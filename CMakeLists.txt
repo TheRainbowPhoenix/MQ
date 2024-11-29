@@ -4,6 +4,8 @@ project(MQ VERSION 0.1 LANGUAGES CXX C ASM)
 list(APPEND CMAKE_MODULE_PATH "$ENV{AZUR_PATH_${AZUR_PLATFORM}}/lib/cmake")
 find_package(Azur 0.1 REQUIRED)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
@@ -12,9 +14,27 @@ if(AZUR_PLATFORM STREQUAL gint)
 endif()
 
 set(SOURCES
+  core/cpu.c
+  core/insn.c
+  core/machine.c
+  core/memory.c
+
   src/main.cc
   src/programs.cpp)
+
 set(ASSETS)
+
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
+  COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/autogen"
+  COMMAND python tools/gen-isa.py core/sh-isa.def
+                 "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Generating decoder for sh-isa"
+  DEPENDS tools/gen-isa.py core/sh-isa.def)
+# Annoyingly, I couldn't get the dependency to be auto-detected. Anything that
+# uses a custom target is out of the question because that always rebuilds.
+set_source_files_properties(core/insn.c PROPERTIES
+  OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc")
 
 if(AZUR_PLATFORM STREQUAL emscripten)
   configure_file(backend/emscripten/index.html index.html)
@@ -26,7 +46,10 @@ if(AZUR_PLATFORM STREQUAL emscripten)
 endif()
 
 add_executable(mq ${SOURCES} ${ASSETS})
-target_compile_options(mq PRIVATE -O0 -g)
+target_compile_options(mq PRIVATE -O0 -g -Wno-pointer-arith)
+target_include_directories(mq PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_options(mq PRIVATE)
 
 if(AZUR_PLATFORM STREQUAL linux)

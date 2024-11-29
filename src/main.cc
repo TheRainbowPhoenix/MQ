@@ -15,6 +15,8 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl.h>
 
+#include <mq/machine.h>
+
 #include "util.h"
 #include "programs.h"
 
@@ -38,11 +40,30 @@ static int spell_needs_update = true;
 
 static bool view_needs_update = true;
 
+static mqMachine *mach = nullptr;
+
+struct input {
+    bool mq_initialize_addin_fx = false;
+    bool mq_initialize_addin_cg = false;
+
+    bool ui_pattern_mono = false;
+    bool ui_pattern_rgb = false;
+};
+
+struct input delayed_input;
+
+static ImFont *fontSans = nullptr;
+static ImFont *fontMono = nullptr;
+
 static void view_update(void)
 {
     SDL_Window *window = azur_sdl_window();
     int width, height;
     SDL_GetWindowSize(window, &width, &height);
+
+    /* Make sure we align on unit boundaries */
+    float vx = roundf(view_x);
+    float vy = roundf(view_y);
 
     /* We have 4 coordinate systems:
        * world:  The spell world (1.0f = view_scale pixels)
@@ -53,7 +74,7 @@ static void view_update(void)
     mat3 tr_world2pixel(
          view_scale,                  0.0f,                       0.0f,
          0.0f,                        view_scale,                 0.0f,
-         -view_x * view_scale,       -view_y * view_scale,        1.0f);
+         -vx * view_scale,            -vy * view_scale,           1.0f);
 
     mat3 tr_pixel2screen(
          1.0f,                        0.0f,                       0.0f,
@@ -269,7 +290,7 @@ static void render(void)
     ImVec2 cursor = ImGui::GetIO().MousePos;
     vec2 pointing = cursor_location();
 
-    if(ImGui::Begin("Coordinates", nullptr, 0)) {
+    if(ImGui::Begin("Control", nullptr, 0)) {
         TextLR("Window size", "%dx%d", width, height);
         TextLR("Display window size", "%dx%d", spell_w, spell_h);
         TextLR("Display view center", "(%.6f, %.6f)", view_x, view_y);
@@ -289,14 +310,36 @@ static void render(void)
         ImGui::Checkbox("Show demo window", &show_demo_window);
 
         if(ImGui::Button("B&W pattern"))
-            puts("B&W pattern clicked!");
+            delayed_input.ui_pattern_mono = true;
         if(ImGui::Button("RGB pattern"))
-            puts("RGB pattern clicked!");
+            delayed_input.ui_pattern_rgb = true;
     }
     ImGui::End();
 
     if(ImGui::Begin("Inspector", nullptr, 0)) {
-        ImGui::Text("TODO");
+        ImGui::PushFont(fontMono);
+
+        ImGui::BeginGroup();
+        for(int i = 0; i < 16; i++)
+            ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", mach->cpu.gpRegs[i]);
+        ImGui::EndGroup();
+
+        ImGui::SameLine(0, 25);
+        ImGui::BeginGroup();
+        for(uint i = 0; i < SH_NUM_SPECIAL_REGS; i++) {
+            char const *name = mq_cpu_spreg_name(i);
+            if(name)
+                ImGui::Text("%s:%*s %08x", name, 7-strlen(name), "", mach->cpu.spRegs[i]);
+
+            if(i == 15) {
+                ImGui::EndGroup();
+                ImGui::SameLine(0, 25);
+                ImGui::BeginGroup();
+            }
+        }
+        ImGui::EndGroup();
+
+        ImGui::PopFont();
     }
     ImGui::End();
 
@@ -311,7 +354,7 @@ static void render(void)
 
         ImGui::DockBuilderDockWindow("Display", dock);
         ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
-        ImGui::DockBuilderDockWindow("Coordinates", dock_left_top);
+        ImGui::DockBuilderDockWindow("Control", dock_left_top);
         ImGui::DockBuilderDockWindow("Inspector", dock_left_bottom);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
@@ -328,25 +371,6 @@ static void render(void)
     previous_time = time;
 
     render_needed--;
-}
-
-static int update(void)
-{
-    SDL_Event e;
-
-    while(SDL_PollEvent(&e)) {
-        ImGui_ImplSDL2_ProcessEvent(&e);
-        render_needed = std::max(render_needed, 1);
-
-        if(e.type == SDL_QUIT)
-            return 1;
-        if(e.type == SDL_WINDOWEVENT &&
-                e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-            view_needs_update = true;
-        }
-    }
-
-    return 0;
 }
 
 // TODO - Plug in data from the display emulation
@@ -452,6 +476,43 @@ static bool generate_rgb_pattern(struct DisplayData *display)
 }
 
 //---
+
+static int update(void)
+{
+    SDL_Event e;
+
+    while(SDL_PollEvent(&e)) {
+        ImGui_ImplSDL2_ProcessEvent(&e);
+        render_needed = std::max(render_needed, 1);
+
+        if(e.type == SDL_QUIT)
+            return 1;
+        if(e.type == SDL_WINDOWEVENT &&
+                e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+            view_needs_update = true;
+        }
+    }
+
+    if(delayed_input.mq_initialize_addin_fx)
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+    if(delayed_input.mq_initialize_addin_cg)
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+
+    if(delayed_input.ui_pattern_mono)
+        puts("B&W pattern clicked!");
+    if(delayed_input.ui_pattern_rgb) {
+        generate_rgb_pattern(&display);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, /* x */ 0, /* y */ 0, display.width,
+            display.height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, display.data);
+        render_needed = std::max(render_needed, 1);
+    }
+
+    delayed_input = input();
+
+    return 0;
+}
+
+//---
 struct Texture
 {
     Texture(GLuint type, GLuint name = 0);
@@ -481,6 +542,8 @@ void Texture::bind() const
 int main(void)
 {
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
+
+    mach = mq_machine_alloc();
 
     if(azur_init("MQ", 1366, 768) != 0)
         return 1;
@@ -534,7 +597,8 @@ int main(void)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.IniFilename = NULL;
-    io.Fonts->AddFontFromFileTTF("assets/DejaVuSans.ttf", 13.0f);
+    fontSans = io.Fonts->AddFontFromFileTTF("assets/DejaVuSans.ttf", 13.0f);
+    fontMono = io.Fonts->AddFontFromFileTTF("assets/DejaVuSansMono.ttf", 13.0f);
     io.Fonts->AddFontDefault();
 
     ImGuiStyle &style = ImGui::GetStyle();
@@ -573,5 +637,9 @@ int main(void)
     ImGui::DestroyContext();
 
     azur_quit();
+    if(mach) {
+        mq_machine_free(mach);
+        mach = nullptr;
+    }
     return rc;
 }
