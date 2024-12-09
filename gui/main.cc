@@ -329,7 +329,8 @@ static void render(void)
         for(uint i = 0; i < SH_NUM_SPECIAL_REGS; i++) {
             char const *name = mq_cpu_spreg_name(i);
             if(name)
-                ImGui::Text("%s:%*s %08x", name, 7-strlen(name), "", mach->cpu.spRegs[i]);
+                ImGui::Text("%s:%*s %08x", name, 7-(int)strlen(name), "",
+                    mach->cpu.spRegs[i]);
 
             if(i == 15) {
                 ImGui::EndGroup();
@@ -597,8 +598,9 @@ int main(void)
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.IniFilename = NULL;
-    fontSans = io.Fonts->AddFontFromFileTTF("assets/DejaVuSans.ttf", 13.0f);
-    fontMono = io.Fonts->AddFontFromFileTTF("assets/DejaVuSansMono.ttf", 13.0f);
+    // TODO: Embed assets in native build to dodge workdir requirement
+    fontSans = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSans.ttf", 13.0f);
+    fontMono = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSansMono.ttf", 13.0f);
     io.Fonts->AddFontDefault();
 
     ImGuiStyle &style = ImGui::GetStyle();

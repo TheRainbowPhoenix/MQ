@@ -111,28 +111,28 @@ typedef struct mqChunk mqChunk;
 
 MQ_INLINE u8 mq_buffer_read8(void const *buffer, u32 offset)
 {
-   return *(u8 *)(buffer + (offset ^ 3));
+   return *((u8 *)buffer + (offset ^ 3));
 }
 MQ_INLINE u16 mq_buffer_read16(void const *buffer, u32 offset)
 {
-   return *(u16 *)(buffer + (offset ^ 1));
+   return *(u16 *)((u8 *)buffer + (offset ^ 1));
 }
 MQ_INLINE u32 mq_buffer_read32(void const *buffer, u32 offset)
 {
-   return *(u32 *)(buffer + offset);
+   return *(u32 *)((u8 *)buffer + offset);
 }
 
 MQ_INLINE void mq_buffer_write8(void const *buffer, u32 offset, u8 value)
 {
-   *(u8 *)(buffer + (offset ^ 3)) = value;
+   *((u8 *)buffer + (offset ^ 3)) = value;
 }
 MQ_INLINE void mq_buffer_write16(void const *buffer, u32 offset, u16 value)
 {
-   *(u16 *)(buffer + (offset ^ 1)) = value;
+   *(u16 *)((u8 *)buffer + (offset ^ 1)) = value;
 }
 MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 {
-   *(u32 *)(buffer + offset) = value;
+   *(u32 *)((u8 *)buffer + offset) = value;
 }
 
 /* Main memory access functions. */

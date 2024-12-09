@@ -83,7 +83,7 @@ enum {
 
     SH_NUM_EXCEPTIONS,
 };
-MQ_STATIC_ASSERT(SH_NUM_EXCEPTIONS <= 32);
+MQ_STATIC_ASSERT(SH_NUM_EXCEPTIONS <= 32, "Too many exceptions for u32 mask");
 
 struct mqCpu
 {

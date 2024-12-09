@@ -19,8 +19,8 @@ set(SOURCES
   core/machine.c
   core/memory.c
 
-  src/main.cc
-  src/programs.cpp)
+  gui/main.cc
+  gui/programs.cpp)
 
 set(ASSETS)
 
@@ -37,11 +37,12 @@ set_source_files_properties(core/insn.c PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc")
 
 if(AZUR_PLATFORM STREQUAL emscripten)
-  configure_file(backend/emscripten/index.html index.html)
+  configure_file(gui/emscripten/index.html index.html)
   list(APPEND ASSETS
-    assets/DejaVuSans.ttf
-    glsl/vs_bg.glsl
-    glsl/fs_bg.glsl
+    gui/assets/DejaVuSans.ttf
+    gui/assets/DejaVuSansMono.ttf
+    gui/glsl/vs_tiles.glsl
+    gui/glsl/fs_tiles.glsl
   )
 endif()
 

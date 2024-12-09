@@ -68,8 +68,8 @@ ProgramBackground::ProgramBackground(): Program()
     glEnableVertexAttribArray(0);
 
     this->prog = azur::gl::loadProgramFiles(
-        GL_VERTEX_SHADER,   "glsl/vs_tiles.glsl",
-        GL_FRAGMENT_SHADER, "glsl/fs_tiles.glsl",
+        GL_VERTEX_SHADER,   "gui/glsl/vs_tiles.glsl",
+        GL_FRAGMENT_SHADER, "gui/glsl/fs_tiles.glsl",
         0);
 }
 
