@@ -19,8 +19,10 @@ set(SOURCES
   core/machine.c
   core/memory.c
 
+  gui/display-window.cc
+  gui/imgui-util.cc
   gui/main.cc
-  gui/programs.cpp)
+  gui/texture.cc)
 
 set(ASSETS)
 

@@ -1,48 +1,27 @@
-#include <azur/azur.h>
-#include <azur/log.h>
-#include <azur/gl/gl.h>
-
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <memory>
+#include "gui.h"
+#include <mq/machine.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl.h>
+#include <azur/azur.h>
+#include <azur/log.h>
+#include <SDL2/SDL.h>
 
-#include <mq/machine.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <memory>
 
-#include "util.h"
-#include "programs.h"
+DisplayGlWindow DGW;
+Texture displayTexture;
 
-static std::unique_ptr<ProgramTexture> shader_texture;
-static std::unique_ptr<ProgramBackground> shader_background;
-
-/* A pixel art texture for tests/debugging */
-static GLuint tex_image;
-
-/* Refresh request triggered by SDL events (used to avoid useless renders). For
-   some reason Dear ImGui needs a couple of frames to initialize */
-static int render_needed = 5;
-
-/* Transformation settings for the camera */
-static float view_x=0.0f, view_y=0.0f;
-static float view_scale=1.0f;
-/* Spell location in pixels (set by Dear ImGui code each frame) */
-static int spell_x=0, spell_y=0, spell_w=0, spell_h=0;
-/* Whether view needs update based on window movement */
-static int spell_needs_update = true;
-
-static bool view_needs_update = true;
+/* Refresh request triggered by SDL events and Dear ImGui's initial frames. */
+static int render_needed = IMGUI_SETTLING_FRAMES;
 
 static mqMachine *mach = nullptr;
 
-struct input {
+struct DelayedInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
 
@@ -50,129 +29,16 @@ struct input {
     bool ui_pattern_rgb = false;
 };
 
-struct input delayed_input;
+struct DelayedInput input;
 
 static ImFont *fontSans = nullptr;
 static ImFont *fontMono = nullptr;
 
-static void view_update(void)
-{
-    SDL_Window *window = azur_sdl_window();
-    int width, height;
-    SDL_GetWindowSize(window, &width, &height);
-
-    /* Make sure we align on unit boundaries */
-    float vx = roundf(view_x);
-    float vy = roundf(view_y);
-
-    /* We have 4 coordinate systems:
-       * world:  The spell world (1.0f = view_scale pixels)
-       * pixel:  Pixel coordinates in the Dear ImGui spell window (0 is center)
-       * screen: Pixel coordinates within the program's window
-       * gl:     Normalized GL coordinates of the program's window */
-
-    mat3 tr_world2pixel(
-         view_scale,                  0.0f,                       0.0f,
-         0.0f,                        view_scale,                 0.0f,
-         -vx * view_scale,            -vy * view_scale,           1.0f);
-
-    mat3 tr_pixel2screen(
-         1.0f,                        0.0f,                       0.0f,
-         0.0f,                        1.0f,                       0.0f,
-         spell_x + spell_w / 2.0f,    spell_y + spell_h / 2.0f,   1.0f);
-
-    mat3 tr_screen2gl(
-         2.0f / width,                0.0f,                       0.0f,
-         0.0f,                       -2.0f / height,              0.0f,
-        -1.0f,                        1.0f,                       1.0f);
-
-    mat3 tr_world2gl = tr_screen2gl * tr_pixel2screen * tr_world2pixel;
-    mat3 tr_pixel2gl = tr_screen2gl * tr_pixel2screen;
-
-    glUseProgram(shader_texture->prog);
-    shader_texture->set_uniform("u_transform", tr_world2gl);
-
-    glUseProgram(shader_background->prog);
-    shader_background->set_uniform("u_pixel2gl", tr_pixel2gl);
-    shader_background->set_uniform("u_view", view_x, view_y, view_scale);
-}
-
-static vec2 cursor_location(void)
-{
-    ImGuiIO &io = ImGui::GetIO();
-    int x = io.MousePos.x - spell_x - spell_w / 2;
-    int y = io.MousePos.y - spell_y - spell_h / 2;
-
-    float cx = view_x + (float)x / view_scale;
-    float cy = view_y + (float)y / view_scale;
-    return vec2(cx, cy);
-}
-
-void display_callback(ImDrawList const *, ImDrawCmd const *)
-{
-    SDL_Window *window = azur_sdl_window();
-    int width, height;
-    SDL_GetWindowSize(window, &width, &height);
-
-    if(spell_needs_update)
-        view_update();
-
-    shader_texture->vertices.clear();
-    shader_background->vertices.clear();
-
-    /* Draw background */
-    shader_background->add_background(-spell_w / 2.0f, -spell_h / 2.0f,
-        spell_w, spell_h);
-
-    if(tex_image) {
-        /* Go to the negatives to benefit from clamping (on bottom right side
-           the texture continues till next power of 2) */
-        // FIXME: Not sure why this needs 0.25 and not 0.5 to work well.
-        float u0 = 0.25 / 512 / view_scale;
-        float v0 = 0.25 / 256 / view_scale;
-        float tw = 396. / 512;
-        float th = 224. / 256;
-        shader_texture->add_subtexture(-396/2, -224/2, 396, 224,
-            u0, v0, tw, th);
-    }
-
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(spell_x, height - spell_h - spell_y, spell_w, spell_h);
-
-    shader_background->draw();
-
-    glBindTexture(GL_TEXTURE_2D, tex_image);
-    shader_texture->draw();
-
-    glDisable(GL_SCISSOR_TEST);
-}
-
-static void TextLR(char const *left, char const *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    char *str;
-    vasprintf(&str, fmt, args);
-    va_end(args);
-
-    char const *right = str ? str : "(nil)";
-
-    ImGui::TextUnformatted(left);
-    ImGui::SameLine(ImGui::GetContentRegionAvail().x -
-        ImGui::CalcTextSize(right).x);
-    ImGui::TextUnformatted(right);
-
-    free(str);
-}
-
 static void render(void)
 {
-    if(!render_needed) return;
-
-    if(view_needs_update) {
-        view_update();
-        view_needs_update = false;
-    }
+    if(!render_needed)
+        return;
+    render_needed--;
 
     SDL_Window *window = azur_sdl_window();
     int width, height;
@@ -199,58 +65,8 @@ static void render(void)
     auto dock = ImGui::DockSpaceOverViewport();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    if(ImGui::Begin("Display", nullptr, 0)) {
-        /* InvisibleButton() trick from the custom rendering demo */
-        ImVec2 p0 = ImGui::GetCursorScreenPos();
-        ImVec2 size = ImGui::GetContentRegionAvail();
-        if(size.x < 50) size.x = 50;
-        if(size.y < 50) size.y = 50;
-
-        spell_x = p0.x;
-        spell_y = p0.y;
-        spell_w = size.x;
-        spell_h = size.y;
-
-        ImGui::InvisibleButton("SpellInvisibleButton", size,
-            ImGuiButtonFlags_MouseButtonLeft |
-            ImGuiButtonFlags_MouseButtonRight);
-        bool hovered = ImGui::IsItemHovered();
-        bool active = ImGui::IsItemActive();
-
-        ImGuiIO& io = ImGui::GetIO();
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddCallback(display_callback, nullptr);
-        draw_list->AddCallback(ImDrawCallback_ResetRenderState, nullptr);
-
-        if(active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
-            view_x -= (float)io.MouseDelta.x / view_scale;
-            view_y -= (float)io.MouseDelta.y / view_scale;
-            view_update();
-        }
-
-        float wheel = ImGui::GetIO().MouseWheel;
-        if(hovered && wheel != 0) {
-            /* Only accept +1/-1 for scroll as browser specify wildly
-               inconsistent units, which find their way into emscripten.
-               <https://github.com/emscripten-core/emscripten/issues/6283> */
-            int dy = (wheel < 0) ? -1 : +1;
-
-            /* Zoom around the location of the cursor */
-            int x = io.MousePos.x - spell_x - spell_w / 2;
-            int y = io.MousePos.y - spell_y - spell_h / 2;
-
-            /* Determine the invariant quantity (which is the world location of
-               the point under the cursor) then rotate around that */
-            float cx = view_x + (float)x / view_scale;
-            float cy = view_y + (float)y / view_scale;
-
-            if(view_scale + dy != 0)
-                view_scale += dy; // *= powf(1.2f, dy);
-            view_x = cx - (float)x / view_scale;
-            view_y = cy - (float)y / view_scale;
-            view_update();
-        }
-    }
+    if(ImGui::Begin("Display", nullptr, 0))
+        DGW.AddWindow();
     ImGui::End();
     ImGui::PopStyleVar();
 
@@ -288,31 +104,33 @@ static void render(void)
 
     static bool show_demo_window = false;
     ImVec2 cursor = ImGui::GetIO().MousePos;
-    vec2 pointing = cursor_location();
 
     if(ImGui::Begin("Control", nullptr, 0)) {
-        TextLR("Window size", "%dx%d", width, height);
-        TextLR("Display window size", "%dx%d", spell_w, spell_h);
-        TextLR("Display view center", "(%.6f, %.6f)", view_x, view_y);
-        TextLR("View top-left", "(%.6f, %.6f)",
-            view_x - spell_w/2/view_scale, view_y - spell_h/2/view_scale);
-        TextLR("View bottom-right", "(%.6f, %.6f)",
-            view_x + spell_w/2/view_scale, view_y + spell_h/2/view_scale);
-        TextLR("Zoom", "%d%%", (int)(view_scale * 100));
+        ImGui::TextLR("Window size", "%dx%d", width, height);
+        ImGui::TextLR("Display window size", "%dx%d", DGW.width(), DGW.height());
+        ImGui::TextLR("Display view center", "(%.6f, %.6f)", DGW.viewX(), DGW.viewY());
+        ImGui::TextLR("Zoom", "%d%%", (int)(DGW.viewScale() * 100));
 
-        if(cursor.x >= spell_x && cursor.x < spell_x + spell_w &&
-           cursor.y >= spell_y && cursor.y < spell_y + spell_h) {
-            TextLR("Pointing at", "%.1f, %.1f", pointing.x, pointing.y);
+        if(DGW.inWindow(cursor)) {
+            ImVec2 pointing = DGW.viewLocation(cursor.x, cursor.y);
+            ImGui::TextLR("Pointing at", "%.1f, %.1f", pointing.x, pointing.y);
         }
         else {
-            TextLR("Pointing at", "-");
+            ImGui::TextLR("Pointing at", "-");
         }
         ImGui::Checkbox("Show demo window", &show_demo_window);
 
-        if(ImGui::Button("B&W pattern"))
-            delayed_input.ui_pattern_mono = true;
-        if(ImGui::Button("RGB pattern"))
-            delayed_input.ui_pattern_rgb = true;
+        if(ImGui::Button("128x64 mono"))
+            input.ui_pattern_mono = true;
+        ImGui::SameLine();
+        if(ImGui::Button("396x224 16-bit"))
+            input.ui_pattern_rgb = true;
+
+        if(ImGui::Button("Reset add-in FX"))
+            input.mq_initialize_addin_fx = true;
+        ImGui::SameLine();
+        if(ImGui::Button("Reset add-in CG"))
+            input.mq_initialize_addin_cg = true;
     }
     ImGui::End();
 
@@ -324,20 +142,46 @@ static void render(void)
             ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", mach->cpu.gpRegs[i]);
         ImGui::EndGroup();
 
-        ImGui::SameLine(0, 25);
+        ImGui::SameLine(0, 40);
         ImGui::BeginGroup();
-        for(uint i = 0; i < SH_NUM_SPECIAL_REGS; i++) {
-            char const *name = mq_cpu_spreg_name(i);
-            if(name)
-                ImGui::Text("%s:%*s %08x", name, 7-(int)strlen(name), "",
-                    mach->cpu.spRegs[i]);
+        ImGui::Text("pc:    %08x", mach->cpu.pc);
+        ImGui::Text("sr:    %08x", mach->cpu.spRegs[SH_SR]);
+        ImGui::Text("gbr:   %08x", mach->cpu.spRegs[SH_GBR]);
+        ImGui::Text("mach:  %08x", mach->cpu.spRegs[SH_MACH]);
+        ImGui::Text("macl:  %08x", mach->cpu.spRegs[SH_MACL]);
+        ImGui::Text("pr:    %08x", mach->cpu.spRegs[SH_PR]);
+        ImGui::EndGroup();
 
-            if(i == 15) {
-                ImGui::EndGroup();
-                ImGui::SameLine(0, 25);
-                ImGui::BeginGroup();
-            }
-        }
+        ImGui::SameLine(0, 40);
+        ImGui::BeginGroup();
+        ImGui::Text("vbr:     %08x", mach->cpu.spRegs[SH_VBR]);
+        ImGui::Text("ssr:     %08x", mach->cpu.spRegs[SH_SSR]);
+        ImGui::Text("spc:     %08x", mach->cpu.spRegs[SH_SPC]);
+        ImGui::Text("sgr:     %08x", mach->cpu.spRegs[SH_SGR]);
+        ImGui::Text("dbr:     %08x", mach->cpu.spRegs[SH_DBR]);
+        ImGui::Text("dsr:     %08x", mach->cpu.spRegs[SH_DSR]);
+        for(int i = 0; i < 8; i++)
+            ImGui::Text("r%d_bank: %08x", i, mach->cpu.spRegs[SH_RnBANK + i]);
+        // ImGui::Text();
+        ImGui::EndGroup();
+
+        ImGui::SameLine(0, 40);
+        ImGui::BeginGroup();
+        ImGui::Text("[DSP]");
+        ImGui::Text("a0:  %02x.%08x",
+            mach->cpu.spRegs[SH_A0G], mach->cpu.spRegs[SH_A0]);
+        ImGui::Text("a1:  %02x.%08x",
+            mach->cpu.spRegs[SH_A1G], mach->cpu.spRegs[SH_A1]);
+        ImGui::Text("x0:     %08x", mach->cpu.spRegs[SH_X0]);
+        ImGui::Text("x1:     %08x", mach->cpu.spRegs[SH_X1]);
+        ImGui::Text("y0:     %08x", mach->cpu.spRegs[SH_Y0]);
+        ImGui::Text("y1:     %08x", mach->cpu.spRegs[SH_Y1]);
+        ImGui::Text("m0:     %08x", mach->cpu.spRegs[SH_M0]);
+        ImGui::Text("m1:     %08x", mach->cpu.spRegs[SH_M1]);
+        ImGui::Text("mod:    %08x", mach->cpu.spRegs[SH_MOD]);
+        ImGui::Text("rs:     %08x", mach->cpu.spRegs[SH_RS]);
+        ImGui::Text("re:     %08x", mach->cpu.spRegs[SH_RE]);
+        // ImGui::Text();
         ImGui::EndGroup();
 
         ImGui::PopFont();
@@ -370,8 +214,6 @@ static void render(void)
     /* Present results to user */
     SDL_GL_SwapWindow(window);
     previous_time = time;
-
-    render_needed--;
 }
 
 // TODO - Plug in data from the display emulation
@@ -388,7 +230,7 @@ struct DisplayData display;
 static uint display_size_for(enum DisplayFormat format, uint w, uint h)
 {
     if(format == MONO)
-        return ((w + 7) / 8) * h;
+        return w * h;
     else if(format == RGB565)
         return (w * 2) * h;
     assert(false && "display_realloc: bad format");
@@ -428,8 +270,28 @@ static bool generate_mono_pattern(struct DisplayData *display)
     if(!display_realloc(display, MONO, 128, 64))
         return false;
 
-    for(uint i = 0; i < display->size; i++)
-        ((u8 *)display->data)[i] = rand();
+    int r0 = rand() % 2 + 1;
+    int r1 = rand() % 3 + 1;
+    int r2 = rand() % 2;
+    int r3 = rand() % 4 + 2;
+    u8 palette[4] = { 0x00, 0x55, 0xaa, 0xff };
+    for(int y = 0; y < display->height; y++)
+    for(int x = 0; x < display->width; x++) {
+        int c1 = x ^ y;
+        int c2 = (x >> r3) ^ r0 * ((x - r2*y) >> 1);
+        int c3 = (y >> 1) ^ ((x+y) >> r1);
+        int c = c1 ^ c2 ^ c3;
+        ((u8 *)display->data)[display->width * y + x] = palette[c & 3];
+    }
+
+    for(uint y = 0; y < display->height; y++) {
+        ((u8 *)display->data)[display->width * y + 0] = 0xff;
+        ((u8 *)display->data)[display->width * (y+1) - 1] = 0xff;
+    }
+    for(uint x = 0; x < display->width; x++) {
+        ((u8 *)display->data)[display->width * 0 + x] = 0xff;
+        ((u8 *)display->data)[display->width * (display->height-1) + x] = 0xff;
+    }
     return true;
 }
 
@@ -490,55 +352,42 @@ static int update(void)
             return 1;
         if(e.type == SDL_WINDOWEVENT &&
                 e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-            view_needs_update = true;
+            DGW.markViewDirty(true);
         }
     }
 
-    if(delayed_input.mq_initialize_addin_fx)
+    if(input.mq_initialize_addin_fx) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
-    if(delayed_input.mq_initialize_addin_cg)
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
-
-    if(delayed_input.ui_pattern_mono)
-        puts("B&W pattern clicked!");
-    if(delayed_input.ui_pattern_rgb) {
-        generate_rgb_pattern(&display);
-        glTexSubImage2D(GL_TEXTURE_2D, 0, /* x */ 0, /* y */ 0, display.width,
-            display.height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, display.data);
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_initialize_addin_cg) {
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         render_needed = std::max(render_needed, 1);
     }
 
-    delayed_input = input();
+    if(input.ui_pattern_mono) {
+        generate_mono_pattern(&display);
+        displayTexture.bind();
+        displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
+                                 display.width, display.height);
+        displayTexture.setData(display.data);
+        DGW.setInherentScale(3);
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.ui_pattern_rgb) {
+        generate_rgb_pattern(&display);
+        displayTexture.bind();
+        displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                                 display.width, display.height);
+        displayTexture.setData(display.data);
+        DGW.setInherentScale(1);
+        render_needed = std::max(render_needed, 1);
+    }
+
+    input = DelayedInput();
 
     return 0;
 }
-
-//---
-struct Texture
-{
-    Texture(GLuint type, GLuint name = 0);
-    Texture(Texture const &) = delete;
-    Texture(Texture &&);
-
-    void bind() const;
-
-private:
-    GLuint m_type;
-    GLuint m_name;
-};
-
-Texture::Texture(GLuint type, GLuint name):
-    m_type {type}, m_name {name}
-{
-    if(!m_name)
-        glGenTextures(1, &m_name);
-}
-
-void Texture::bind() const
-{
-    glBindTexture(m_type, m_name);
-}
-//---
 
 int main(void)
 {
@@ -551,27 +400,25 @@ int main(void)
 
     srand(clock());
 
-    shader_texture = std::make_unique<ProgramTexture>();
-    shader_background = std::make_unique<ProgramBackground>();
-
-    view_update();
+    DGW.init(displayTexture);
 
     generate_rgb_pattern(&display);
 
     /* Generate an example display for a texture */
-    glGenTextures(1, &tex_image);
-    glBindTexture(GL_TEXTURE_2D, tex_image);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 512, 256,
-        0, GL_RGB,  GL_UNSIGNED_SHORT_5_6_5, NULL);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, /* x */ 0, /* y */ 0, display.width,
-        display.height, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, display.data);
+    displayTexture.init(GL_TEXTURE_2D);
+    displayTexture.bind();
+    displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                             display.width, display.height);
+    displayTexture.setData(display.data);
+    DGW.setInherentScale(1);
+
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 3);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // LINEAR_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glGenerateMipmap(GL_TEXTURE_2D);
+    // glGenerateMipmap(GL_TEXTURE_2D);
 
     // Texture tex_display(GL_TEXTURE_2D);
 
@@ -603,36 +450,11 @@ int main(void)
     fontMono = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSansMono.ttf", 13.0f);
     io.Fonts->AddFontDefault();
 
-    ImGuiStyle &style = ImGui::GetStyle();
-    style.WindowTitleAlign = ImVec2(0.5, 0.5);
-    style.FramePadding = ImVec2(8, 4);
-    style.ItemSpacing = ImVec2(10, 5);
-    style.ItemInnerSpacing = ImVec2(6, 5);
-    style.ScrollbarSize = 12;
-    style.GrabMinSize = 8;
-    style.FrameBorderSize = 1;
-    style.TabBorderSize = 1;
-    style.FrameRounding = 2;
-    style.GrabRounding = 2;
-    style.TabRounding = 2;
-
-    style.Colors[ImGuiCol_WindowBg]           = ImVec4(0.2, 0.2, 0.2, 1.0);
-    style.Colors[ImGuiCol_FrameBg]            = ImVec4(0.25, 0.275, 0.3, 1.0);
-    style.Colors[ImGuiCol_FrameBgHovered]     = ImVec4(0.7, 0.81, 1.0, 0.2);
-    style.Colors[ImGuiCol_FrameBgActive]      = ImVec4(0.70f, 0.81f, 1.00f, 0.36f);
-    style.Colors[ImGuiCol_TitleBg]            = ImVec4(0.14, 0.14, 0.14, 1.0);
-    style.Colors[ImGuiCol_TitleBgActive]      = ImVec4(0.14, 0.14, 0.14, 1.0);
-    style.Colors[ImGuiCol_CheckMark]          = ImVec4(0.92f, 0.95f, 0.98f, 1.00f);
-    style.Colors[ImGuiCol_TabUnfocused]       = ImVec4(0.18f, 0.18f, 0.19f, 0.97f);
-    style.Colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.19f, 0.20f, 0.21f, 1.00f);
-
-    style.Colors[ImGuiCol_Border].w = 0.125;
-    style.Colors[ImGuiCol_ScrollbarBg].w = 0.25;
+    ImGui_LoadMQStyle(ImGui::GetStyle());
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
 
-    shader_texture.reset();
-    shader_background.reset();
+    DGW.cleanup();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
