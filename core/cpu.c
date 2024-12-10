@@ -9,6 +9,7 @@
 #include <mq/machine.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
 {
@@ -67,10 +68,10 @@ static bool exc_isReexecutionType(int exc)
            && exc != SH_EXC_TRAP;
 }
 
-static bool exc_isInterrupt(int exc)
-{
-    return exc >= SH_EXC_NMI;
-}
+// static bool exc_isInterrupt(int exc)
+// {
+//     return exc >= SH_EXC_NMI;
+// }
 
 /* Find the highest exception priority in the mask; -1 if excMask == 0. */
 static int highestPriorityException(u32 excMask)
@@ -98,7 +99,7 @@ static void handleException(mqCpu *cpu, int exc, u32 previousPC)
     if(exc == SH_EXC_BREAK_BEFORE || exc == SH_EXC_BREAK_AFTER)
         // TODO: Send UBC breaks to DBR if CBCR.UBDE = 1
         ; // cpu->pc = cpu->spRegs[DBR];
-    if(exc >= SH_EXC_POWERON_RESET && exc <= SH_EXC_TLB_DATA_MULTIHIT)
+    else if(exc >= SH_EXC_POWERON_RESET && exc <= SH_EXC_TLB_DATA_MULTIHIT)
         cpu->pc = 0xa0000000;
 
     cpu->excMask &= ~(1 << exc);
@@ -121,20 +122,26 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
         ; // TODO: TRA = value << 2
 }
 
-#include <stdio.h>
+bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value)
+{
+    mq_cpu_raiseException(cpu, exc, value);
+    return false;
+}
 
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
 {
     u32 previousPC = cpu->pc;
 
+    printf("Cycle: pc=%08x\n", cpu->pc);
+
     /* Fetch the next instruction. */
     // TODO: Same-basic-block prefetching optimization.
-    u32 ins = mq_memory_read32(cpu, mach->memory, cpu->pc);
-    fprintf(stderr, "nope, read16\n");
-    abort();
-
-    /* Decode and execute the instruction. */
-    _mq_cpu_execute(mach, cpu, ins);
+    u32 ins;
+    if(mq_memory_read16(cpu, mach->memory, cpu->pc, &ins)) {
+        printf("  -> ins=%04x\n", ins);
+        /* Decode and execute the instruction. */
+        _mq_cpu_execute(mach, cpu, ins);
+    }
 
     /* Check for exceptions or interrupts. This is done *after* running the
        instruction because some exceptions are re-execution type. */

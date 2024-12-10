@@ -120,6 +120,10 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind);
    - Other exceptions: ignored, specify 0. */
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value);
 
+/* Raise an exception and return false. This is used to reduce code size by
+   making exception paths terminal calls, notably in memory access code. */
+bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value);
+
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
 void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode);

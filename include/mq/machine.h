@@ -33,5 +33,9 @@ enum {
 
 void mq_machine_initialize(mqMachine *mach, int initializeKind);
 
+bool mq_machine_load_g3a(mqMachine *mach, char const *path);
+
+void mq_machine_cycle(mqMachine *mach);
+
 MQ_END_DEFS
 #endif /* MQ_MACHINE_H */

@@ -24,6 +24,8 @@ static mqMachine *mach = nullptr;
 struct DelayedInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
+    bool mq_initialize_gravity_duck = false;
+    bool mq_cycle;
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -33,6 +35,17 @@ struct DelayedInput input;
 
 static ImFont *fontSans = nullptr;
 static ImFont *fontMono = nullptr;
+
+static bool HexViewer_ReadByte(u64 addr, u8 *result)
+{
+    if(!mach || !mach->memory)
+        return false;
+    u32 v;
+    bool b = mq_memory_read8(&mach->cpu, mach->memory, addr, &v);
+    if(b)
+        *result = v;
+    return b;
+}
 
 static void render(void)
 {
@@ -65,8 +78,29 @@ static void render(void)
     auto dock = ImGui::DockSpaceOverViewport();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    if(ImGui::Begin("Display", nullptr, 0))
+    if(ImGui::Begin("Display", nullptr, 0)) {
         DGW.AddWindow();
+        ImVec2 TL(DGW.x(), DGW.y() + DGW.height());
+        ImVec2 BR(TL.x + DGW.width(), TL.y + DGW.padding().w);
+        ImGui::PushClipRect(TL, BR, false);
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddRectFilled(TL, BR, 0xff1c1712);
+
+        ImGui::SetCursorScreenPos({TL.x + 4, TL.y + 4});
+        ImGui::Text("%dx%d - center (%.1f,%.1f) - zoom %d%%",
+            DGW.width(), DGW.height(), DGW.viewX(), DGW.viewY(),
+            (int)(DGW.viewScale() * 100));
+
+        ImVec2 cursor = ImGui::GetIO().MousePos;
+        if(DGW.inWindow(cursor)) {
+            ImVec2 pointing = DGW.viewLocation(cursor.x, cursor.y);
+            ImGui::SameLine(0);
+            ImGui::Text("- pointing at (%.1f,%.1f)", pointing.x, pointing.y);
+        }
+
+        ImGui::PopClipRect();
+    }
     ImGui::End();
     ImGui::PopStyleVar();
 
@@ -103,21 +137,8 @@ static void render(void)
     ImGui::End();
 
     static bool show_demo_window = false;
-    ImVec2 cursor = ImGui::GetIO().MousePos;
 
     if(ImGui::Begin("Control", nullptr, 0)) {
-        ImGui::TextLR("Window size", "%dx%d", width, height);
-        ImGui::TextLR("Display window size", "%dx%d", DGW.width(), DGW.height());
-        ImGui::TextLR("Display view center", "(%.6f, %.6f)", DGW.viewX(), DGW.viewY());
-        ImGui::TextLR("Zoom", "%d%%", (int)(DGW.viewScale() * 100));
-
-        if(DGW.inWindow(cursor)) {
-            ImVec2 pointing = DGW.viewLocation(cursor.x, cursor.y);
-            ImGui::TextLR("Pointing at", "%.1f, %.1f", pointing.x, pointing.y);
-        }
-        else {
-            ImGui::TextLR("Pointing at", "-");
-        }
         ImGui::Checkbox("Show demo window", &show_demo_window);
 
         if(ImGui::Button("128x64 mono"))
@@ -131,10 +152,17 @@ static void render(void)
         ImGui::SameLine();
         if(ImGui::Button("Reset add-in CG"))
             input.mq_initialize_addin_cg = true;
+
+        if(ImGui::Button("Reset and load GravityDuck.g3a"))
+            input.mq_initialize_gravity_duck = true;
+
+        if(ImGui::Button("Cycle"))
+            input.mq_cycle = true;
     }
     ImGui::End();
 
-    if(ImGui::Begin("Inspector", nullptr, 0)) {
+    if(ImGui::Begin("Inspector", nullptr,
+            ImGuiWindowFlags_HorizontalScrollbar)) {
         ImGui::PushFont(fontMono);
 
         ImGui::BeginGroup();
@@ -188,18 +216,60 @@ static void render(void)
     }
     ImGui::End();
 
+    if(ImGui::Begin("Memory", nullptr, ImGuiWindowFlags_HorizontalScrollbar)) {
+        static ImGui::HexViewer HV = {
+            .AddressBits = 32,
+            .ReadByte = HexViewer_ReadByte,
+            .Cursor = 0,
+        };
+
+        // TODO: Avoid recomputation of memory stats every frame?!
+        struct mqMemory_Stats s = mq_memory_stats(mach->memory);
+
+        ImGui::Text("1 MB Chunks: %d (%d buffer, %d detailed including %d "
+                    "pure MMIO)",
+                    s.totalChunks, s.bufferChunks, s.detailedChunks,
+                    s.pureMMIOChunks);
+        ImGui::Text("4 kB Pages: %d mapped", s.bufferPages);
+
+        mqMemory const *mem = mach->memory;
+        for(int i = 0; i < 0x1000; i++) {
+            char id[16];
+            sprintf(id, "memchunk%d", i);
+            if(mem->chunks[i] && ImGui::TreeNode(id, "%08x", i << 20)) {
+                // TODO: Nodes are clicked only when closed. Leaves?
+                if(ImGui::IsItemClicked()) {
+                    HV.Cursor = i << 20;
+                }
+                ImGui::TreePop();
+            }
+        }
+
+        ImGuiStyle const &style = ImGui::GetStyle();
+        ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+        ImGui::SeparatorText("Hex Viewer");
+        ImGui::PopStyleColor();
+        ImGui::PushFont(fontMono);
+        ImGui::AddHexViewer(HV);
+        ImGui::PopFont();
+    }
+    ImGui::End();
+
     static bool first_frame = true;
     if(first_frame) {
         auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
-            ImGuiDir_Left, 0.65f, nullptr, &dock);
+            ImGuiDir_Left, 0.6f, nullptr, &dock);
         auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
+        auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
+            ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
         auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
             ImGuiDir_Down, 0.6f, nullptr, &dock);
 
         ImGui::DockBuilderDockWindow("Display", dock);
         ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
+        ImGui::DockBuilderDockWindow("Memory", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Inspector", dock_left_bottom);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
@@ -236,10 +306,10 @@ static uint display_size_for(enum DisplayFormat format, uint w, uint h)
     assert(false && "display_realloc: bad format");
 }
 
-static uint display_size(struct DisplayData const *d)
-{
-    return display_size_for(d->format, d->width, d->height);
-}
+// static uint display_size(struct DisplayData const *d)
+// {
+//     return display_size_for(d->format, d->width, d->height);
+// }
 
 static bool display_realloc(
     struct DisplayData *d, enum DisplayFormat format, uint w, uint h)
@@ -275,8 +345,8 @@ static bool generate_mono_pattern(struct DisplayData *display)
     int r2 = rand() % 2;
     int r3 = rand() % 4 + 2;
     u8 palette[4] = { 0x00, 0x55, 0xaa, 0xff };
-    for(int y = 0; y < display->height; y++)
-    for(int x = 0; x < display->width; x++) {
+    for(uint y = 0; y < display->height; y++)
+    for(uint x = 0; x < display->width; x++) {
         int c1 = x ^ y;
         int c2 = (x >> r3) ^ r0 * ((x - r2*y) >> 1);
         int c3 = (y >> 1) ^ ((x+y) >> r1);
@@ -346,7 +416,7 @@ static int update(void)
 
     while(SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
-        render_needed = std::max(render_needed, 1);
+        render_needed = std::max(render_needed, 2);
 
         if(e.type == SDL_QUIT)
             return 1;
@@ -362,6 +432,15 @@ static int update(void)
     }
     if(input.mq_initialize_addin_cg) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_initialize_gravity_duck) {
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_load_g3a(mach, "GravityDuck.g3a");
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_cycle) {
+        mq_machine_cycle(mach);
         render_needed = std::max(render_needed, 1);
     }
 

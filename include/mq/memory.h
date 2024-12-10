@@ -75,6 +75,8 @@ typedef void *mqChunkPointer;
 #define MQ_CHUNKPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
 #define MQ_CHUNKPTR_BUFFER(PTR) ((void *)(PTR))
 #define MQ_CHUNKPTR_DETAILS(PTR) ((mqChunk *)((uintptr_t)(PTR) & -2))
+#define MQ_CHUNKPTR_MKBUFFER(PTR) ((mqChunkPointer)(PTR))
+#define MQ_CHUNKPTR_MKDETAILS(PTR) ((mqChunkPointer)((uintptr_t)(PTR) | 1))
 
 struct mqMemory {
     /* Array of pointers to chunk info. If the LSB is clear this is a direct
@@ -83,6 +85,10 @@ struct mqMemory {
        empty entry is thus indicated with value (void *)1. */
     mqChunkPointer chunks[0x1000];
 };
+
+/* Read-write functions for a chunk. */
+typedef bool mq_chunk_read_t(u32 addr, int size, u32 *result);
+typedef bool mq_chunk_write_t(u32 addr, int size, u32 value);
 
 /* Chunk contents for a chink that's not optimized to be a whole buffer. */
 struct mqChunk {
@@ -94,8 +100,8 @@ struct mqChunk {
    /* General read/write functions for pages that don't use buffers. addresses
       are given as full 32-bit values because this is generally used for MMIO,
       for which the full address is more recognizable. */
-   bool (*read)(u32 address, int size, u32 *result);
-   bool (*write)(u32 address, int size, u32 value);
+   mq_chunk_read_t *read;
+   mq_chunk_write_t *write;
 };
 
 typedef struct mqMemory mqMemory;
@@ -103,7 +109,31 @@ typedef struct mqChunk mqChunk;
 
 //=== Memory configuration ===================================================//
 
+mqMemory *mq_memory_alloc(void);
+void mq_memory_free(mqMemory *mem);
 
+/* Reset to an empty memory, freeing all existing chunks and pages. */
+void mq_memory_init(mqMemory *mem);
+
+/* Create a buffer chunk. If `buffer` is NULL, allocates one, initialized with
+   zero. Returns true on success, false if the chunk already exists. */
+bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer);
+
+/* Create a standard chunk. Returns a pointer to the chunk structure, NULL if
+   the chunk already exists. */
+mqChunk *mq_memory_createChunk(
+    mqMemory *mem, u32 addr, mq_chunk_read_t *read, mq_chunk_write_t *write);
+
+/* Create a buffer page in a chunk. If `buffer` is NULL, allocates one. The
+   high-order bits of the address are ignored. Returns true on success, false
+   if the page already exists. */
+bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
+
+/* Load data from a buffer into memory. This applies endianness swaps to match
+   the internal buffer format and works across chunk and page boundaries.
+   Returns true on success, false if the designated range is not entirely
+   covered by buffer chunks and buffer pages. */
+bool mq_memory_load(mqMemory *mem, u32 addr, void const *data, int size);
 
 //=== Memory access functions ================================================//
 
@@ -115,7 +145,7 @@ MQ_INLINE u8 mq_buffer_read8(void const *buffer, u32 offset)
 }
 MQ_INLINE u16 mq_buffer_read16(void const *buffer, u32 offset)
 {
-   return *(u16 *)((u8 *)buffer + (offset ^ 1));
+   return *(u16 *)((u8 *)buffer + (offset ^ 2));
 }
 MQ_INLINE u32 mq_buffer_read32(void const *buffer, u32 offset)
 {
@@ -128,7 +158,7 @@ MQ_INLINE void mq_buffer_write8(void const *buffer, u32 offset, u8 value)
 }
 MQ_INLINE void mq_buffer_write16(void const *buffer, u32 offset, u16 value)
 {
-   *(u16 *)((u8 *)buffer + (offset ^ 1)) = value;
+   *(u16 *)((u8 *)buffer + (offset ^ 2)) = value;
 }
 MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 {
@@ -138,30 +168,75 @@ MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 /* Main memory access functions. */
 
 // internal
-u32 _mq_chunk_read(mqCpu *cpu, mqChunk const *chunk, u32 addr, int size);
+bool _mq_chunk_read(
+    mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out);
 
-/* Read 32 bits from memory at the given address. This raises exceptions with
-   the given machine if the access fails, in which case the return value is
-   undefined. The fast path is inlined while the slow paths are handled in the
-   internal `mq_chunk_read()` function. Alignment check can be removed by
-   compiler optimization based on known bits of `addr` at the call site. */
-MQ_INLINE u32 mq_memory_read32(mqCpu *cpu, mqMemory *mem, u32 addr)
+/* Read 32 bits from memory at the given address. On success, returns true and
+   sets *out. On error, raises an exception with the machine and returns false.
+   The fast path is inlined while the slow paths are handled in the internal
+   `_mq_chunk_read()` function. The output pointer should disappear with
+   inlining and the alignment check can be contextually optimized out. */
+MQ_INLINE bool mq_memory_read32(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
 {
     // TODO: Memory access exception type: instruction read vs. data read.
-    if(MQ_UNLIKELY(addr & 3)) {
-        mq_cpu_raiseException(cpu, SH_EXC_READ_ADDR, addr);
-        return 0;
-    }
-    // TODO: This method of error handling has issues. Is lds.l @rm+, sr going
-    // to set SR to 0 before the exception is handled?!
+    if(MQ_UNLIKELY(addr & 3))
+        return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    u32 chunkOffset = addr & 0xfffff;
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr)))
-        return mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOffset);
-    else
-        return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 4);
+    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+        *out = mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+        return true;
+    }
+
+    return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 4, out);
 }
+
+/* Read 16 bits from the given address. */
+MQ_INLINE bool mq_memory_read16(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
+{
+    // TODO: Memory access exception type: instruction read vs. data read.
+    if(MQ_UNLIKELY(addr & 1))
+        return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
+
+    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+        *out = mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+        return true;
+    }
+
+    return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 2, out);
+}
+
+/* Read 8 bits from the given address. */
+MQ_INLINE bool mq_memory_read8(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
+{
+    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+        *out = mq_buffer_read8(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+        return true;
+    }
+
+    return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 1, out);
+}
+
+/* Write to memory. Returns true on success, false if an exception occurs. */
+bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value);
+
+//=== Misc. information ======================================================//
+
+struct mqMemory_Stats {
+    /* Number of mapped chunks backed by buffers, details; total. */
+    uint bufferChunks;
+    uint detailedChunks;
+    uint totalChunks;
+    /* Number of chunks with no conventional memory at all. */
+    uint pureMMIOChunks;
+
+    /* Number of pages mapped to buffers in chunk details. */
+    uint bufferPages;
+};
+
+struct mqMemory_Stats mq_memory_stats(mqMemory const *mem);
 
 MQ_END_DEFS
 #endif /* MQ_MEMORY_H */

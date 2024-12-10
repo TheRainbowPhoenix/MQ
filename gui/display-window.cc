@@ -7,6 +7,7 @@ void DisplayGlWindow::init(Texture const &texture)
     shader_texture.init();
     shader_background.init();
     m_texture = &texture;
+    setPadding({0, 0, 0, 25});
 }
 
 void DisplayGlWindow::cleanup(void)

@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 MQ_INLINE void stc(int n, int c) {
     fprintf(stderr, "error: not implemented: stc\n");
     abort();
@@ -618,6 +620,8 @@ MQ_INLINE void mov_imm(int n, int imm) {
     fprintf(stderr, "error: not implemented: mov_imm\n");
     abort();
 }
+
+#pragma GCC diagnostic pop
 
 void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode)
 {
