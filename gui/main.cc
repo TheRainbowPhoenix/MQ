@@ -25,7 +25,7 @@ struct DelayedInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
     bool mq_initialize_gravity_duck = false;
-    bool mq_cycle;
+    int mq_cycles = 0;
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -41,7 +41,7 @@ static bool HexViewer_ReadByte(u64 addr, u8 *result)
     if(!mach || !mach->memory)
         return false;
     u32 v;
-    bool b = mq_memory_read8(&mach->cpu, mach->memory, addr, &v);
+    bool b = mq_memory_read_pure(mach->memory, addr, 1, &v);
     if(b)
         *result = v;
     return b;
@@ -112,8 +112,8 @@ static void render(void)
 
         char const *names[] = {
             "F1",     "F2",     "F3",     "F4",     "F5",     "F6",
-            "SHIFT",  "OTPN",   "VARS",   "MENU",   "←",      "↑",
-            "ALPHA",  "x2",     "^",      "EXIT",   "↓",      "→",
+            "SHIFT",  "OTPN",   "VARS",   "MENU",   "◀",      "▲",
+            "ALPHA",  "x2",     "^",      "EXIT",   "▼",      "▶",
             "XOT",    "log",    "ln",     "sin",    "cos",    "tan",
             "o/o",    "S<->D",  "(",      ")",      ",",      "→",
             "7",      "8",      "9",      "DEL",    "AC/ON",
@@ -157,7 +157,17 @@ static void render(void)
             input.mq_initialize_gravity_duck = true;
 
         if(ImGui::Button("Cycle"))
-            input.mq_cycle = true;
+            input.mq_cycles = 1;
+        if(ImGui::Button("10"))
+            input.mq_cycles = 10;
+        if(ImGui::Button("100"))
+            input.mq_cycles = 100;
+        if(ImGui::Button("1000"))
+            input.mq_cycles = 1000;
+        if(mach->stuck) {
+            ImGui::SameLine();
+            ImGui::Text("Machine is stuck!");
+        }
     }
     ImGui::End();
 
@@ -167,7 +177,7 @@ static void render(void)
 
         ImGui::BeginGroup();
         for(int i = 0; i < 16; i++)
-            ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", mach->cpu.gpRegs[i]);
+            ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", mach->cpu.r[i]);
         ImGui::EndGroup();
 
         ImGui::SameLine(0, 40);
@@ -439,8 +449,8 @@ static int update(void)
         mq_machine_load_g3a(mach, "GravityDuck.g3a");
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_cycle) {
-        mq_machine_cycle(mach);
+    if(input.mq_cycles) {
+        mq_machine_cycle(mach, input.mq_cycles);
         render_needed = std::max(render_needed, 1);
     }
 

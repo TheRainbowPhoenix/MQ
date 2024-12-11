@@ -18,6 +18,8 @@ struct mqMachine
 {
     mqCpu cpu;
     mqMemory *memory;
+
+    bool stuck;
 };
 
 typedef struct mqMachine mqMachine;
@@ -35,7 +37,9 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind);
 
 bool mq_machine_load_g3a(mqMachine *mach, char const *path);
 
-void mq_machine_cycle(mqMachine *mach);
+int mq_machine_cycle(mqMachine *mach, int cycles);
+
+void mq_mach_syscall(mqMachine *mach);
 
 MQ_END_DEFS
 #endif /* MQ_MACHINE_H */

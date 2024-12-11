@@ -118,8 +118,8 @@ bool mq_memory_load(mqMemory *mem, u32 baseAddr, void const *data, int size)
     return true;
 }
 
-bool _mq_chunk_read(
-    mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out)
+static bool _mq_chunk_read_pure(
+    mqChunk const *chunk, u32 addr, int size, u32 *out)
 {
     if(chunk) {
         u32 chunkOffset = addr & 0xfffff;
@@ -140,6 +140,14 @@ bool _mq_chunk_read(
     }
 
     // TODO: Handle special cases related to TLB/Cache areas
+    return false;
+}
+
+bool _mq_chunk_read(
+    mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out)
+{
+    if(_mq_chunk_read_pure(chunk, addr, size, out))
+        return true;
 
     /* Memory accesses outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently return undefined values in P1-P4. */
@@ -152,25 +160,55 @@ bool _mq_chunk_read(
 }
 
 static bool _mq_chunk_write(
-    mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 value)
+    mqChunk const *chunk, u32 addr, int size, u32 value)
 {
-    if(chunk) {
-        u32 chunkOffset = addr & 0xfffff;
+    if(!chunk)
+        return false;
 
-        void *pagePtr = chunk->pages[chunkOffset >> 12];
-        if(MQ_LIKELY(pagePtr != NULL)) {
-            if(size == 4)
-                mq_buffer_write32(pagePtr, chunkOffset & 0xfff, value);
-            else if(size == 2)
-                mq_buffer_write16(pagePtr, chunkOffset & 0xfff, value);
-            else
-                mq_buffer_write8(pagePtr, chunkOffset & 0xfff, value);
-            return true;
-        }
-
-        if(MQ_LIKELY(chunk->write != NULL))
-            return chunk->write(addr, size, value);
+    u32 chunkOffset = addr & 0xfffff;
+    void *pagePtr = chunk->pages[chunkOffset >> 12];
+    if(MQ_LIKELY(pagePtr != NULL)) {
+        if(size == 4)
+            mq_buffer_write32(pagePtr, chunkOffset & 0xfff, value);
+        else if(size == 2)
+            mq_buffer_write16(pagePtr, chunkOffset & 0xfff, value);
+        else
+            mq_buffer_write8(pagePtr, chunkOffset & 0xfff, value);
+        return true;
     }
+
+    if(MQ_LIKELY(chunk->write != NULL))
+        return chunk->write(addr, size, value);
+    return false;
+}
+
+bool mq_memory_write_pure(mqMemory *mem, u32 addr, int size, u32 value)
+{
+    if(MQ_UNLIKELY(addr & (size - 1)))
+        return false;
+
+    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    u32 chunkOff = addr & 0xfffff;
+    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+        if(size == 4)
+            mq_buffer_write32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+        else if(size == 2)
+            mq_buffer_write16(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+        else
+            mq_buffer_write8(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+        return true;
+    }
+
+    return _mq_chunk_write(MQ_CHUNKPTR_DETAILS(chunkPtr), addr, size, value);
+}
+
+bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value)
+{
+    if(MQ_UNLIKELY(addr & (size - 1)))
+        return mq_cpu_raiseException_false(cpu, SH_EXC_WRITE_ADDR, addr);
+
+    if(mq_memory_write_pure(mem, addr, size, value))
+        return true;
 
     /* Memory writes outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently do nothing in P1-P4. */
@@ -181,25 +219,24 @@ static bool _mq_chunk_write(
     return true;
 }
 
-bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value)
+bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out)
 {
     if(MQ_UNLIKELY(addr & (size - 1)))
-        return mq_cpu_raiseException_false(cpu, SH_EXC_WRITE_ADDR, addr);
+        return false;
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
     u32 chunkOff = addr & 0xfffff;
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
         if(size == 4)
-            mq_buffer_write32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+            *out = mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
         else if(size == 2)
-            mq_buffer_write16(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+            *out = mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
         else
-            mq_buffer_write8(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+            *out = mq_buffer_read8(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
         return true;
     }
 
-    return
-        _mq_chunk_write(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, size, value);
+    return _mq_chunk_read_pure(MQ_CHUNKPTR_DETAILS(chunkPtr), addr, size, out);
 }
 
 struct mqMemory_Stats mq_memory_stats(mqMemory const *mem)

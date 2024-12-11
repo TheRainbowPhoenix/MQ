@@ -88,15 +88,21 @@ MQ_STATIC_ASSERT(SH_NUM_EXCEPTIONS <= 32, "Too many exceptions for u32 mask");
 struct mqCpu
 {
     /* Registers */
-    u32 gpRegs[16];  // r0..r15
+    u32 r[16];  // r0..r15
     u32 spRegs[SH_NUM_SPECIAL_REGS];
 
-    /* Control flow: PC and whether the next instruction is in a delay slot */
+    /* Control flow: PC, whether the next instruction should be executed as a
+       delay slot, and the target to jump to after said delay slot. */
     u32 pc;
-    bool delaySlot;
+    bool inDelaySlot;
+    u32 delaySlotTarget;
 
     /* Mask of pending exceptions */
     u32 excMask;
+
+    /* Syscall emulation address. If this address is hit a syscall will be
+       emulated. This is set to 0 when syscall emulation is disabled */
+    u32 syscallHandler;
 };
 
 typedef struct mqCpu mqCpu;
@@ -128,10 +134,38 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
 void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode);
 
+/* Set the value of the T bit; the value provided must be 0 or 1. */
+MQ_INLINE void mq_cpu_setT(mqCpu *cpu, int T)
+{
+    cpu->spRegs[SH_SR] = (cpu->spRegs[SH_SR] & -2) + T;
+}
+/* Get the value of the T bit. */
+MQ_INLINE int mq_cpu_getT(mqCpu *cpu)
+{
+    return cpu->spRegs[SH_SR] & 1;
+}
+
+/* Set a delay slot with the given target destination. */
+MQ_INLINE void mq_cpu_setDelaySlot(mqCpu *cpu, u32 targetAddress)
+{
+    cpu->inDelaySlot = true;
+    cpu->delaySlotTarget = targetAddress;
+    cpu->pc += 2;
+}
+/* Check if the current instructions is running in a delay slot. This is only
+   for instruction emulation functions. */
+MQ_INLINE bool mq_cpu_inDelaySlot(mqCpu *cpu)
+{
+    return cpu->inDelaySlot;
+}
+
 //=== Misc. information ======================================================//
 
 /* Lowercase name of a special register. */
-char const *mq_cpu_spreg_name(int spReg);
+char const *mq_cpu_specialRegisterName(int spReg);
+
+/* Enumeration name of an exception number. */
+char const *mq_cpu_exceptionName(int exc);
 
 MQ_END_DEFS
 #endif /* MQ_CPU_H */

@@ -233,6 +233,12 @@ def resolveDecisions(tree, instructions):
 
 #=== Decoder generation =======================================================#
 
+DECODER_HEADER = ""
+DECODER_FOOTER = """\
+#undef _OPCODE
+#undef _DECIDE
+"""
+
 def codegen_caseLabels(spec):
     if spec == "_":
         return ["default:"]
@@ -253,8 +259,8 @@ def codegen(node, depth=0) -> str:
                 s += indent + "  break;\n"
             return s + indent + "}\n"
         case Decide():
-            args = ", ".join(codegen(s) for s in node.args)
-            return indent + str(node.name) + "(" + args + ");\n"
+            args = [str(node.name)] + [codegen(s) for s in node.args]
+            return "{}_DECIDE({});\n".format(indent, ", ".join(args))
         case Slice():
             mask = (1 << node.size) - 1
             return "(_OPCODE >> {}) & 0x{:x}".format(node.start, mask)
@@ -264,7 +270,7 @@ def generateDecoder(spec, filename="<inline>"):
     tree, ins = parseSpec(spec, filename)
     if tree is not None:
         resolveDecisions(tree, ins)
-        return codegen(tree)
+        return DECODER_HEADER + codegen(tree) + DECODER_FOOTER
 
 #=== Main function ============================================================#
 

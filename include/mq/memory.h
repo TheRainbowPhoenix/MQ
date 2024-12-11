@@ -172,10 +172,11 @@ bool _mq_chunk_read(
     mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out);
 
 /* Read 32 bits from memory at the given address. On success, returns true and
-   sets *out. On error, raises an exception with the machine and returns false.
-   The fast path is inlined while the slow paths are handled in the internal
-   `_mq_chunk_read()` function. The output pointer should disappear with
-   inlining and the alignment check can be contextually optimized out. */
+   sets *out. On error, raises an exception with the machine, leaves *out
+   unchanged, and returns false. The fast path is inlined while the slow paths
+   are handled in the internal `_mq_chunk_read()` function. The output pointer
+   should disappear with inlining and the alignment check can be contextually
+   optimized out. */
 MQ_INLINE bool mq_memory_read32(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
 {
     // TODO: Memory access exception type: instruction read vs. data read.
@@ -221,6 +222,11 @@ MQ_INLINE bool mq_memory_read8(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
 
 /* Write to memory. Returns true on success, false if an exception occurs. */
 bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value);
+
+/* Read/write from memory, with no exceptions/side-effects. Just returns the
+   status and value. This is used for UI code that manipulates the memory. */
+bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out);
+bool mq_memory_write_pure(mqMemory *mem, u32 addr, int size, u32 value);
 
 //=== Misc. information ======================================================//
 

@@ -20,20 +20,24 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
         cpu->spRegs[SH_VBR] = 0x00000000;
         cpu->spRegs[SH_DSR] = 0x0000;
         cpu->pc = 0xa0000000;
+        cpu->syscallHandler = 0;
     }
     else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_FX) {
         cpu->spRegs[SH_SR] = 0x40000000; // MD=1
-        cpu->gpRegs[4] = 0; // isAppli
-        cpu->gpRegs[5] = 0; // optNum
+        cpu->r[4] = 0; // isAppli
+        cpu->r[5] = 0; // optNum
         // TODO: Initial r15
         cpu->pc = 0x00300200;
+        cpu->syscallHandler = 0x80010070;
     }
     else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_CG) {
         cpu->spRegs[SH_SR] = 0x40000000; // MD=1
-        cpu->gpRegs[4] = 0; // isAppli
-        cpu->gpRegs[5] = 0; // optNum
-        // TODO: Initial r15
+        cpu->r[4] = 0; // isAppli
+        cpu->r[5] = 0; // optNum
+        // TODO: Initial r15 directly in P1
+        cpu->r[15] = 0x08100000 + (512 << 10);
         cpu->pc = 0x00300000;
+        cpu->syscallHandler = 0x80020070;
     }
 }
 
@@ -90,9 +94,11 @@ static void handleException(mqCpu *cpu, int exc, u32 previousPC)
     // TODO: Set EXPEVT (if exception), otherwise set INTEVT.
     // TODO: Requires interface for INTC to provide interrupt code.
 
+    printf("Handling exception %s\n", mq_cpu_exceptionName(exc));
+
     cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
-    cpu->spRegs[SH_SGR] = cpu->gpRegs[15];
+    cpu->spRegs[SH_SGR] = cpu->r[15];
 
     cpu->pc = cpu->spRegs[SH_VBR] + exc_VBROffset(exc);
 
@@ -107,6 +113,8 @@ static void handleException(mqCpu *cpu, int exc, u32 previousPC)
 
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
 {
+    printf("Exception raised! %s (%08x)\n", mq_cpu_exceptionName(exc), value);
+
     cpu->excMask |= (1 << exc);
     if(exc == SH_EXC_INS_ADDR
        || exc == SH_EXC_INS_TLBMISS
@@ -134,6 +142,13 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
 
     printf("Cycle: pc=%08x\n", cpu->pc);
 
+    /* We don't check whether the syscall address is 0 here, since this is a
+       hot path. We raise the exception if pc=0 in the syscall handler. */
+    if(MQ_UNLIKELY(cpu->pc == cpu->syscallHandler)) {
+        mq_mach_syscall(mach);
+        goto endCycle;
+    }
+
     /* Fetch the next instruction. */
     // TODO: Same-basic-block prefetching optimization.
     u32 ins;
@@ -143,6 +158,16 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
         _mq_cpu_execute(mach, cpu, ins);
     }
 
+    /* In case of a delay slot, continue. */
+    if(cpu->inDelaySlot && mq_memory_read16(cpu, mach->memory, cpu->pc, &ins)) {
+        printf("  -> delay ins=%04x\n", ins);
+        _mq_cpu_execute(mach, cpu, ins);
+
+        cpu->pc = cpu->delaySlotTarget;
+        cpu->inDelaySlot = false;
+    }
+
+endCycle:
     /* Check for exceptions or interrupts. This is done *after* running the
        instruction because some exceptions are re-execution type. */
     if(cpu->excMask) {
@@ -151,7 +176,7 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
     }
 }
 
-char const *mq_cpu_spreg_name(int spReg)
+char const *mq_cpu_specialRegisterName(int spReg)
 {
     static char const spreg_names[SH_NUM_SPECIAL_REGS][8] = {
         "sr",       "gbr",      "vbr",      "ssr",
@@ -169,4 +194,34 @@ char const *mq_cpu_spreg_name(int spReg)
     char const *name =
         ((uint)spReg < SH_NUM_SPECIAL_REGS) ? spreg_names[spReg] : NULL;
     return name && *name ? name : NULL;
+}
+
+char const *mq_cpu_exceptionName(int exc)
+{
+    char const *exc_names[SH_NUM_EXCEPTIONS] = {
+        "POWERON_RESET",
+        "HUDI_RESET",
+        "MANUAL_RESET",
+        "TLB_INS_MULTIHIT",
+        "TLB_DATA_MULTIHIT",
+        "BREAK_BEFORE",
+        "INS_ADDR",
+        "INS_TLBMISS",
+        "INS_TLBPROT",
+        "ILLEGAL",
+        "ILLEGAL_SLOT",
+        "TRAP",
+        "READ_ADDR",
+        "WRITE_ADDR",
+        "READ_TLBMISS",
+        "WRITE_TLBMISS",
+        "READ_TLBPROT",
+        "WRITE_TLBPROT",
+        "INITIAL_PAGE_WRITE",
+        "BREAK_AFTER",
+        "NMI",
+        "INTERRUPT",
+    };
+
+    return ((uint)exc < SH_NUM_EXCEPTIONS) ? exc_names[exc] : NULL;
 }

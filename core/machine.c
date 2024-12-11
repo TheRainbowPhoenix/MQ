@@ -42,6 +42,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         // TODO[machine]: More precise memory setup for CG add-in
     }
+
+    mach->stuck = false;
 }
 
 bool mq_machine_load_g3a(mqMachine *mach, char const *path)
@@ -72,7 +74,34 @@ err:
     return false;
 }
 
-void mq_machine_cycle(mqMachine *mach)
+int mq_machine_cycle(mqMachine *mach, int cycles)
 {
-    mq_cpu_cycle(mach, &mach->cpu);
+    for(int i = 0; i < cycles; i++) {
+        if(mach->stuck)
+            return i;
+        mq_cpu_cycle(mach, &mach->cpu);
+    }
+    return cycles;
+}
+
+void mq_mach_syscall(mqMachine *mach)
+{
+    u32 syscallID = mach->cpu.r[0];
+
+    // TODO: Check syscall API version
+
+    printf("Syscall! r0=%08x\n", mach->cpu.r[0]);
+
+    if(syscallID == 0x0029) {
+        printf("Ignoring %%029, what is that?\n");
+        /* Just return 0. */
+        mach->cpu.r[0] = 0;
+    }
+    else {
+        printf("Unknown sycall, getting stuck.\n");
+        mach->stuck = true;
+        return;
+    }
+
+    mach->cpu.pc = mach->cpu.spRegs[SH_PR];
 }
