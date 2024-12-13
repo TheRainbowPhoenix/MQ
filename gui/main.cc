@@ -156,18 +156,21 @@ static void render(void)
         if(ImGui::Button("Reset and load GravityDuck.g3a"))
             input.mq_initialize_gravity_duck = true;
 
-        if(ImGui::Button("Cycle"))
+        ImGui::Text("Cycle:");
+        ImGui::SameLine();
+        if(ImGui::Button("1"))
             input.mq_cycles = 1;
+        ImGui::SameLine();
         if(ImGui::Button("10"))
             input.mq_cycles = 10;
+        ImGui::SameLine();
         if(ImGui::Button("100"))
             input.mq_cycles = 100;
+        ImGui::SameLine();
         if(ImGui::Button("1000"))
             input.mq_cycles = 1000;
-        if(mach->stuck) {
-            ImGui::SameLine();
+        if(mach->stuck)
             ImGui::Text("Machine is stuck!");
-        }
     }
     ImGui::End();
 
@@ -234,7 +237,8 @@ static void render(void)
         };
 
         // TODO: Avoid recomputation of memory stats every frame?!
-        struct mqMemory_Stats s = mq_memory_stats(mach->memory);
+        mqMemory const *mem = mach->memory;
+        struct mqMemory_Stats s = mq_memory_stats(mem);
 
         ImGui::Text("1 MB Chunks: %d (%d buffer, %d detailed including %d "
                     "pure MMIO)",
@@ -242,23 +246,32 @@ static void render(void)
                     s.pureMMIOChunks);
         ImGui::Text("4 kB Pages: %d mapped", s.bufferPages);
 
-        mqMemory const *mem = mach->memory;
-        for(int i = 0; i < 0x1000; i++) {
-            char id[16];
-            sprintf(id, "memchunk%d", i);
-            if(mem->chunks[i] && ImGui::TreeNode(id, "%08x", i << 20)) {
-                // TODO: Nodes are clicked only when closed. Leaves?
-                if(ImGui::IsItemClicked()) {
-                    HV.Cursor = i << 20;
+        if(ImGui::BeginTable("memtable", 2, ImGuiTableFlags_SizingStretchSame)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+
+            ImGui::SeparatorTextD("Chunks");
+            for(int i = 0; i < 0x1000; i++) {
+                char id[16];
+                sprintf(id, "memchunk%d", i);
+                if(!MQ_CHUNKPTR_ISNULL(mem->chunks[i]) &&
+                    ImGui::TreeNode(id, "%08x", i << 20)) {
+                    // TODO: Nodes are clicked only when closed. Leaves?
+                    if(ImGui::IsItemClicked()) {
+                        HV.Cursor = i << 20;
+                    }
+                    ImGui::TreePop();
                 }
-                ImGui::TreePop();
             }
+
+            ImGui::TableNextColumn();
+            ImGui::SeparatorTextD("Pages");
+            ImGui::Text("TODO");
+            ImGui::EndTable();
         }
 
-        ImGuiStyle const &style = ImGui::GetStyle();
-        ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
-        ImGui::SeparatorText("Hex Viewer");
-        ImGui::PopStyleColor();
+        ImGui::SeparatorTextD("Hex Viewer");
+        ImGui::Text("FIXME");
         ImGui::PushFont(fontMono);
         ImGui::AddHexViewer(HV);
         ImGui::PopFont();
@@ -268,7 +281,7 @@ static void render(void)
     static bool first_frame = true;
     if(first_frame) {
         auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
-            ImGuiDir_Left, 0.6f, nullptr, &dock);
+            ImGuiDir_Left, 0.65f, nullptr, &dock);
         auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
         auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
@@ -482,7 +495,7 @@ int main(void)
 {
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
 
-    mach = mq_machine_alloc();
+    mach = mq_machine_create();
 
     if(azur_init("MQ", 1366, 768) != 0)
         return 1;
@@ -551,7 +564,7 @@ int main(void)
 
     azur_quit();
     if(mach) {
-        mq_machine_free(mach);
+        mq_machine_destroy(mach);
         mach = nullptr;
     }
     return rc;

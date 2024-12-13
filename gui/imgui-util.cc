@@ -22,6 +22,14 @@ void TextLR(char const *left, char const *fmt, ...)
     free(str);
 }
 
+void SeparatorTextD(char const *str)
+{
+    ImGuiStyle const &style = ImGui::GetStyle();
+    ImGui::PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]);
+    ImGui::SeparatorText(str);
+    ImGui::PopStyleColor();
+}
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &st)

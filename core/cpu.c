@@ -11,9 +11,14 @@
 #include <string.h>
 #include <stdio.h>
 
-void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
+void mq_cpu_reset(mqCpu *cpu)
 {
     memset(cpu, 0x00, sizeof *cpu);
+}
+
+void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
+{
+    mq_cpu_reset(cpu);
 
     if(initializeKind == MQ_CPU_INITIALIZE_POWERON) {
         cpu->spRegs[SH_SR] = 0x700000f0; // MD=1 RB=1 BL=1 IMASK=15

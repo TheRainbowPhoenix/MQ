@@ -24,9 +24,11 @@ struct mqMachine
 
 typedef struct mqMachine mqMachine;
 
-mqMachine *mq_machine_alloc(void);
-
-void mq_machine_free(mqMachine *mach);
+/* CRD functions for mqMachine. The default state is the default CPU and memory
+   state. */
+mqMachine *mq_machine_create(void);
+void mq_machine_reset(mqMachine *mach);
+void mq_machine_destroy(mqMachine *mach);
 
 enum {
     MQ_MACHINE_INITIALIZE_ADDIN_FX,

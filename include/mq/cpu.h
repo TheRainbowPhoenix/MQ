@@ -115,6 +115,7 @@ enum {
     MQ_CPU_INITIALIZE_ADDIN_CG,
 };
 
+void mq_cpu_reset(mqCpu *cpu);
 void mq_cpu_initialize(mqCpu *cpu, int initializeKind);
 
 //=== Emulation routines =====================================================//

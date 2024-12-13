@@ -71,7 +71,9 @@ MQ_START_DEFS
 /* A chunk pointer whose least significant bit is stolen to indicate whether
    the entire chunk is a buffer (0) or not (1). */
 typedef void *mqChunkPointer;
-/* Macros for punning around the chunk pointer's. */
+/* Macros for punning around the chunk pointers. */
+#define MQ_CHUNKPTR_NULL ((mqChunkPointer)1)
+#define MQ_CHUNKPTR_ISNULL(PTR) ((uintptr_t)(PTR) == 1)
 #define MQ_CHUNKPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
 #define MQ_CHUNKPTR_BUFFER(PTR) ((void *)(PTR))
 #define MQ_CHUNKPTR_DETAILS(PTR) ((mqChunk *)((uintptr_t)(PTR) & -2))
@@ -79,50 +81,86 @@ typedef void *mqChunkPointer;
 #define MQ_CHUNKPTR_MKDETAILS(PTR) ((mqChunkPointer)((uintptr_t)(PTR) | 1))
 
 struct mqMemory {
-    /* Array of pointers to chunk info. If the LSB is clear this is a direct
-       pointer a buffer representation (cannot be NULL). If the LSB is set this
-       is a pointer to an mqChunkDetails structure after clearing said bit. An
-       empty entry is thus indicated with value (void *)1. */
+    /* Array of pointers to chunk info.
+       * If the LSB is clear this is a direct pointer a buffer representation,
+         and the pointer cannot be NULL.
+       * If the LSB is set this is a pointer to an mqChunk structure after
+         clearing said bit if the result is not NULL.
+       * An empty entry is indicated with (mqChunkPointer)1. */
+    // TODO: Use the other bit for writeability.
     mqChunkPointer chunks[0x1000];
+
+    // TODO: Cache, MMU, mapping description, lazy mappings...
 };
 
-/* Read-write functions for a chunk. */
-typedef bool mq_chunk_read_t(u32 addr, int size, u32 *result);
-typedef bool mq_chunk_write_t(u32 addr, int size, u32 value);
+/* A page pointer whose two least significant bits are stolen to indicate
+   whether the page is a buffer or MMIO, and the MMIO map size. */
+typedef void *mqPagePointer;
+/* Macros for punning around the page pointers. */
+#define MQ_PAGEPTR_NULL ((mqPagePointer)1)
+#define MQ_PAGEPTR_ISNULL(PTR) ((uintptr_t)(PTR) == 1)
+#define MQ_PAGEPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
+#define MQ_PAGEPTR_BUFFER(PTR) ((void *)(PTR))
+#define MQ_PAGEPTR_MMIOPAGE(PTR) ((mqMMIOPage *)((uintptr_t)(PTR) & -1))
+#define MQ_PAGEPTR_MKBUFFER(PTR) ((mqPagePointer)(PTR))
+#define MQ_PAGEPTR_MKMMIOPAGE(PTR) ((mqPagePointer)((uintptr_t)(PTR) | 1))
 
-/* Chunk contents for a chink that's not optimized to be a whole buffer. */
+/* Chunk contents for a chunk that's not optimized to be a whole buffer. The
+   chunk is divided into 4-kB pages, all of which can independently be backed
+   by a buffer or define an MMIO range. */
 struct mqChunk {
-   /* Array of pointers to raw pages. If the pointer is not NULL then the page
-      is a raw buffer access, otherwise accesses to the page are handled by the
-      read/write functions below. */
-   void *pages[256];
+   /* Array of pointers to pages.
+      * If the LSB is clear this is a buffer pointer, and it can't be NULL.
+      * If the LSB is set this clearing it yields an mqMMIOPage * if not NULL.
+      * An empty page is indicated with (mqPagePointer)1. */
+    // TODO: Use the other bit for writeability.
+   mqPagePointer pages[256];
+};
 
+/* An MMIO range of up to 4 kiB. This structure defines fairly rich info
+   structures and independently maps address within the range to these
+   structures. This is to avoid repeating 8-byte pointers over a large area. */
+struct mqMMIOPage {
+    /* Length of the range. The range always starts at offset 0 in the page. */
+    int length;
+    /* Mapping of bytes [0..length) in the page to into structures. */
+    u8 *map;
+    /* List of IO structures, indexed by map[address & 0xfff]. */
+    struct mqMMIO *io;
+};
+
+/* Information on a memory-mapped I/O unit. */
+typedef bool mq_mmio_read_t(u32 addr, int size, u32 *result);
+typedef bool mq_mmio_write_t(u32 addr, int size, u32 value);
+struct mqMMIO {
    /* General read/write functions for pages that don't use buffers. addresses
       are given as full 32-bit values because this is generally used for MMIO,
       for which the full address is more recognizable. */
-   mq_chunk_read_t *read;
-   mq_chunk_write_t *write;
+   mq_mmio_read_t *read;
+   mq_mmio_write_t *write;
 };
 
 typedef struct mqMemory mqMemory;
 typedef struct mqChunk mqChunk;
+typedef struct mqMMIOPage mqMMIOPage;
+typedef struct mqMMIO mqMMIO;
 
 //=== Memory configuration ===================================================//
 
-mqMemory *mq_memory_alloc(void);
-void mq_memory_free(mqMemory *mem);
-
-/* Reset to an empty memory, freeing all existing chunks and pages. */
-void mq_memory_init(mqMemory *mem);
+/* CRD functions for mqMemory. The default state is an empty memory with no
+   mapped chunks. */
+mqMemory *mq_memory_create(void);
+void mq_memory_reset(mqMemory *mem);
+void mq_memory_destroy(mqMemory *mem);
 
 /* Create a buffer chunk. If `buffer` is NULL, allocates one, initialized with
-   zero. Returns true on success, false if the chunk already exists. */
+   zero. Otherwise, takes ownership of the buffer. Returns true on success,
+   false if the chunk exists or alloc fails, in which case it is unchanged. */
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer);
 
-/* Create a standard chunk. Returns a pointer to the chunk structure, NULL if
-   the chunk already exists. */
-mqChunk *mq_memory_createChunk(
-    mqMemory *mem, u32 addr, mq_chunk_read_t *read, mq_chunk_write_t *write);
+/* Create a standard (broken-down) chunk. Returns a pointer to the chunk
+   structure, NULL if the chunk already exists. */
+mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr);
 
 /* Create a buffer page in a chunk. If `buffer` is NULL, allocates one. The
    high-order bits of the address are ignored. Returns true on success, false
@@ -184,7 +222,7 @@ MQ_INLINE bool mq_memory_read32(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
         return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
         *out = mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
         return true;
     }
@@ -200,7 +238,7 @@ MQ_INLINE bool mq_memory_read16(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
         return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
         *out = mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
         return true;
     }
@@ -212,7 +250,7 @@ MQ_INLINE bool mq_memory_read16(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
 MQ_INLINE bool mq_memory_read8(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
 {
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
         *out = mq_buffer_read8(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
         return true;
     }

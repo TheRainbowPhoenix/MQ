@@ -17,6 +17,10 @@ namespace ImGui {
    right-aligned on the right side of the current drawing region. */
 void TextLR(char const *left, char const *fmt, ...);
 
+/* Separator text, but disabled. */
+void SeparatorTextD(char const *str);
+
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &style);
