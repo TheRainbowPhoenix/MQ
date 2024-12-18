@@ -92,6 +92,8 @@ struct HexViewer {
     int MajorSpacing = 10;
     /* Spacing (pixels) between bytes in hex column. */
     int MinorSpacing = 2;
+    /* Center-align horizontally */
+    bool AlignXCenter = true;
 
     //=== Variable data ===//
 

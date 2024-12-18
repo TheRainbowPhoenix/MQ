@@ -1,4 +1,5 @@
 #include "imgui-util.h"
+#include <algorithm>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -193,9 +194,11 @@ static void RenderHexViewer(HexViewer &HV)
         HV.BytesPerLine = PreviousPowerOfTwo(HV.BytesPerLine);
 
     /* Center the view if we don't use all the space. */
-    int pixelsLeft = spaceForBytes - HV.BytesPerLine * bytePixels;
-    TL.x += pixelsLeft / 2;
-    R.x -= pixelsLeft;
+    if(HV.AlignXCenter) {
+        int pixelsLeft = spaceForBytes - HV.BytesPerLine * bytePixels;
+        TL.x += pixelsLeft / 2;
+        R.x -= pixelsLeft;
+    }
 
     u64 addr = HV.Cursor;
     u8 byte;

@@ -4,7 +4,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <imgui_impl_opengl3.h>
-#include <imgui_impl_sdl.h>
+#include <imgui_impl_sdl2.h>
 #include <azur/azur.h>
 #include <azur/log.h>
 #include <SDL2/SDL.h>
@@ -26,6 +26,7 @@ struct DelayedInput {
     bool mq_initialize_addin_cg = false;
     bool mq_initialize_gravity_duck = false;
     int mq_cycles = 0;
+    bool mq_cycle_until_stuck = false;
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -169,6 +170,10 @@ static void render(void)
         ImGui::SameLine();
         if(ImGui::Button("1000"))
             input.mq_cycles = 1000;
+        if(ImGui::Button("10000"))
+            input.mq_cycles = 10000;
+        if(ImGui::Button("Until stuck"))
+            input.mq_cycle_until_stuck = true;
         if(mach->stuck)
             ImGui::Text("Machine is stuck!");
     }
@@ -229,12 +234,13 @@ static void render(void)
     }
     ImGui::End();
 
+    static ImGui::HexViewer HV = {
+        .AddressBits = 32,
+        .ReadByte = HexViewer_ReadByte,
+        .AlignXCenter = false,
+        .Cursor = 0,
+    };
     if(ImGui::Begin("Memory", nullptr, ImGuiWindowFlags_HorizontalScrollbar)) {
-        static ImGui::HexViewer HV = {
-            .AddressBits = 32,
-            .ReadByte = HexViewer_ReadByte,
-            .Cursor = 0,
-        };
 
         // TODO: Avoid recomputation of memory stats every frame?!
         mqMemory const *mem = mach->memory;
@@ -269,9 +275,10 @@ static void render(void)
             ImGui::Text("TODO");
             ImGui::EndTable();
         }
+    }
+    ImGui::End();
 
-        ImGui::SeparatorTextD("Hex Viewer");
-        ImGui::Text("FIXME");
+    if(ImGui::Begin("Hex Viewer")) {
         ImGui::PushFont(fontMono);
         ImGui::AddHexViewer(HV);
         ImGui::PopFont();
@@ -286,14 +293,18 @@ static void render(void)
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
         auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
+        auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
+            dock_left_bottom,
+            ImGuiDir_Right, 0.55f, nullptr, &dock_left_bottom);
         auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
             ImGuiDir_Down, 0.6f, nullptr, &dock);
 
         ImGui::DockBuilderDockWindow("Display", dock);
         ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
-        ImGui::DockBuilderDockWindow("Memory", dock_left_top_right);
-        ImGui::DockBuilderDockWindow("Inspector", dock_left_bottom);
+        ImGui::DockBuilderDockWindow("Inspector", dock_left_top_right);
+        ImGui::DockBuilderDockWindow("Memory", dock_left_bottom);
+        ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
     }
@@ -462,7 +473,12 @@ static int update(void)
         mq_machine_load_g3a(mach, "GravityDuck.g3a");
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_cycles) {
+    if(input.mq_cycle_until_stuck) {
+        while(!mach->stuck)
+            mq_machine_cycle(mach, 1000);
+        render_needed = std::max(render_needed, 1);
+    }
+    else if(input.mq_cycles) {
         mq_machine_cycle(mach, input.mq_cycles);
         render_needed = std::max(render_needed, 1);
     }

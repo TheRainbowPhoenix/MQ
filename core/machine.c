@@ -46,6 +46,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBufferChunk(mach->memory, 0x00400000, NULL);
         /* P0 userspace RAM */
         mq_memory_createBufferChunk(mach->memory, 0x08100000, NULL);
+        /* VRAM (way more than needed!) */
+        mq_memory_createBufferChunk(mach->memory, 0x80000000, NULL);
 
         // TODO[machine]: More precise memory setup for CG add-in
     }
@@ -104,6 +106,16 @@ void mq_mach_syscall(mqMachine *mach)
         printf("Ignoring %%029, what is that?\n");
         /* Just return 0. */
         mach->cpu.r[0] = 0;
+    }
+    /* GetVRAMAddress() */
+    else if(syscallID == 0x1e6) {
+        mach->cpu.r[0] = 0x80000000;
+    }
+    /* RTC_GetTicks() */
+    else if(syscallID == 0x2c1) {
+        // FIXME: GetTicks() more than trivial counter
+        static int ticks = 0;
+        mach->cpu.r[0] = ++ticks;
     }
     else {
         printf("Unknown sycall, getting stuck.\n");

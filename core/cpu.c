@@ -92,18 +92,28 @@ static int highestPriorityException(u32 excMask)
     return -1;
 }
 
-static void handleException(mqCpu *cpu, int exc, u32 previousPC)
+static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
 {
     // TODO: Does SR.BL=1 double fault or simply wait to raise the exception?
+    if(cpu->spRegs[SH_SR] & 0x10000000) {
+        fprintf(stderr, "Double fault!\n");
+        return false;
+    }
 
     // TODO: Set EXPEVT (if exception), otherwise set INTEVT.
     // TODO: Requires interface for INTC to provide interrupt code.
+
+    // TODO: Break from sleep
 
     printf("Handling exception %s\n", mq_cpu_exceptionName(exc));
 
     cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
     cpu->spRegs[SH_SGR] = cpu->r[15];
+
+    /* Set BL=1 */
+    cpu->spRegs[SH_SR] |= 0x10000000;
+    // TODO: Set BL=1 MD=1
 
     cpu->pc = cpu->spRegs[SH_VBR] + exc_VBROffset(exc);
 
@@ -145,7 +155,7 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
 {
     u32 previousPC = cpu->pc;
 
-    printf("Cycle: pc=%08x\n", cpu->pc);
+    // printf("Cycle: pc=%08x\n", cpu->pc);
 
     /* We don't check whether the syscall address is 0 here, since this is a
        hot path. We raise the exception if pc=0 in the syscall handler. */
@@ -158,14 +168,14 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
     // TODO: Same-basic-block prefetching optimization.
     u32 ins;
     if(mq_memory_read16(cpu, mach->memory, cpu->pc, &ins)) {
-        printf("  -> ins=%04x\n", ins);
+        // printf("  -> ins=%04x\n", ins);
         /* Decode and execute the instruction. */
         _mq_cpu_execute(mach, cpu, ins);
     }
 
     /* In case of a delay slot, continue. */
     if(cpu->inDelaySlot && mq_memory_read16(cpu, mach->memory, cpu->pc, &ins)) {
-        printf("  -> delay ins=%04x\n", ins);
+        // printf("  -> delay ins=%04x\n", ins);
         _mq_cpu_execute(mach, cpu, ins);
 
         cpu->pc = cpu->delaySlotTarget;
@@ -177,7 +187,8 @@ endCycle:
        instruction because some exceptions are re-execution type. */
     if(cpu->excMask) {
         int exc = highestPriorityException(cpu->excMask);
-        handleException(cpu, exc, previousPC);
+        if(!handleException(cpu, exc, previousPC))
+            mach->stuck = true;
     }
 }
 
