@@ -61,6 +61,8 @@ void ImGui_LoadMQStyle(ImGuiStyle &st)
     st.Colors[ImGuiCol_TabUnfocused]       = {.165, .165, .18, .97};
     st.Colors[ImGuiCol_TabUnfocusedActive] = {.17,  .17,  .19, 1  };
     st.Colors[ImGuiCol_DockingPreview]     = {.25,  .375, .5,  .5 };
+    st.Colors[ImGuiCol_TabDimmedSelected]  = st.Colors[ImGuiCol_WindowBg];
+    st.Colors[ImGuiCol_Tab]                = st.Colors[ImGuiCol_TabDimmed];
 
     st.Colors[ImGuiCol_Border].w = 0.25;
     st.Colors[ImGuiCol_ScrollbarBg].w = 0.00;

@@ -19,6 +19,8 @@ set(SOURCES
   core/machine.c
   core/memory.c
 
+  system/heap.c
+
   gui/display-window.cc
   gui/imgui-util.cc
   gui/main.cc

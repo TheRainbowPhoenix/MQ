@@ -257,17 +257,29 @@ static void render(void)
             ImGui::TableNextColumn();
 
             ImGui::SeparatorTextD("Chunks");
-            for(int i = 0; i < 0x1000; i++) {
-                char id[16];
-                sprintf(id, "memchunk%d", i);
-                if(!MQ_CHUNKPTR_ISNULL(mem->chunks[i]) &&
-                    ImGui::TreeNode(id, "%08x", i << 20)) {
-                    // TODO: Nodes are clicked only when closed. Leaves?
-                    if(ImGui::IsItemClicked()) {
+            ImVec2 avl = ImGui::GetContentRegionAvail();
+            if(ImGui::BeginListBox("##memory-chunks", ImVec2(avl.x - 4, -1))) {
+                static int selectedChunk = -1;
+                // TODO: Reset selection if invalid after a change
+
+                for(uint i = 0; i < 0x1000; i++) {
+                    char addr[16];
+                    sprintf(addr, "%08x", i << 20);
+                    if(MQ_CHUNKPTR_ISNULL(mem->chunks[i]))
+                        continue;
+
+                    ImGui::SetNextItemAllowOverlap();
+                    bool clicked = ImGui::Selectable(addr, i == selectedChunk);
+                    ImGui::SameLine();
+                    ImGui::Text(MQ_CHUNKPTR_ISBUFFER(mem->chunks[i]) ?
+                        "(Buffer)" : "(Details)");
+
+                    if(clicked) {
+                        selectedChunk = i;
                         HV.Cursor = i << 20;
                     }
-                    ImGui::TreePop();
                 }
+                ImGui::EndListBox();
             }
 
             ImGui::TableNextColumn();
@@ -275,6 +287,11 @@ static void render(void)
             ImGui::Text("TODO");
             ImGui::EndTable();
         }
+    }
+    ImGui::End();
+
+    if(ImGui::Begin("Heap")) {
+        ImGui::Text("TODO: System heap emulation");
     }
     ImGui::End();
 
@@ -304,6 +321,7 @@ static void render(void)
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
         ImGui::DockBuilderDockWindow("Inspector", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Memory", dock_left_bottom);
+        ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
