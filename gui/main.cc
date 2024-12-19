@@ -1,5 +1,6 @@
 #include "gui.h"
 #include <mq/machine.h>
+#include <mq/system/heap.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -11,6 +12,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <memory>
 
 DisplayGlWindow DGW;
@@ -27,6 +29,7 @@ struct DelayedInput {
     bool mq_initialize_gravity_duck = false;
     int mq_cycles = 0;
     bool mq_cycle_until_stuck = false;
+    bool mq_heap_init = false;
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -140,6 +143,12 @@ static void render(void)
     static bool show_demo_window = false;
 
     if(ImGui::Begin("Control", nullptr, 0)) {
+        struct mallinfo2 mi = mallinfo2();
+        /* This info is not available with AddressSanitizer's wrapper's */
+        if(mi.arena || mi.hblkhd)
+            ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
+                (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
+
         ImGui::Checkbox("Show demo window", &show_demo_window);
 
         if(ImGui::Button("128x64 mono"))
@@ -248,7 +257,16 @@ static void render(void)
         HV.Cursor = MWA.address;
 
     if(ImGui::Begin("Heap")) {
-        ImGui::Text("TODO: System heap emulation");
+        u32 heapStart, heapEnd;
+        bool initialized = mq_heap_isInitialized(&heapStart, &heapEnd);
+        if(initialized) {
+            ImGui::Text("Heap from %08x to %08x", heapStart, heapEnd);
+        }
+        else {
+            ImGui::Text("System heap is not initialized");
+            if(ImGui::Button("Initialize"))
+                input.mq_heap_init = true;
+        }
     }
     ImGui::End();
 
@@ -425,7 +443,7 @@ static int update(void)
 
     while(SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
-        render_needed = std::max(render_needed, 2);
+        render_needed = std::max(render_needed, 3);
 
         if(e.type == SDL_QUIT)
             return 1;
@@ -456,6 +474,9 @@ static int update(void)
     else if(input.mq_cycles) {
         mq_machine_cycle(mach, input.mq_cycles);
         render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_heap_init) {
+        mq_mach_initHeap(mach);
     }
 
     if(input.ui_pattern_mono) {

@@ -10,6 +10,8 @@
 // towards buffer overflows however (with a lot of buffer overflows flaring up
 // in gint add-ins when gint's allocator became the default) so I arbitrarily
 // add 8 extra bytes at the end of each allocation to compensate.
+//
+// TODO: MQ heap is global instead of being attached to a machine.
 //---
 
 #ifndef MQ_SYSTEM_HEAP_H
@@ -46,6 +48,9 @@ typedef struct {
 /* Init the heap to use the designated range of emulated memory backed by the
    given buffer, which must be of size at least end - start. */
 bool mq_heap_init(u32 start, u32 end, void *buffer);
+
+/* Check if the heap was initialized. If it is, return the range. */
+bool mq_heap_isInitialized(u32 *start, u32 *end);
 
 /* Standard functions for using the allocated heap. These directly modify the
    backing buffer and return addresses as start-based u32. */

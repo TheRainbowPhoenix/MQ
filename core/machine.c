@@ -5,15 +5,16 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/machine.h>
+#include <mq/system/heap.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 
 mqMachine *mq_machine_create(void)
 {
-    mqMachine *mach = malloc(sizeof *mach);
+    mqMachine *mach = calloc(1, sizeof *mach);
     mq_cpu_reset(&mach->cpu);
     mach->memory = mq_memory_create();
-    mach->stuck = false;
     return mach;
 }
 
@@ -21,6 +22,7 @@ void mq_machine_reset(mqMachine *mach)
 {
     mq_cpu_reset(&mach->cpu);
     mq_memory_reset(mach->memory);
+    memset(&mach->system, 0, sizeof mach->system);
     mach->stuck = false;
 }
 
@@ -44,11 +46,18 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_reset(mach->memory);
 
         /* P0 program code */
-        mq_memory_createBlock(mach->memory, 0x00300000, 2 << 20, NULL);
+        void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
+        mq_memory_createBlock(mach->memory, 0x00300000, 2 << 20, addin);
         /* P0 userspace RAM */
-        mq_memory_createBlock(mach->memory, 0x08100000, 512 << 10, NULL);
+        void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
+        mq_memory_createBlock(mach->memory, 0x08100000, 512 << 10, uram);
         /* VRAM */
-        mq_memory_createBlock(mach->memory, 0x80000000, 384 * 216 * 2, NULL);
+        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", 384*216*2);
+        mq_memory_createBlock(mach->memory, 0x8c000000, 384 * 216 * 2, vram);
+
+        // TODO[machine]: Reasonable heap address on fx-CG?!
+        mach->system.heapAddress = 0x8c100000;
+        mach->system.heapSize = 128 << 10;
 
         // TODO[machine]: More precise memory setup for CG add-in
     }
@@ -112,7 +121,7 @@ void mq_mach_syscall(mqMachine *mach)
     }
     /* GetVRAMAddress() */
     else if(syscallID == 0x1e6) {
-        mach->cpu.r[0] = 0x80000000;
+        mach->cpu.r[0] = 0x8c000000;
     }
     /* RTC_GetTicks() */
     else if(syscallID == 0x2c1) {
@@ -127,4 +136,22 @@ void mq_mach_syscall(mqMachine *mach)
     }
 
     mach->cpu.pc = mach->cpu.spRegs[SH_PR];
+}
+
+bool mq_mach_initHeap(mqMachine *mach)
+{
+    u32 start = mach->system.heapAddress;
+    u32 size = mach->system.heapSize;
+
+    if(!start || !size || mq_heap_isInitialized(NULL, NULL))
+        return false;
+
+    void *buffer = mq_memory_allocBuffer(mach->memory, "HEAP", size);
+    if(!buffer)
+        return false;
+
+    if(!mq_memory_createBlock(mach->memory, start, size, buffer))
+        return false;
+
+    return mq_heap_init(start, start + size, buffer);
 }

@@ -431,7 +431,7 @@ u32 mq_heap_realloc(u32 ptr32, size_t size)
 
 bool mq_heap_init(u32 start, u32 end, void *buffer)
 {
-    if(end - start < 256)
+    if(end - start < 256 || !start)
         return false;
     block_t *entry_block;
 
@@ -460,9 +460,21 @@ bool mq_heap_init(u32 start, u32 end, void *buffer)
     return true;
 }
 
+bool mq_heap_isInitialized(u32 *start, u32 *end)
+{
+    if(!mq_heapBase)
+        return false;
+    if(start)
+        *start = mq_heapBase;
+    if(end)
+        *end = mq_heapEnd;
+    return true;
+}
+
 mq_heap_stats_t *mq_heap_stats(void)
 {
-    return mq_resolvePointer(mq_heapBase);
+    index_t *index = mq_resolvePointer(mq_heapBase);
+    return &index->stats;
 }
 
 //=== Introspection and debugging (also original functions) ==================//

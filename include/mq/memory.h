@@ -17,13 +17,12 @@
 // grained control of memory contents without having overly large arrays. The
 // first level is divided in 1 MiB "chunks" while the second level is divided
 // in 4 kiB "pages". The large swaths of memory-mapped cache/TLB addressing
-// space are handled with a special case.
+// space are handled with special handlers.
 //
 // For the calculator models where performance is most critical (fx-CG and
 // fx-CP) both RAM and ROM are aligned on chunk boundaries, which allows an
 // optimization where entire chunks are designated as buffer-backed memory,
-// removing the need to allocate and dereference a page array. This fast path,
-// which takes a dozen or so instructions, is inlined.
+// removing the need to allocate and dereference a page array.
 //
 // In terms of memory usage, a typical memory map is expected to use in the
 // order of 10000 pointers, with a fixed 4096 chunk pointers and a comparable
@@ -75,10 +74,18 @@ typedef void *mqChunkPointer;
 #define MQ_CHUNKPTR_NULL ((mqChunkPointer)1)
 #define MQ_CHUNKPTR_ISNULL(PTR) ((uintptr_t)(PTR) == 1)
 #define MQ_CHUNKPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
+#define MQ_CHUNKPTR_ISDETAILS(PTR) (((uintptr_t)(PTR) & 1) != 0)
 #define MQ_CHUNKPTR_BUFFER(PTR) ((void *)(PTR))
 #define MQ_CHUNKPTR_DETAILS(PTR) ((mqChunk *)((uintptr_t)(PTR) & -2))
 #define MQ_CHUNKPTR_MKBUFFER(PTR) ((mqChunkPointer)(PTR))
 #define MQ_CHUNKPTR_MKDETAILS(PTR) ((mqChunkPointer)((uintptr_t)(PTR) | 1))
+
+/* A buffer of emulated memory. */
+struct mqMemoryBuffer {
+    char const *name;
+    void *data;
+    u32 size;
+};
 
 struct mqMemory {
     /* Array of pointers to chunk info.
@@ -91,6 +98,8 @@ struct mqMemory {
     mqChunkPointer chunks[0x1000];
 
     // TODO: Cache, MMU, mapping description, lazy mappings...
+    struct mqMemoryBuffer *buffers;
+    int bufferCount;
 };
 
 /* A page pointer whose two least significant bits are stolen to indicate
@@ -154,18 +163,29 @@ mqMemory *mq_memory_create(void);
 void mq_memory_reset(mqMemory *mem);
 void mq_memory_destroy(mqMemory *mem);
 
-/* Create a buffer chunk. If `buffer` is NULL, allocates one, initialized with
-   zero. Otherwise, takes ownership of the buffer. Returns true on success,
-   false if the chunk exists or alloc fails, in which case it is unchanged. */
-bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer);
+/* Allocate a new zero-initialized buffer owned by the mqMemory. The buffer can
+   be mapped freely to memory, including partially, multiple times, and in
+   overlapping fashions. The name string can be used to later query the buffer
+   in mq_memory_getBuffer(), unless it's NULL, then the buffer has no name. The
+   name string is not copied. */
+void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size);
+
+/* Get a previously allocated buffer by name, NULL if nonexistant. If size is
+   not NULL, it receives the size of the buffer. */
+void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size);
+
+/* Create a buffer chunk; the backing data cannot be NULL. Returns true on
+   success, false if the chunk already exists (in which case the call is a
+   no-op). */
+bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *data);
 
 /* Create a standard (broken-down) chunk. Returns a pointer to the chunk
    structure, NULL if the chunk already exists. */
 mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr);
 
-/* Create a buffer page in a chunk. If `buffer` is NULL, allocates one. The
-   high-order bits of the address are ignored. Returns true on success, false
-   if the page already exists. */
+/* Create a buffer page in a chunk, the backing data cannot be NULL. Returns
+   true on success, false if the page already exists (in which case the call is
+   a no-op). */
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
 
 /* Create a series of chunks or pages matching the given memory interval. The

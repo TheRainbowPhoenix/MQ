@@ -39,6 +39,9 @@ mqMemory *mq_memory_create(void)
 
     for(int i = 0; i < 0x1000; i++)
         mem->chunks[i] = MQ_CHUNKPTR_NULL;
+
+    mem->buffers = NULL;
+    mem->bufferCount = 0;
     return mem;
 }
 
@@ -48,11 +51,16 @@ void mq_memory_reset(mqMemory *mem)
         mqChunkPointer ch = mem->chunks[i];
         mem->chunks[i] = MQ_CHUNKPTR_NULL;
 
-        if(MQ_CHUNKPTR_ISBUFFER(ch))
-            free(ch);
-        else if(!MQ_CHUNKPTR_ISNULL(ch))
+        if(ch != MQ_CHUNKPTR_NULL && MQ_CHUNKPTR_ISDETAILS(ch))
             mq_chunk_destroy(MQ_CHUNKPTR_DETAILS(ch));
     }
+
+    for(int i = 0; i < mem->bufferCount; i++)
+        free(mem->buffers[i].data);
+    free(mem->buffers);
+
+    mem->buffers = NULL;
+    mem->bufferCount = 0;
 }
 
 void mq_memory_destroy(mqMemory *mem)
@@ -78,9 +86,7 @@ static void mq_chunk_reset(mqChunk *chunk)
         mqPagePointer pg = chunk->pages[i];
         chunk->pages[i] = MQ_PAGEPTR_NULL;
 
-        if(MQ_PAGEPTR_ISBUFFER(pg))
-            free(pg);
-        else if(!MQ_PAGEPTR_ISNULL(pg))
+        if(pg != MQ_PAGEPTR_NULL && MQ_PAGEPTR_ISMMIOPAGE(pg))
             mq_MMIOPage_destroy(MQ_PAGEPTR_MMIOPAGE(pg));
     }
 }
@@ -113,18 +119,51 @@ void mq_MMIOPage_destroy(mqMMIOPage *mmpg)
 
 //=== Memory configuration functions =========================================//
 
+void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size)
+{
+    int newSize = (mem->bufferCount + 1) * sizeof *mem->buffers;
+    struct mqMemoryBuffer *newBuffers = realloc(mem->buffers, newSize);
+    if(!newBuffers)
+        return NULL;
+
+    void *data = calloc(1, size);
+    if(!data) {
+        free(newBuffers);
+        return NULL;
+    }
+
+    struct mqMemoryBuffer *b = &newBuffers[mem->bufferCount];
+    mem->buffers = newBuffers;
+    mem->bufferCount++;
+
+    b->name = name;
+    b->data = data;
+    b->size = size;
+    return data;
+}
+
+void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size)
+{
+    if(!name)
+        return NULL;
+
+    for(int i = 0; i < mem->bufferCount; i++) {
+        struct mqMemoryBuffer *b = &mem->buffers[i];
+        if(b->name && !strcmp(b->name, name)) {
+            if(size)
+                *size = b->size;
+            return b->data;
+        }
+    }
+
+    return NULL;
+}
+
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer)
 {
     u32 chunkNum = addr >> 20;
-    if(!MQ_CHUNKPTR_ISNULL(mem->chunks[chunkNum]))
+    if(!buffer || !MQ_CHUNKPTR_ISNULL(mem->chunks[chunkNum]))
         return false;
-
-    /* Automatically allocate a 1-MB buffer if one is not supplied. */
-    if(!buffer) {
-        buffer = calloc(1, 1 << 20);
-        if(!buffer)
-            return false;
-    }
 
     mem->chunks[chunkNum] = MQ_CHUNKPTR_MKBUFFER(buffer);
     return true;
@@ -147,15 +186,8 @@ mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr)
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
 {
     u32 pageNum = (addr & 0xfffff) >> 12;
-    if(!MQ_PAGEPTR_ISNULL(chunk->pages[pageNum]))
+    if(!buffer || !MQ_PAGEPTR_ISNULL(chunk->pages[pageNum]))
         return false;
-
-    /* Automatically allocate a 4-kB buffer if one is not supplied. */
-    if(!buffer) {
-        buffer = calloc(1, 1 << 12);
-        if(!buffer)
-            return false;
-    }
 
     chunk->pages[pageNum] = MQ_PAGEPTR_MKBUFFER(buffer);
     return true;
@@ -163,14 +195,15 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
 
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 {
+    if(!buffer)
+        return NULL;
+
     /* Mind the fact that addr + size might be 2³² which we can't compute
        directly. */
     if((addr & 0xfff) != 0 || !size || (size - 1 > ~addr))
         return false;
     if(size & 0xfff)
         size = (size | 0xfff) + 1;
-
-    bool bufferIncrement = (buffer != NULL);
 
     /* Allocate chunks or pages in sequence. */
     while(size > 0) {
@@ -181,7 +214,7 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
                 mq_memory_createBufferChunk(mem, addr, buffer)) {
             size -= 0x100000;
             addr += 0x100000;
-            buffer += bufferIncrement ? 0x100000 : 0;
+            buffer += 0x100000;
             continue;
         }
 
@@ -199,7 +232,7 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 
         size -= 0x1000;
         addr += 0x1000;
-        buffer += bufferIncrement ? 0x1000 : 0;
+        buffer += 0x1000;
     }
 
     return true;
