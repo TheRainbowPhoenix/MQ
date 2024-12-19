@@ -13,6 +13,7 @@ mqMachine *mq_machine_create(void)
     mqMachine *mach = malloc(sizeof *mach);
     mq_cpu_reset(&mach->cpu);
     mach->memory = mq_memory_create();
+    mach->stuck = false;
     return mach;
 }
 
@@ -20,6 +21,7 @@ void mq_machine_reset(mqMachine *mach)
 {
     mq_cpu_reset(&mach->cpu);
     mq_memory_reset(mach->memory);
+    mach->stuck = false;
 }
 
 void mq_machine_destroy(mqMachine *mach)
@@ -42,12 +44,11 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_reset(mach->memory);
 
         /* P0 program code */
-        mq_memory_createBufferChunk(mach->memory, 0x00300000, NULL);
-        mq_memory_createBufferChunk(mach->memory, 0x00400000, NULL);
+        mq_memory_createBlock(mach->memory, 0x00300000, 2 << 20, NULL);
         /* P0 userspace RAM */
-        mq_memory_createBufferChunk(mach->memory, 0x08100000, NULL);
-        /* VRAM (way more than needed!) */
-        mq_memory_createBufferChunk(mach->memory, 0x80000000, NULL);
+        mq_memory_createBlock(mach->memory, 0x08100000, 512 << 10, NULL);
+        /* VRAM */
+        mq_memory_createBlock(mach->memory, 0x80000000, 384 * 216 * 2, NULL);
 
         // TODO[machine]: More precise memory setup for CG add-in
     }
@@ -58,7 +59,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 bool mq_machine_load_g3a(mqMachine *mach, char const *path)
 {
     FILE *fp = fopen(path, "r");
-    void *data;
+    void *data = NULL;
     if(!fp) goto err;
 
     fseek(fp, 0, SEEK_END);
@@ -71,9 +72,10 @@ bool mq_machine_load_g3a(mqMachine *mach, char const *path)
     if(fread(data, size, 1, fp) != 1) goto err;
     fclose(fp);
 
-    bool x = mq_memory_load(mach->memory, 0x00300000, data + 0x7000, size - 0x7000);
-    printf("x = %s\n", x ? "true" : "false");
-    return true;
+    bool x = mq_memory_load(
+        mach->memory, 0x00300000, data + 0x7000, size - 0x7000);
+    free(data);
+    return x;
 
 err:
     perror("mq_machine_load_g3a");
@@ -81,6 +83,7 @@ err:
         fclose(fp);
     if(data)
         free(data);
+    mach->stuck = true;
     return false;
 }
 

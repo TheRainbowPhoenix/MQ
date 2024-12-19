@@ -52,7 +52,7 @@ static u16 const exc_CodeTable[SH_NUM_EXCEPTIONS] = {
     0x1c0, 0xfff,
 };
 
-static u32 exc_ExceptionCode(int exc)
+static u32 exc_exceptionCode(int exc)
 {
     return (uint)exc >= SH_NUM_EXCEPTIONS ? 0xfff : exc_CodeTable[exc];
 }
@@ -77,10 +77,10 @@ static bool exc_isReexecutionType(int exc)
            && exc != SH_EXC_TRAP;
 }
 
-// static bool exc_isInterrupt(int exc)
-// {
-//     return exc >= SH_EXC_NMI;
-// }
+static bool exc_isInterrupt(int exc)
+{
+    return exc >= SH_EXC_NMI;
+}
 
 /* Find the highest exception priority in the mask; -1 if excMask == 0. */
 static int highestPriorityException(u32 excMask)
@@ -100,8 +100,12 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
         return false;
     }
 
-    // TODO: Set EXPEVT (if exception), otherwise set INTEVT.
-    // TODO: Requires interface for INTC to provide interrupt code.
+    if(exc_isInterrupt(exc)) {
+        // TODO: Set INTEVT. Requires INTC providing the interrupt code.
+    }
+    else {
+        u32 code = exc_exceptionCode(exc); // TODO: Set EXPEVT.
+    }
 
     // TODO: Break from sleep
 
@@ -124,6 +128,7 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
         cpu->pc = 0xa0000000;
 
     cpu->excMask &= ~(1 << exc);
+    return true;
 }
 
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)

@@ -34,8 +34,8 @@ struct DelayedInput {
 
 struct DelayedInput input;
 
-static ImFont *fontSans = nullptr;
-static ImFont *fontMono = nullptr;
+ImFont *fontSans = nullptr;
+ImFont *fontMono = nullptr;
 
 static bool HexViewer_ReadByte(u64 addr, u8 *result)
 {
@@ -170,6 +170,7 @@ static void render(void)
         ImGui::SameLine();
         if(ImGui::Button("1000"))
             input.mq_cycles = 1000;
+        ImGui::SameLine();
         if(ImGui::Button("10000"))
             input.mq_cycles = 10000;
         if(ImGui::Button("Until stuck"))
@@ -240,55 +241,11 @@ static void render(void)
         .AlignXCenter = false,
         .Cursor = 0,
     };
-    if(ImGui::Begin("Memory", nullptr, ImGuiWindowFlags_HorizontalScrollbar)) {
+    static MemoryWindowState MWS {};
+    MemoryWindowAction MWA = AddMemoryWindow(mach, MWS);
 
-        // TODO: Avoid recomputation of memory stats every frame?!
-        mqMemory const *mem = mach->memory;
-        struct mqMemory_Stats s = mq_memory_stats(mem);
-
-        ImGui::Text("1 MB Chunks: %d (%d buffer, %d detailed including %d "
-                    "pure MMIO)",
-                    s.totalChunks, s.bufferChunks, s.detailedChunks,
-                    s.pureMMIOChunks);
-        ImGui::Text("4 kB Pages: %d mapped", s.bufferPages);
-
-        if(ImGui::BeginTable("memtable", 2, ImGuiTableFlags_SizingStretchSame)) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-
-            ImGui::SeparatorTextD("Chunks");
-            ImVec2 avl = ImGui::GetContentRegionAvail();
-            if(ImGui::BeginListBox("##memory-chunks", ImVec2(avl.x - 4, -1))) {
-                static int selectedChunk = -1;
-                // TODO: Reset selection if invalid after a change
-
-                for(uint i = 0; i < 0x1000; i++) {
-                    char addr[16];
-                    sprintf(addr, "%08x", i << 20);
-                    if(MQ_CHUNKPTR_ISNULL(mem->chunks[i]))
-                        continue;
-
-                    ImGui::SetNextItemAllowOverlap();
-                    bool clicked = ImGui::Selectable(addr, i == selectedChunk);
-                    ImGui::SameLine();
-                    ImGui::Text(MQ_CHUNKPTR_ISBUFFER(mem->chunks[i]) ?
-                        "(Buffer)" : "(Details)");
-
-                    if(clicked) {
-                        selectedChunk = i;
-                        HV.Cursor = i << 20;
-                    }
-                }
-                ImGui::EndListBox();
-            }
-
-            ImGui::TableNextColumn();
-            ImGui::SeparatorTextD("Pages");
-            ImGui::Text("TODO");
-            ImGui::EndTable();
-        }
-    }
-    ImGui::End();
+    if(MWA.type == MWA.Type::MWA_VIEW_HEX)
+        HV.Cursor = MWA.address;
 
     if(ImGui::Begin("Heap")) {
         ImGui::Text("TODO: System heap emulation");
@@ -305,14 +262,14 @@ static void render(void)
     static bool first_frame = true;
     if(first_frame) {
         auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
-            ImGuiDir_Left, 0.65f, nullptr, &dock);
+            ImGuiDir_Left, 0.68f, nullptr, &dock);
         auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
         auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
         auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
             dock_left_bottom,
-            ImGuiDir_Right, 0.55f, nullptr, &dock_left_bottom);
+            ImGuiDir_Right, 0.51f, nullptr, &dock_left_bottom);
         auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
             ImGuiDir_Down, 0.6f, nullptr, &dock);
 

@@ -3,6 +3,7 @@
 #ifndef MQ_UI_IMGUI_UTIL_H
 #define MQ_UI_IMGUI_UTIL_H
 
+#include <mq/defs.h>
 #include <azur/gl/gl.h>
 #include <imgui.h>
 #include <glm/glm.hpp>
@@ -10,6 +11,10 @@
 /* Number of frames we expect Dear ImGui to need to settle its layout after
    starting for the first time, resizing windows, etc. */
 #define IMGUI_SETTLING_FRAMES 5
+
+// TODO: Proper namespacing of fonts
+extern ImFont *fontSans;
+extern ImFont *fontMono;
 
 namespace ImGui {
 
@@ -19,7 +24,6 @@ void TextLR(char const *left, char const *fmt, ...);
 
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
-
 
 } /* namespace ImGui */
 

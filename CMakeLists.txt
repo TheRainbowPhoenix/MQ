@@ -24,7 +24,8 @@ set(SOURCES
   gui/display-window.cc
   gui/imgui-util.cc
   gui/main.cc
-  gui/texture.cc)
+  gui/texture.cc
+  gui/windows.cc)
 
 set(ASSETS)
 
@@ -51,11 +52,12 @@ if(AZUR_PLATFORM STREQUAL emscripten)
 endif()
 
 add_executable(mq ${SOURCES} ${ASSETS})
-target_compile_options(mq PRIVATE -O0 -g -Wall -Wextra -Wno-pointer-arith)
+target_compile_options(mq PRIVATE
+  -O0 -g -Wall -Wextra -Wno-pointer-arith -fsanitize=address)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_options(mq PRIVATE)
+target_link_options(mq PRIVATE -fsanitize=address)
 
 if(AZUR_PLATFORM STREQUAL linux)
   target_link_libraries(mq Azur::Azur Azur::GLM Azur::ImGui)

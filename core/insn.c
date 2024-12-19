@@ -12,6 +12,20 @@
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+/* addc/subc builtins aren't available on old-ish versions of GCC. */
+#define ADDC(_A, _B, _CARRY_IN, _CARRY_OUT) \
+    ({ __typeof__(_A) _s; \
+       __typeof__(_A) _c1 = __builtin_add_overflow(_A, _B, &_s); \
+       __typeof__(_A) _c2 = __builtin_add_overflow(_s, _CARRY_IN, &_s); \
+       _CARRY_OUT = _c1 | _c2; \
+       _s; })
+#define SUBC(_A, _B, _CARRY_IN, _CARRY_OUT) \
+    ({ __typeof__(_A) _s; \
+       __typeof__(_A) _c1 = __builtin_sub_overflow(_A, _B, &_s); \
+       __typeof__(_A) _c2 = __builtin_sub_overflow(_s, _CARRY_IN, &_s); \
+       _CARRY_OUT = _c1 | _c2; \
+       _s; })
+
 // TODO[insn]: Assumption: @-rn/@rn+ will only inc/decrement if access succeeds
 // TODO[insn]: Raise exceptions for privileged instructions while in user mode
 
@@ -43,7 +57,7 @@ MQ_INLINE void add(mqMachine *mach, mqCpu *cpu, int n, int m) {
 MQ_INLINE void addc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* addc rm, rn */
     uint T_out;
-    cpu->r[n] = __builtin_addc(cpu->r[n], cpu->r[m], mq_cpu_getT(cpu), &T_out);
+    cpu->r[n] = ADDC(cpu->r[n], cpu->r[m], mq_cpu_getT(cpu), T_out);
     mq_cpu_setT(cpu, T_out);
     cpu->pc += 2;
 }
@@ -61,7 +75,7 @@ MQ_INLINE void sub(mqMachine *mach, mqCpu *cpu, int n, int m) {
 MQ_INLINE void subc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* subc rm, rn */
     uint T_out;
-    cpu->r[n] = __builtin_subc(cpu->r[n], cpu->r[m], mq_cpu_getT(cpu), &T_out);
+    cpu->r[n] = SUBC(cpu->r[n], cpu->r[m], mq_cpu_getT(cpu), T_out);
     mq_cpu_setT(cpu, T_out);
     cpu->pc += 2;
 }
@@ -79,7 +93,7 @@ MQ_INLINE void neg(mqMachine *mach, mqCpu *cpu, int n, int m) {
 MQ_INLINE void negc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* negc rm, rn */
     uint T_out;
-    cpu->r[n] = __builtin_subc(0, cpu->r[m], mq_cpu_getT(cpu), &T_out);
+    cpu->r[n] = SUBC(0, cpu->r[m], mq_cpu_getT(cpu), T_out);
     mq_cpu_setT(cpu, T_out);
     cpu->pc += 2;
 }

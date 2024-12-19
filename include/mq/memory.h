@@ -100,6 +100,7 @@ typedef void *mqPagePointer;
 #define MQ_PAGEPTR_NULL ((mqPagePointer)1)
 #define MQ_PAGEPTR_ISNULL(PTR) ((uintptr_t)(PTR) == 1)
 #define MQ_PAGEPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
+#define MQ_PAGEPTR_ISMMIOPAGE(PTR) (((uintptr_t)(PTR) & 1) != 0)
 #define MQ_PAGEPTR_BUFFER(PTR) ((void *)(PTR))
 #define MQ_PAGEPTR_MMIOPAGE(PTR) ((mqMMIOPage *)((uintptr_t)(PTR) & -1))
 #define MQ_PAGEPTR_MKBUFFER(PTR) ((mqPagePointer)(PTR))
@@ -166,6 +167,14 @@ mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr);
    high-order bits of the address are ignored. Returns true on success, false
    if the page already exists. */
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
+
+/* Create a series of chunks or pages matching the given memory interval. The
+   start address must be page-aligned; the size will be rounded up to the next
+   page-size multiple. This function creates buffer chunks or buffer pages
+   as needed to cover the interval, which needs to be initially empty. If
+   `buffer` is NULL, one will be allocated (contiguously). On error, returns
+   false; the memory will be partially modified. */
+bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer);
 
 /* Load data from a buffer into memory. This applies endianness swaps to match
    the internal buffer format and works across chunk and page boundaries.

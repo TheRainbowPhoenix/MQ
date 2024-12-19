@@ -146,7 +146,7 @@ mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr)
 
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
 {
-    u32 pageNum = (addr & 0xfffff) >> 8;
+    u32 pageNum = (addr & 0xfffff) >> 12;
     if(!MQ_PAGEPTR_ISNULL(chunk->pages[pageNum]))
         return false;
 
@@ -158,6 +158,50 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
     }
 
     chunk->pages[pageNum] = MQ_PAGEPTR_MKBUFFER(buffer);
+    return true;
+}
+
+bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
+{
+    /* Mind the fact that addr + size might be 2³² which we can't compute
+       directly. */
+    if((addr & 0xfff) != 0 || !size || (size - 1 > ~addr))
+        return false;
+    if(size & 0xfff)
+        size = (size | 0xfff) + 1;
+
+    bool bufferIncrement = (buffer != NULL);
+
+    /* Allocate chunks or pages in sequence. */
+    while(size > 0) {
+        /* Try to allocate a chunk if we're on a chunk boundary, needs at least
+           1 MB more memory, and the chunk doesn't already exist in a broken-
+           down form. */
+        if(!(addr & 0xfffff) && size >= 0x100000 &&
+                mq_memory_createBufferChunk(mem, addr, buffer)) {
+            size -= 0x100000;
+            addr += 0x100000;
+            buffer += bufferIncrement ? 0x100000 : 0;
+            continue;
+        }
+
+        /* Otherwise, fall back to allocating a page. */
+        mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+        if(MQ_CHUNKPTR_ISNULL(chunkPtr) && !mq_memory_createChunk(mem, addr))
+            return false;
+        else if(MQ_CHUNKPTR_ISBUFFER(chunkPtr))
+            return false;
+
+        chunkPtr = mem->chunks[addr >> 20];
+        mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
+        if(!mq_chunk_createBufferPage(chunk, addr, buffer))
+            return false;
+
+        size -= 0x1000;
+        addr += 0x1000;
+        buffer += bufferIncrement ? 0x1000 : 0;
+    }
+
     return true;
 }
 
@@ -354,7 +398,7 @@ struct mqMemory_Stats mq_memory_stats(mqMemory const *mem)
 
         int pages = 0;
         for(int j = 0; j < 256; j++)
-            pages += (ch->pages[i] != NULL);
+            pages += (ch->pages[j] != MQ_PAGEPTR_NULL);
 
         s.bufferPages += pages;
         s.pureMMIOChunks += (pages == 0);

@@ -6,6 +6,7 @@
 #include "imgui-util.h"
 #include "shader.h"
 #include "texture.h"
+#include <mq/machine.h>
 
 //=== Display window =========================================================//
 
@@ -95,5 +96,25 @@ private:
     /* Display texture */
     Texture const *m_texture = nullptr;
 };
+
+//=== Other windows ==========================================================//
+
+/* State retained from one frame to the next in the memory window. */
+struct MemoryWindowState {
+    /* Currently-selected chunk and page. */
+    int selectedChunk = -1;
+    int selectedPage = -1;
+};
+/* Actions emitted from the memory window. */
+struct MemoryWindowAction {
+    enum class Type { MWA_NONE, MWA_VIEW_HEX };
+    Type type = Type::MWA_NONE;
+    u32 address = 0;
+};
+
+MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state);
+
+MemoryWindowAction AddMemoryWindowContents(
+    mqMachine *mach, MemoryWindowState &state);
 
 #endif /* MQ_UI_GUI_H */

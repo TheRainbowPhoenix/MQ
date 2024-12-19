@@ -51,12 +51,15 @@ void ImGui_LoadMQStyle(ImGuiStyle &st)
     st.SeparatorTextPadding = {0,0};
 
     st.Colors[ImGuiCol_WindowBg]           = {.185, .185, .2,  1  };
-    st.Colors[ImGuiCol_FrameBg]            = {.25,  .275, .3,  1  };
+    st.Colors[ImGuiCol_FrameBg]            = {.22,  .22,  .24, 1  };
     st.Colors[ImGuiCol_FrameBgHovered]     = {.7,   .81,  1,   .2 };
     st.Colors[ImGuiCol_FrameBgActive]      = {.70,  .81,  1,   .36};
     st.Colors[ImGuiCol_TitleBg]            = {.14,  .14,  .14, 1  };
     st.Colors[ImGuiCol_TitleBgActive]      = {.14,  .14,  .14, 1  };
     st.Colors[ImGuiCol_TitleBgCollapsed]   = {.14,  .14,  .14, 1  };
+    st.Colors[ImGuiCol_Header]             = {.26,  .59,  .98, .28};
+    st.Colors[ImGuiCol_HeaderHovered]      = {.26,  .59,  .98, .47};
+    st.Colors[ImGuiCol_HeaderActive]       = {.26,  .59,  .98, .59};
     st.Colors[ImGuiCol_CheckMark]          = {.92,  .95,  .98, 1  };
     st.Colors[ImGuiCol_TabUnfocused]       = {.165, .165, .18, .97};
     st.Colors[ImGuiCol_TabUnfocusedActive] = {.17,  .17,  .19, 1  };
