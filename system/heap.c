@@ -460,6 +460,13 @@ bool mq_heap_init(u32 start, u32 end, void *buffer)
     return true;
 }
 
+void mq_heap_reset(void)
+{
+    mq_heapBase = 0;
+    mq_heapEnd = 0;
+    mq_heapBuffer = NULL;
+}
+
 bool mq_heap_isInitialized(u32 *start, u32 *end)
 {
     if(!mq_heapBase)
@@ -607,3 +614,19 @@ bool mq_heap_dbg_index_class_separation(void)
     return true;
 }
 
+mq_heap_debug_t mq_heap_debuginfo(void)
+{
+    mq_heap_debug_t dbg = { 0 };
+    if(!mq_heap_isInitialized(NULL, NULL))
+        return dbg;
+
+    dbg.sequence_covers = mq_heap_dbg_sequence_covers();
+    dbg.sequence_terminator = mq_heap_dbg_sequence_terminator();
+    dbg.sequence_coherent_used = mq_heap_dbg_sequence_coherent_used();
+    dbg.sequence_footer_size = mq_heap_dbg_sequence_footer_size();
+    dbg.sequence_merged_free = mq_heap_dbg_sequence_merged_free();
+    dbg.list_structure = mq_heap_dbg_list_structure();
+    dbg.index_covers = mq_heap_dbg_index_covers();
+    dbg.index_class_separation = mq_heap_dbg_index_class_separation();
+    return dbg;
+}

@@ -381,14 +381,14 @@ MQ_INLINE void movl_w_predec(mqMachine *mach, mqCpu *cpu, int n, int m) {
     cpu->pc += 2;
 }
 MQ_INLINE void movl_w_rm_drn(
-    /* mov.l rm, @(disp, rn) */
     mqMachine *mach, mqCpu *cpu, int n, int m, int disp) {
+    /* mov.l rm, @(disp, rn) */
     mq_memory_write(cpu, mach->memory, cpu->r[n] + (disp << 2), 4, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movl_r_drm_rn(
-    /* mov.l @(disp, rm), rn */
     mqMachine *mach, mqCpu *cpu, int n, int m, int disp) {
+    /* mov.l @(disp, rm), rn */
     mq_memory_read32(cpu, mach->memory, cpu->r[m] + (disp << 2), &cpu->r[n]);
     cpu->pc += 2;
 }
@@ -407,6 +407,56 @@ MQ_INLINE void movl_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     u32 targetAddr = (cpu->pc & -4) + 4 + (disp << 2);
     mq_memory_read32(cpu, mach->memory, targetAddr, &cpu->r[n]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movb_r_drm_r0(mqMachine *mach, mqCpu *cpu, int m, int disp) {
+    /* mov.b @(disp,rm), r0 */
+    mq_memory_read8(cpu, mach->memory, cpu->r[m] + disp, &cpu->r[0]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movw_r_drm_r0(mqMachine *mach, mqCpu *cpu, int m, int disp) {
+    /* mov.w @(disp,rm), r0 */
+    mq_memory_read16(cpu, mach->memory, cpu->r[m] + (disp << 1), &cpu->r[0]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movb_w_r0_drn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
+    /* mov.b r0, @(disp,rn) */
+    mq_memory_write(cpu, mach->memory, cpu->r[n] + disp, 1, cpu->r[0]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movw_w_r0_drn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
+    /* mov.w r0, @(disp,rn) */
+    mq_memory_write(cpu, mach->memory, cpu->r[n] + (disp << 1), 2, cpu->r[0]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movb_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    /* mov.b @(r0,rm), rn */
+    mq_memory_read8(cpu, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movw_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    /* mov.w @(r0,rm), rn */
+    mq_memory_read16(cpu, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movl_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    /* mov.l @(r0,rm), rn */
+    mq_memory_read32(cpu, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movb_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    /* mov.b rm, @(r0,rn) */
+    mq_memory_write(cpu, mach->memory, cpu->r[n] + cpu->r[0], 1, cpu->r[m]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movw_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    /* mov.w rm, @(r0,rn) */
+    mq_memory_write(cpu, mach->memory, cpu->r[n] + cpu->r[0], 2, cpu->r[m]);
+    cpu->pc += 2;
+}
+MQ_INLINE void movl_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    /* mov.l rm, @(r0,rn) */
+    mq_memory_write(cpu, mach->memory, cpu->r[n] + cpu->r[0], 4, cpu->r[m]);
     cpu->pc += 2;
 }
 
@@ -544,6 +594,55 @@ MQ_INLINE void rts(mqMachine *mach, mqCpu *cpu) {
     mq_cpu_setDelaySlot(cpu, cpu->spRegs[SH_PR]);
 }
 
+MQ_INLINE void clrt(mqMachine *mach, mqCpu *cpu) {
+    /* clrt */
+    mq_cpu_setT(cpu, 0);
+    cpu->pc += 2;
+}
+MQ_INLINE void sett(mqMachine *mach, mqCpu *cpu) {
+    /* sett */
+    mq_cpu_setT(cpu, 1);
+    cpu->pc += 2;
+}
+MQ_INLINE void clrmac(mqMachine *mach, mqCpu *cpu) {
+    /* clrmac */
+    cpu->spRegs[SH_MACL] = 0;
+    cpu->spRegs[SH_MACH] = 0;
+    cpu->pc += 2;
+}
+MQ_INLINE void clrs(mqMachine *mach, mqCpu *cpu) {
+    /* clrs */
+    cpu->spRegs[SH_SR] &= ~0x00000002;
+    cpu->pc += 2;
+}
+MQ_INLINE void sets(mqMachine *mach, mqCpu *cpu) {
+    /* sets */
+    cpu->spRegs[SH_SR] |= 0x00000002;
+    cpu->pc += 2;
+}
+MQ_INLINE void clrmdxy(mqMachine *mach, mqCpu *cpu) {
+    /* clrmdxy */
+    cpu->spRegs[SH_SR] &= ~0x00000c00;
+    cpu->pc += 2;
+}
+MQ_INLINE void setmdx(mqMachine *mach, mqCpu *cpu) {
+    /* setmdx */
+    cpu->spRegs[SH_SR] |= 0x00000400;
+    cpu->pc += 2;
+}
+MQ_INLINE void setmdy(mqMachine *mach, mqCpu *cpu) {
+    /* setmdy */
+    cpu->spRegs[SH_SR] |= 0x00000400;
+    cpu->pc += 2;
+}
+MQ_INLINE void movt(mqMachine *mach, mqCpu *cpu, int n) {
+    /* movt rn */
+    cpu->r[n] = mq_cpu_getT(cpu);
+    cpu->pc += 2;
+}
+
+//===//
+
 MQ_INLINE void bsrf(mqMachine *mach, mqCpu *cpu, int m) {
     if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
@@ -596,60 +695,12 @@ MQ_INLINE void icbi(mqMachine *mach, mqCpu *cpu, int n) {
     fprintf(stderr, "error: not implemented: icbi\n");
     mach->stuck = true;
 }
-MQ_INLINE void movb_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    fprintf(stderr, "error: not implemented: movb_w_rm_r0rn\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movw_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    fprintf(stderr, "error: not implemented: movw_w_rm_r0rn\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movl_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    fprintf(stderr, "error: not implemented: movl_w_rm_r0rn\n");
-    mach->stuck = true;
-}
-MQ_INLINE void clrt(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: clrt\n");
-    mach->stuck = true;
-}
-MQ_INLINE void sett(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: sett\n");
-    mach->stuck = true;
-}
-MQ_INLINE void clrmac(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: clrmac\n");
-    mach->stuck = true;
-}
 MQ_INLINE void ldtlb(mqMachine *mach, mqCpu *cpu) {
     fprintf(stderr, "error: not implemented: ldtlb\n");
     mach->stuck = true;
 }
-MQ_INLINE void clrs(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: clrs\n");
-    mach->stuck = true;
-}
-MQ_INLINE void sets(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: sets\n");
-    mach->stuck = true;
-}
-MQ_INLINE void clrmdxy(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: clrmdxy\n");
-    mach->stuck = true;
-}
-MQ_INLINE void setmdx(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: setmdx\n");
-    mach->stuck = true;
-}
-MQ_INLINE void setmdy(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: setmdy\n");
-    mach->stuck = true;
-}
 MQ_INLINE void div0u(mqMachine *mach, mqCpu *cpu) {
     fprintf(stderr, "error: not implemented: div0u\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movt(mqMachine *mach, mqCpu *cpu, int n) {
-    fprintf(stderr, "error: not implemented: movt\n");
     mach->stuck = true;
 }
 MQ_INLINE void sleep(mqMachine *mach, mqCpu *cpu) {
@@ -664,18 +715,6 @@ MQ_INLINE void rte(mqMachine *mach, mqCpu *cpu) {
 }
 MQ_INLINE void synco(mqMachine *mach, mqCpu *cpu) {
     fprintf(stderr, "error: not implemented: synco\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movb_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    fprintf(stderr, "error: not implemented: movb_r_r0rm_rn\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movw_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    fprintf(stderr, "error: not implemented: movw_r_r0rm_rn\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movl_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    fprintf(stderr, "error: not implemented: movl_r_r0rm_rn\n");
     mach->stuck = true;
 }
 MQ_INLINE void macl(mqMachine *mach, mqCpu *cpu, int n, int m) {
@@ -746,24 +785,8 @@ MQ_INLINE void swapw(mqMachine *mach, mqCpu *cpu, int n, int m) {
     fprintf(stderr, "error: not implemented: swapw\n");
     mach->stuck = true;
 }
-MQ_INLINE void movb_w_r0_drn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
-    fprintf(stderr, "error: not implemented: movb_w_r0_drn\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movw_w_r0_drn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
-    fprintf(stderr, "error: not implemented: movw_w_r0_drn\n");
-    mach->stuck = true;
-}
 MQ_INLINE void setrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     fprintf(stderr, "error: not implemented: setrc_imm\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movb_r_drm_r0(mqMachine *mach, mqCpu *cpu, int m, int disp) {
-    fprintf(stderr, "error: not implemented: movb_r_drm_r0\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movw_r_drm_r0(mqMachine *mach, mqCpu *cpu, int m, int disp) {
-    fprintf(stderr, "error: not implemented: movw_r_drm_r0\n");
     mach->stuck = true;
 }
 MQ_INLINE void ldrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {

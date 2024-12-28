@@ -11,7 +11,7 @@
 // in gint add-ins when gint's allocator became the default) so I arbitrarily
 // add 8 extra bytes at the end of each allocation to compensate.
 //
-// TODO: MQ heap is global instead of being attached to a machine.
+// FIXME: MQ heap is global instead of being attached to a machine.
 //---
 
 #ifndef MQ_SYSTEM_HEAP_H
@@ -48,6 +48,8 @@ typedef struct {
 /* Init the heap to use the designated range of emulated memory backed by the
    given buffer, which must be of size at least end - start. */
 bool mq_heap_init(u32 start, u32 end, void *buffer);
+/* Reset the heap. */
+void mq_heap_reset(void);
 
 /* Check if the heap was initialized. If it is, return the range. */
 bool mq_heap_isInitialized(u32 *start, u32 *end);
@@ -60,6 +62,30 @@ u32 mq_heap_realloc(u32 ptr, size_t size);
 
 /* Get internal heap statistics. */
 mq_heap_stats_t *mq_heap_stats(void);
+
+typedef struct {
+    /* Block sequence covers entire range */
+    bool sequence_covers;
+    /* Terminator block is correctly identified */
+    bool sequence_terminator;
+    /* Boundary tags are coherent with used tags */
+    bool sequence_coherent_used;
+    /* Footer sizes are correct in all free blocks */
+    bool sequence_footer_size;
+    /* All consecutive free blocks are merged */
+    bool sequence_merged_free;
+    /* The doubly-linked list structure is coherent */
+    bool list_structure;
+    /* The segregated lists cover all free blocks in the sequence */
+    bool index_covers;
+    /* The segregated lists contain blocks of correct sizes */
+    bool index_class_separation;
+
+} mq_heap_debug_t;
+
+/* Get debug information from the heap. Undefined return value if the heap is
+   not initialized. */
+mq_heap_debug_t mq_heap_debuginfo(void);
 
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_HEAP_H */

@@ -180,8 +180,8 @@ static void render(void)
         if(ImGui::Button("1000"))
             input.mq_cycles = 1000;
         ImGui::SameLine();
-        if(ImGui::Button("10000"))
-            input.mq_cycles = 10000;
+        if(ImGui::Button("1 million"))
+            input.mq_cycles = 1000000;
         if(ImGui::Button("Until stuck"))
             input.mq_cycle_until_stuck = true;
         if(mach->stuck)
@@ -261,6 +261,21 @@ static void render(void)
         bool initialized = mq_heap_isInitialized(&heapStart, &heapEnd);
         if(initialized) {
             ImGui::Text("Heap from %08x to %08x", heapStart, heapEnd);
+
+            mq_heap_debug_t dbg = mq_heap_debuginfo();
+            #define X(NAME) \
+                ImGui::Text(#NAME ":"); \
+                ImGui::SameLine(); \
+                ImGui::Text(dbg.NAME ? "true" : "false");
+            X(sequence_covers)
+            X(sequence_terminator)
+            X(sequence_coherent_used)
+            X(sequence_footer_size)
+            X(sequence_merged_free)
+            X(list_structure)
+            X(index_covers)
+            X(index_class_separation)
+            #undef X
         }
         else {
             ImGui::Text("System heap is not initialized");

@@ -24,6 +24,7 @@ void mq_machine_reset(mqMachine *mach)
     mq_memory_reset(mach->memory);
     memset(&mach->system, 0, sizeof mach->system);
     mach->stuck = false;
+    mq_heap_reset();
 }
 
 void mq_machine_destroy(mqMachine *mach)
@@ -35,15 +36,15 @@ void mq_machine_destroy(mqMachine *mach)
 
 void mq_machine_initialize(mqMachine *mach, int initializeKind)
 {
+    mq_machine_reset(mach);
+
     if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
-        mq_memory_reset(mach->memory);
 
         // TODO[machine]: Memory setup for FX add-in
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
-        mq_memory_reset(mach->memory);
 
         /* P0 program code */
         void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
@@ -52,8 +53,9 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
         mq_memory_createBlock(mach->memory, 0x08100000, 512 << 10, uram);
         /* VRAM */
-        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", 384*216*2);
-        mq_memory_createBlock(mach->memory, 0x8c000000, 384 * 216 * 2, vram);
+        u32 VRAMsize = 384 * 216 * 2 + 1024; // margin for buffer overflows...
+        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", VRAMsize);
+        mq_memory_createBlock(mach->memory, 0x8c000000, VRAMsize, vram);
 
         // TODO[machine]: Reasonable heap address on fx-CG?!
         mach->system.heapAddress = 0x8c100000;
@@ -112,7 +114,8 @@ void mq_mach_syscall(mqMachine *mach)
 
     // TODO: Check syscall API version
 
-    printf("Syscall! r0=%08x\n", mach->cpu.r[0]);
+    if(syscallID != 0x1e6 /* happens too often */)
+        printf("Syscall! r0=%08x\n", syscallID);
 
     if(syscallID == 0x0029) {
         printf("Ignoring %%029, what is that?\n");
@@ -121,6 +124,7 @@ void mq_mach_syscall(mqMachine *mach)
     }
     /* GetVRAMAddress() */
     else if(syscallID == 0x1e6) {
+        // FIXME: GetVRAMAddress() is normally in P2
         mach->cpu.r[0] = 0x8c000000;
     }
     /* RTC_GetTicks() */
@@ -128,6 +132,34 @@ void mq_mach_syscall(mqMachine *mach)
         // FIXME: GetTicks() more than trivial counter
         static int ticks = 0;
         mach->cpu.r[0] = ++ticks;
+    }
+    /* malloc(), free(), realloc() */
+    else if(syscallID == 0x1f43 || syscallID == 0x1f44) {
+        mq_mach_initHeap(mach);
+        mach->cpu.r[0] = mq_heap_malloc(mach->cpu.r[4]);
+    }
+    else if(syscallID == 0x1f41 || syscallID == 0x1f42) {
+        mq_mach_initHeap(mach);
+        mq_heap_free(mach->cpu.r[4]);
+    }
+    else if(syscallID == 0x1f45 || syscallID == 0x1f46) {
+        mq_mach_initHeap(mach);
+        mach->cpu.r[0] = mq_heap_realloc(mach->cpu.r[4], mach->cpu.r[5]);
+    }
+    /* memcpy() */
+    else if(syscallID == 0x1dd0) {
+        // TODO: This is a super slow memcpy()
+        u32 dst = mach->cpu.r[4];
+        u32 src = mach->cpu.r[5];
+        u32 len = mach->cpu.r[6];
+        for(u32 i = 0; i < len; i++) {
+            u32 byte;
+            if(!mq_memory_read8(&mach->cpu, mach->memory, src + i, &byte))
+                break;
+            if(!mq_memory_write(&mach->cpu, mach->memory, dst + i, 1, byte))
+                break;
+        }
+        mach->cpu.r[0] = mach->cpu.r[4];
     }
     else {
         printf("Unknown sycall, getting stuck.\n");
