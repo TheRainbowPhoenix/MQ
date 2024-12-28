@@ -19,6 +19,8 @@ set(SOURCES
   core/machine.c
   core/memory.c
 
+  interfaces/display.c
+
   system/heap.c
 
   gui/display-window.cc

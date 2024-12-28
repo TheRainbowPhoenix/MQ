@@ -11,6 +11,7 @@
 
 #include <mq/cpu.h>
 #include <mq/memory.h>
+#include <mq/interfaces/display.h>
 MQ_START_DEFS
 
 // TODO
@@ -27,6 +28,9 @@ struct mqMachine
         u32 heapAddress;
         u32 heapSize;
     } system;
+
+    /* Display peripheral associated with the machine. May be NULL. */
+    mqDisplay *display;
 };
 
 typedef struct mqMachine mqMachine;

@@ -1,6 +1,7 @@
 #include "gui.h"
 #include <mq/machine.h>
 #include <mq/system/heap.h>
+#include <mq/interfaces/display.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -71,6 +72,26 @@ static void render(void)
     /* Don't accumulate work when the window is not focused! */
     Uint32 flags = SDL_GetWindowFlags(window);
     if(previous_time != 0.0 && !(flags & SDL_WINDOW_INPUT_FOCUS)) return;
+
+    if(mach && mach->display && mach->display->dirty) {
+        mqDisplay *d = mach->display;
+        displayTexture.bind();
+        if(d->format == MQ_DISPLAY_FORMAT_L8) {
+            displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
+                                     d->width, d->height);
+            displayTexture.setData(d->data);
+        }
+        else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
+            displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                                     d->width, d->height);
+            displayTexture.setData(d->data);
+        }
+        else
+            printf("warning: display not updated, unknown format!\n");
+
+        DGW.setInherentScale(d->width <= 128 ? 3 : 1);
+        mqDisplay_setDirty(d, false);
+    }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -328,58 +349,9 @@ static void render(void)
     previous_time = time;
 }
 
-// TODO - Plug in data from the display emulation
-enum DisplayFormat { NONE, MONO, RGB565 };
-struct DisplayData {
-    enum DisplayFormat format = NONE;
-    uint width = 0;
-    uint height = 0;
-    void *data = NULL;
-    uint size = 0;
-};
-struct DisplayData display;
-
-static uint display_size_for(enum DisplayFormat format, uint w, uint h)
+static bool generate_mono_pattern(mqDisplay *display)
 {
-    if(format == MONO)
-        return w * h;
-    else if(format == RGB565)
-        return (w * 2) * h;
-    assert(false && "display_realloc: bad format");
-}
-
-// static uint display_size(struct DisplayData const *d)
-// {
-//     return display_size_for(d->format, d->width, d->height);
-// }
-
-static bool display_realloc(
-    struct DisplayData *d, enum DisplayFormat format, uint w, uint h)
-{
-    uint size = display_size_for(format, w, h);
-
-    if(d->format == format && d->width == w && d->height == h) {
-        memset(d->data, 0x00, size);
-        return true;
-    }
-
-    void *newData = malloc(size);
-    if(!newData)
-        return false;
-
-    free(d->data);
-
-    d->format = format;
-    d->width = w;
-    d->height = h;
-    d->data = newData;
-    d->size = size;
-    return true;
-}
-
-static bool generate_mono_pattern(struct DisplayData *display)
-{
-    if(!display_realloc(display, MONO, 128, 64))
+    if(!mqDisplay_setFormat(display, MQ_DISPLAY_FORMAT_L8, 128, 64))
         return false;
 
     int r0 = rand() % 2 + 1;
@@ -404,14 +376,16 @@ static bool generate_mono_pattern(struct DisplayData *display)
         ((u8 *)display->data)[display->width * 0 + x] = 0xff;
         ((u8 *)display->data)[display->width * (display->height-1) + x] = 0xff;
     }
+
+    mqDisplay_setDirty(display, true);
     return true;
 }
 
 #define C_RGB(R, G, B) (((R) << 11) + ((G) << 5) + (B))
 
-static bool generate_rgb_pattern(struct DisplayData *display)
+static bool generate_rgb_pattern(mqDisplay *display)
 {
-    if(!display_realloc(display, RGB565, 396, 224))
+    if(!mqDisplay_setFormat(display, MQ_DISPLAY_FORMAT_RGB565, 396, 224))
         return false;
 
     u16 palette[16];
@@ -447,6 +421,7 @@ static bool generate_rgb_pattern(struct DisplayData *display)
         ((u16 *)display->data)[display->width * (display->height-1) + x] = 0xffff;
     }
 
+    mqDisplay_setDirty(display, true);
     return true;
 }
 
@@ -494,22 +469,12 @@ static int update(void)
         mq_mach_initHeap(mach);
     }
 
-    if(input.ui_pattern_mono) {
-        generate_mono_pattern(&display);
-        displayTexture.bind();
-        displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
-                                 display.width, display.height);
-        displayTexture.setData(display.data);
-        DGW.setInherentScale(3);
+    if(input.ui_pattern_mono && mach->display) {
+        generate_mono_pattern(mach->display);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.ui_pattern_rgb) {
-        generate_rgb_pattern(&display);
-        displayTexture.bind();
-        displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                                 display.width, display.height);
-        displayTexture.setData(display.data);
-        DGW.setInherentScale(1);
+    if(input.ui_pattern_rgb && mach->display) {
+        generate_rgb_pattern(mach->display);
         render_needed = std::max(render_needed, 1);
     }
 
@@ -531,15 +496,12 @@ int main(void)
 
     DGW.init(displayTexture);
 
-    generate_rgb_pattern(&display);
+    if(mach->display)
+        generate_rgb_pattern(mach->display);
 
     /* Generate an example display for a texture */
     displayTexture.init(GL_TEXTURE_2D);
     displayTexture.bind();
-    displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                             display.width, display.height);
-    displayTexture.setData(display.data);
-    DGW.setInherentScale(1);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -548,8 +510,6 @@ int main(void)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // LINEAR_MIPMAP_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     // glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Texture tex_display(GL_TEXTURE_2D);
 
     SDL_Window *window = azur_sdl_window();
 

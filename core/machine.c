@@ -24,6 +24,11 @@ void mq_machine_reset(mqMachine *mach)
     mq_memory_reset(mach->memory);
     memset(&mach->system, 0, sizeof mach->system);
     mach->stuck = false;
+
+    if(mach->display)
+        mq_display_destroy(mach->display);
+    mach->display = NULL;
+
     mq_heap_reset();
 }
 
@@ -31,6 +36,8 @@ void mq_machine_destroy(mqMachine *mach)
 {
     mq_cpu_reset(&mach->cpu);
     mq_memory_destroy(mach->memory);
+    if(mach->display)
+        mq_display_destroy(mach->display);
     free(mach);
 }
 
@@ -62,6 +69,9 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mach->system.heapSize = 128 << 10;
 
         // TODO[machine]: More precise memory setup for CG add-in
+
+        mach->display = mq_display_create();
+        mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
     }
 
     mach->stuck = false;
@@ -117,37 +127,44 @@ void mq_mach_syscall(mqMachine *mach)
     if(syscallID != 0x1e6 /* happens too often */)
         printf("Syscall! r0=%08x\n", syscallID);
 
-    if(syscallID == 0x0029) {
+    switch(syscallID) {
+    case 0x0029: /* ??? */
         printf("Ignoring %%029, what is that?\n");
         /* Just return 0. */
         mach->cpu.r[0] = 0;
-    }
-    /* GetVRAMAddress() */
-    else if(syscallID == 0x1e6) {
+        break;
+
+    case 0x01e6: /* GetVRAMAddress() */
         // FIXME: GetVRAMAddress() is normally in P2
         mach->cpu.r[0] = 0x8c000000;
-    }
-    /* RTC_GetTicks() */
-    else if(syscallID == 0x2c1) {
+        break;
+
+    case 0x025f: /* Bdisp_PutDisp_DD() */
+        if(mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565,
+                               396, 224)) {
+            // TODO: Much faster memcpy() is needed here
+            u32 src = 0x8c000000;
+            u16 *dst = mach->display->data + 6;
+            for(int y = 0; y < 216; y++) {
+                for(int x = 0; x < 384; x++) {
+                    u32 word;
+                    mq_memory_read16(&mach->cpu, mach->memory, src, &word);
+                    src += 2;
+                    dst[x] = word;
+                }
+                dst += mach->display->width;
+            }
+            mqDisplay_setDirty(mach->display, true);
+        }
+        break;
+
+    case 0x02c1: /* RTC_GetTicks() */
         // FIXME: GetTicks() more than trivial counter
         static int ticks = 0;
         mach->cpu.r[0] = ++ticks;
-    }
-    /* malloc(), free(), realloc() */
-    else if(syscallID == 0x1f43 || syscallID == 0x1f44) {
-        mq_mach_initHeap(mach);
-        mach->cpu.r[0] = mq_heap_malloc(mach->cpu.r[4]);
-    }
-    else if(syscallID == 0x1f41 || syscallID == 0x1f42) {
-        mq_mach_initHeap(mach);
-        mq_heap_free(mach->cpu.r[4]);
-    }
-    else if(syscallID == 0x1f45 || syscallID == 0x1f46) {
-        mq_mach_initHeap(mach);
-        mach->cpu.r[0] = mq_heap_realloc(mach->cpu.r[4], mach->cpu.r[5]);
-    }
-    /* memcpy() */
-    else if(syscallID == 0x1dd0) {
+        break;
+
+    case 0x1dd0: { /* memcpy() */
         // TODO: This is a super slow memcpy()
         u32 dst = mach->cpu.r[4];
         u32 src = mach->cpu.r[5];
@@ -160,8 +177,26 @@ void mq_mach_syscall(mqMachine *mach)
                 break;
         }
         mach->cpu.r[0] = mach->cpu.r[4];
+        break;
     }
-    else {
+
+    case 0x1f41:
+    case 0x1f42: /* free() */
+        mq_mach_initHeap(mach);
+        mq_heap_free(mach->cpu.r[4]);
+        break;
+    case 0x1f43:
+    case 0x1f44: /* malloc() */
+        mq_mach_initHeap(mach);
+        mach->cpu.r[0] = mq_heap_malloc(mach->cpu.r[4]);
+        break;
+    case 0x1f45:
+    case 0x1f46: /* realloc() */
+        mq_mach_initHeap(mach);
+        mach->cpu.r[0] = mq_heap_realloc(mach->cpu.r[4], mach->cpu.r[5]);
+        break;
+
+    default:
         printf("Unknown sycall, getting stuck.\n");
         mach->stuck = true;
         return;
