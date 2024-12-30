@@ -293,7 +293,7 @@ Line *Line::make(char const *str, int size)
 
 void Line::updateRenderLines(View const &view)
 {
-    // TODO: Currently assumes one column per byte, which is... not great!
+    // TODO: Don't assume one column per byte (at least basic UTF-8)
     this->renderLines = (this->size + view.columns - 1) / view.columns;
     if(this->renderLines <= 0)
         this->renderLines = 1;
@@ -435,7 +435,6 @@ void Buffer::updateRender(View const &view, bool lazy)
 Text::Text(): lines {}
 {
     this->renderNeeded = false;
-    this->renderWidth = 0;
     this->renderLines = 0;
 }
 
@@ -449,10 +448,7 @@ bool Text::alloc(int backlogSize, int maximumLineCount)
 
     this->renderNeeded = true;
     this->view = View {};
-    this->renderWidth = 0;
     this->renderLines = 0;
-
-    // FIXME: Compared to original, no newline initially.
     return true;
 }
 
@@ -476,7 +472,6 @@ void Text::computeView(View const &view)
        recompute only the last lines. */
     bool lazy = view.isEquivalentTo(this->view);
     this->view = view;
-    this->renderWidth = view.columns;
     this->renderLines = view.rows;
 
     this->lines.updateRender(view, lazy);

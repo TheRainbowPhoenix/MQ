@@ -12,13 +12,13 @@
 void mq_log_default_handler(enum mq_log_priority priority, char *str)
 {
     if(priority == MQ_LOG_DEBUG)
-        fprintf(stderr, "\e[36mdebug:\e[m %s", str);
+        fprintf(stderr, "\e[36mdebug:\e[m %s\n", str);
     else if(priority == MQ_LOG_WARNING)
-        fprintf(stderr, "\e[33mwarning:\e[m %s", str);
+        fprintf(stderr, "\e[33mwarning:\e[m %s\n", str);
     else if(priority == MQ_LOG_ERROR)
-        fprintf(stderr, "\e[31merror:\e[m %s", str);
+        fprintf(stderr, "\e[31merror:\e[m %s\n", str);
     else
-        fputs(str, stderr);
+        fprintf(stderr, "%s\n", str);
 }
 
 static void (*loghandler)(enum mq_log_priority, char *) =

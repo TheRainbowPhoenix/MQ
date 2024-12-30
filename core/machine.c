@@ -132,11 +132,11 @@ void mq_mach_syscall(mqMachine *mach)
     // TODO: Check syscall API version
 
     if(syscallID != 0x1e6 /* happens too often */)
-        printf("Syscall! r0=%08x\n", syscallID);
+        mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
     case 0x0029: /* ??? */
-        printf("Ignoring %%029, what is that?\n");
+        mq_log(MQ_LOG_WARNING, "Ignoring %%029, what is that?");
         /* Just return 0. */
         mach->cpu.r[0] = 0;
         break;
@@ -204,7 +204,7 @@ void mq_mach_syscall(mqMachine *mach)
         break;
 
     default:
-        printf("Unknown sycall, getting stuck.\n");
+        mq_log(MQ_LOG_ERROR, "Unknown sycall, getting stuck.");
         mach->stuck = true;
         return;
     }

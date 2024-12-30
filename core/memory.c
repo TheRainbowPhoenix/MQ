@@ -318,9 +318,8 @@ bool _mq_chunk_read(
     if(addr < 0x80000000)
         return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
 
-    // TODO
-    mq_log(MQ_LOG_WARNING, "unhandled read @ %08x -> returning 0\n", addr);
-    *out = 0; // 0xffffffff;
+    mq_log(MQ_LOG_WARNING, "unhandled read @ %08x -> returning 0", addr);
+    *out = 0;
     return true;
 }
 

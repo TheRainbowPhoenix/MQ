@@ -163,11 +163,6 @@ struct Line {
     void updateRenderLines(View const &view);
 
     static Line *make(char const *str, int size=-1);
-
-// FIXME
-/* Render a vertical slice of the wrapped line. */
-// int console_fline_render(int x, int y, console_fline_t *FL, int w, int dy,
-//     int show_from, int show_until, int cursor);
 };
 
 struct Buffer {
@@ -277,8 +272,7 @@ struct Text {
     bool renderNeeded;
     /* View parameters from last computeView(). */
     View view;
-    // FIXME: Get rid of renderWidth/renderLines?
-    i16 renderWidth;
+    /* Total number of render lines (this is view data). */
     i16 renderLines;
 
     /* Initiale state has zero capacity. */
@@ -293,14 +287,7 @@ struct Text {
     /* Compute a view of the console for rendering and scrolling. */
     void computeView(View const &view);
 
-    /* Render at (x,y). The render `width`, the number of `lines` and
-       the text `font` are all as specified by the latest console_compute_view().
-       `dy` indicates line height. */
-    // FIXME
-    // void render(int x, int y, int dy,
-    //    scrollpos_t pos);
-
-    // TODO: Selection & editing features
+    // TODO: Text selection & editing features
 
 private:
     /* Clamp a scrolling position to the range valid of the last computed view. */

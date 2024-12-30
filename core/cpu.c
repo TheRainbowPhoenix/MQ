@@ -96,7 +96,7 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
 {
     // TODO: Does SR.BL=1 double fault or simply wait to raise the exception?
     if(cpu->spRegs[SH_SR] & 0x10000000) {
-        fprintf(stderr, "Double fault!\n");
+        mq_log(MQ_LOG_ERROR, "Double fault!");
         return false;
     }
 
@@ -109,7 +109,7 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
 
     // TODO: Break from sleep
 
-    printf("Handling exception %s\n", mq_cpu_exceptionName(exc));
+    mq_log(MQ_LOG_DEBUG, "Handling exception %s", mq_cpu_exceptionName(exc));
 
     cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
@@ -133,7 +133,8 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
 
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
 {
-    printf("Exception raised! %s (%08x)\n", mq_cpu_exceptionName(exc), value);
+    mq_log(MQ_LOG_DEBUG, "Exception raised! %s (%08x)",
+        mq_cpu_exceptionName(exc), value);
 
     cpu->excMask |= (1 << exc);
     if(exc == SH_EXC_INS_ADDR
