@@ -319,7 +319,7 @@ bool _mq_chunk_read(
         return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
 
     // TODO
-    fprintf(stderr, "warning: unhandled read @ %08x -> returning 0\n", addr);
+    mq_log(MQ_LOG_WARNING, "unhandled read @ %08x -> returning 0\n", addr);
     *out = 0; // 0xffffffff;
     return true;
 }

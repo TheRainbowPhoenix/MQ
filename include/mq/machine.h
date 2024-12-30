@@ -20,7 +20,12 @@ struct mqMachine
     mqCpu cpu;
     mqMemory *memory;
 
+    /* Machine is initialized to a reasonable state. */
+    bool initialized;
+    /* Machine is stuck and cannot execute any further. */
     bool stuck;
+    /* A UI interrupt has been requested. */
+    bool interrupt;
 
     /* System emulation details */
     struct {

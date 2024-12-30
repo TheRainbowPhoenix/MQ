@@ -18,6 +18,7 @@
 
 DisplayGlWindow DGW;
 Texture displayTexture;
+RichText::Text ConsoleText;
 
 /* Refresh request triggered by SDL events and Dear ImGui's initial frames. */
 static int render_needed = IMGUI_SETTLING_FRAMES;
@@ -29,7 +30,6 @@ struct DelayedInput {
     bool mq_initialize_addin_cg = false;
     bool mq_initialize_gravity_duck = false;
     int mq_cycles = 0;
-    bool mq_cycle_until_stuck = false;
     bool mq_heap_init = false;
 
     bool ui_pattern_mono = false;
@@ -40,6 +40,23 @@ struct DelayedInput input;
 
 ImFont *fontSans = nullptr;
 ImFont *fontMono = nullptr;
+
+static void handle_log(enum mq_log_priority priority, char *str)
+{
+    /* Print to terminal */
+    mq_log_default_handler(priority, str);
+    /* Also print to internal console */
+    RichText::Line *line;
+    if(priority == MQ_LOG_DEBUG)
+        line = RichText::Line::make((std::string("debug: ") + str).c_str());
+    else if(priority == MQ_LOG_WARNING)
+        line = RichText::Line::make((std::string("warning: ") + str).c_str());
+    else if(priority == MQ_LOG_ERROR)
+        line = RichText::Line::make((std::string("error: ") + str).c_str());
+    else
+        line = RichText::Line::make(str);
+    ConsoleText.addLine(line);
+}
 
 static bool HexViewer_ReadByte(u64 addr, u8 *result)
 {
@@ -187,30 +204,141 @@ static void render(void)
         if(ImGui::Button("Reset and load GravityDuck.g3a"))
             input.mq_initialize_gravity_duck = true;
 
-        ImGui::Text("Cycle:");
-        ImGui::SameLine();
-        if(ImGui::Button("1"))
-            input.mq_cycles = 1;
-        ImGui::SameLine();
-        if(ImGui::Button("10"))
-            input.mq_cycles = 10;
-        ImGui::SameLine();
-        if(ImGui::Button("100"))
-            input.mq_cycles = 100;
-        ImGui::SameLine();
-        if(ImGui::Button("1000"))
-            input.mq_cycles = 1000;
-        ImGui::SameLine();
-        if(ImGui::Button("1 million"))
-            input.mq_cycles = 1000000;
-        if(ImGui::Button("Until stuck"))
-            input.mq_cycle_until_stuck = true;
-        if(mach->stuck)
+        if(mach->initialized) {
+            ImGui::Text("Cycle:");
+            ImGui::SameLine();
+            if(ImGui::Button("1"))
+                input.mq_cycles = 1;
+            ImGui::SameLine();
+            if(ImGui::Button("10"))
+                input.mq_cycles = 10;
+            ImGui::SameLine();
+            if(ImGui::Button("100"))
+                input.mq_cycles = 100;
+            ImGui::SameLine();
+            if(ImGui::Button("1000"))
+                input.mq_cycles = 1000;
+            ImGui::SameLine();
+            if(ImGui::Button("1 million"))
+                input.mq_cycles = 1000000;
+            if(ImGui::Button("Run"))
+                input.mq_cycles = -1;
+            ImGui::SameLine();
+            if(ImGui::Button("Pause"))
+                input.mq_cycles = 0;
+        }
+        else {
+            ImGui::Text("Machine is not initialized.");
+        }
+        if(mach->stuck) {
             ImGui::Text("Machine is stuck!");
+            input.mq_cycles = 0;
+        }
+        if(input.mq_cycles) {
+            if(input.mq_cycles > 0)
+                ImGui::Text("Cycles pending: %d", input.mq_cycles);
+            else
+                ImGui::Text("Running...");
+        }
     }
     ImGui::End();
 
-    if(ImGui::Begin("Inspector", nullptr,
+    if(ImGui::Begin("Console", nullptr)) {
+        static RichText::View view = {
+            .font = fontMono,
+            .scroll = 0,
+        };
+        ImGui::Text("WIP...");
+        if(ImGui::Button("New line (x10)")) {
+            static int i = 0;
+            for(int j = 0; j < 10; j++) {
+                char str[64];
+                sprintf(str, "a pretty long message that will wrap #%d", ++i);
+                RichText::Line *l = RichText::Line::make(str);
+                ConsoleText.addLine(l);
+            }
+        }
+        ImGui::AddRichTextFrame(ConsoleText, view);
+    }
+    ImGui::End();
+
+#if 0
+if(ImGui::Begin("Text Test"))
+{
+struct Segment {
+    Segment(char const *text, ImU32 col=0, bool underline=false):
+        textStart(text),
+        textEnd(text + strlen(text)),
+        color(col),
+        underline(underline) {}
+
+    char const *textStart;
+    char const *textEnd;
+    ImU32 color;
+    bool underline;
+};
+
+Segment segs[] = {
+    Segment("this is a really super duper long segment that should wrap all on its own "),
+    Segment("http://google.com", IM_COL32(127,127,255,255), true),
+    Segment(" Short text "),
+    Segment("http://github.com", IM_COL32(127,127,255,255), true)
+};
+
+ImGui::TextColored(ImColor(0, 255, 0, 255), "Half-manual wrapping");
+
+const float wrapWidth = ImGui::GetContentRegionAvail().x;
+for(int i = 0; i < IM_ARRAYSIZE(segs); ++i)
+{
+    char const *textStart = segs[i].textStart;
+    char const *textEnd = segs[i].textEnd ? segs[i].textEnd : textStart + strlen(textStart);
+
+    ImFont *Font = ImGui::GetFont();
+
+    do {
+        float widthRemaining = ImGui::CalcWrapWidthForPos(ImGui::GetCursorScreenPos(), 0.0f);
+        char const *drawEnd = Font->CalcWordWrapPositionA(1.0f, textStart, textEnd, widthRemaining);
+        if(drawEnd == textStart) {
+            ImGui::NewLine();
+            drawEnd = Font->CalcWordWrapPositionA(1.0f, textStart, textEnd, wrapWidth);
+        }
+
+        if(segs[i].color)
+            ImGui::PushStyleColor(ImGuiCol_Text, segs[i].color);
+        ImGui::TextUnformatted(textStart, drawEnd == textStart ? nullptr : drawEnd);
+        if(segs[i].color)
+            ImGui::PopStyleColor();
+
+        if(segs[i].underline) {
+            ImVec2 lineEnd = ImGui::GetItemRectMax();
+            ImVec2 lineStart = lineEnd;
+            lineStart.x = ImGui::GetItemRectMin().x;
+            ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, segs[i].color);
+
+            if(ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
+                ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
+        }
+
+        if(drawEnd == textStart || drawEnd == textEnd) {
+            ImGui::SameLine(0.0f, 0.0f);
+            break;
+        }
+
+        textStart = drawEnd;
+
+        /* Skip spaces around line wrapping spot */
+        while(textStart < textEnd) {
+            if(ImCharIsBlankA(*textStart)) { textStart++; }
+            else if(*textStart == '\n') { textStart++; break; }
+            else break;
+        }
+    } while (true);
+}
+}
+ImGui::End();
+#endif
+
+    if(ImGui::Begin("CPU", nullptr,
             ImGuiWindowFlags_HorizontalScrollbar)) {
         ImGui::PushFont(fontMono);
 
@@ -330,7 +458,8 @@ static void render(void)
         ImGui::DockBuilderDockWindow("Display", dock);
         ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
-        ImGui::DockBuilderDockWindow("Inspector", dock_left_top_right);
+        ImGui::DockBuilderDockWindow("Console", dock_left_top_right);
+        ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Memory", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);
@@ -430,6 +559,7 @@ static bool generate_rgb_pattern(mqDisplay *display)
 static int update(void)
 {
     SDL_Event e;
+    int cyclesLeft = 0;
 
     while(SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
@@ -456,13 +586,17 @@ static int update(void)
         mq_machine_load_g3a(mach, "GravityDuck.g3a");
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_cycle_until_stuck) {
-        while(!mach->stuck)
-            mq_machine_cycle(mach, 1000);
-        render_needed = std::max(render_needed, 1);
-    }
     else if(input.mq_cycles) {
-        mq_machine_cycle(mach, input.mq_cycles);
+        /* Limit the number of cycles for each GUI frame to not lock the GUI.
+           TODO: Proper "real-time" controls, e.g limit to 20 ms.
+           I don't think I want threads here, too annoying to sync. */
+        int cycles = std::min(input.mq_cycles, 100000);
+        cyclesLeft = input.mq_cycles - cycles;
+        if(cycles < 0) {
+            cycles = 100000;
+            cyclesLeft = -1;
+        }
+        mq_machine_cycle(mach, cycles);
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_heap_init) {
@@ -479,6 +613,7 @@ static int update(void)
     }
 
     input = DelayedInput();
+    input.mq_cycles = cyclesLeft;
 
     return 0;
 }
@@ -486,6 +621,9 @@ static int update(void)
 int main(void)
 {
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
+
+    ConsoleText.alloc(1024, 30);
+    mq_log_handler(handle_log);
 
     mach = mq_machine_create();
 

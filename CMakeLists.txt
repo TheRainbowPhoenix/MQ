@@ -15,6 +15,7 @@ endif()
 
 set(SOURCES
   core/cpu.c
+  core/defs.c
   core/insn.c
   core/machine.c
   core/memory.c

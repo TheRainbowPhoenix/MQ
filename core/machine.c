@@ -23,7 +23,9 @@ void mq_machine_reset(mqMachine *mach)
     mq_cpu_reset(&mach->cpu);
     mq_memory_reset(mach->memory);
     memset(&mach->system, 0, sizeof mach->system);
+    mach->initialized = false;
     mach->stuck = false;
+    mach->interrupt = false;
 
     if(mach->display)
         mq_display_destroy(mach->display);
@@ -74,7 +76,9 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
     }
 
+    mach->initialized = true;
     mach->stuck = false;
+    mach->interrupt = false;
 }
 
 bool mq_machine_load_g3a(mqMachine *mach, char const *path)
@@ -110,8 +114,11 @@ err:
 
 int mq_machine_cycle(mqMachine *mach, int cycles)
 {
+    if(!mach->initialized)
+        return 0;
+
     for(int i = 0; i < cycles; i++) {
-        if(mach->stuck)
+        if(mach->stuck || mach->interrupt)
             return i;
         mq_cpu_cycle(mach, &mach->cpu);
     }

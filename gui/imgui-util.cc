@@ -1,4 +1,5 @@
 #include "imgui-util.h"
+#include <imgui_internal.h>
 #include <algorithm>
 #include <stdio.h>
 #include <ctype.h>
@@ -155,6 +156,14 @@ static int WidthForGlyphs(uint n)
     return (n <= 16) ? w : w + (n / 16) * ImGui::CalcTextSize(str).x;
 }
 
+/* Same in reverse */
+static int GlyphsInWidth(int pixels)
+{
+    char const *str = "WWWWWWWWWWWWWWWW";
+    int w = ImGui::CalcTextSize(str, str + 16).x;
+    return (16 * pixels / w);
+}
+
 static int PreviousPowerOfTwo(uint n)
 {
     uint m;
@@ -258,6 +267,353 @@ void AddHexViewer(HexViewer &HV)
         u64 newCursor = HV.Cursor - dy * HV.BytesPerLine * HV.VisibleLines;
         HV.Cursor = ClampAddress(HV, newCursor);
     }
+}
+
+} /* namespace ImGui */
+
+//============================================================================//
+
+namespace RichText {
+
+Line *Line::make(char const *str, int size)
+{
+    if(size < 0)
+        size = strlen(str);
+
+    Line *l = (Line *)malloc(sizeof(Line) + size + 1);
+    l->formats = NULL;
+    l->formatCount = 0;
+    l->size = strlen(str);
+    l->renderLines = 0;
+
+    memcpy(l->data, str, size);
+    l->data[size] = 0;
+    return l;
+}
+
+void Line::updateRenderLines(View const &view)
+{
+    // TODO: Currently assumes one column per byte, which is... not great!
+    this->renderLines = (this->size + view.columns - 1) / view.columns;
+    if(this->renderLines <= 0)
+        this->renderLines = 1;
+}
+
+Buffer::Buffer()
+{
+    this->lines = nullptr;
+    this->capacity = 0;
+    this->start = 0;
+    this->size = 0;
+    this->totalRendered = 0;
+    this->absolute = 0;
+    this->backlogSize = 0;
+    this->totalSize = 0;
+    this->absoluteRendered = 0;
+}
+
+bool Buffer::alloc(int capacity, int backlogSize)
+{
+    if(capacity <= 0)
+        return false;
+
+    this->lines = new Line *[capacity];
+    if(!this->lines)
+        return false;
+    memset(this->lines, 0, capacity * sizeof(Line *));
+
+    this->capacity = capacity;
+    this->start = 0;
+    this->size = 0;
+    this->totalRendered = 0;
+    this->absolute = 1;
+    this->backlogSize = backlogSize;
+    this->totalSize = 0;
+    this->absoluteRendered = 0;
+    return true;
+}
+
+Buffer::~Buffer()
+{
+    reset();
+}
+
+void Buffer::reset()
+{
+    for(int i = 0; i < this->capacity; i++)
+        free(this->lines[i]);
+    delete[] this->lines;
+    memset(this, 0, sizeof *this);
+}
+
+Line *Buffer::getNthLine(int nth) const
+{
+    if((uint)nth >= this->size)
+        return NULL;
+    return this->lines[nthToIndex(nth)];
+}
+
+int Buffer::indexAdd(int index, int diff) const
+{
+    return (index + diff + this->capacity) % this->capacity;
+}
+
+int Buffer::nthToIndex(int nth) const
+{
+    return (this->start + nth) % this->capacity;
+}
+
+Line *Buffer::getLine(int abs) const
+{
+    return getNthLine(abs - this->absolute);
+}
+
+void Buffer::addLine(Line *line)
+{
+    /* Make space if the buffer is full */
+    recycleOldestLines(this->size - this->capacity + 1);
+
+    this->size++;
+    int last_nth = nthToIndex(this->size - 1);
+
+    this->lines[last_nth] = line;
+}
+
+void Buffer::recycleOldestLines(int count)
+{
+    count = std::min(count, (int)this->size);
+    if(count <= 0)
+        return;
+
+    for(int nth = 0; nth < count; nth++) {
+        Line *L = getNthLine(nth);
+        this->totalRendered -= L->renderLines;
+        this->totalSize -= L->size;
+        this->lines[nthToIndex(nth)] = NULL;
+        free(L);
+    }
+
+    this->start = indexAdd(this->start, count);
+    this->size -= count;
+    this->absolute += count;
+}
+
+void Buffer::cleanBacklog()
+{
+    if(this->size <= 0)
+        return;
+
+    int remove = 0;
+    int n = this->totalSize;
+
+    while(remove < this->size - 1 && n > this->backlogSize) {
+        n -= getNthLine(remove)->size;
+        remove++;
+    }
+
+    recycleOldestLines(remove);
+}
+
+void Buffer::updateRender(View const &view, bool lazy)
+{
+    int start = absoluteStart();
+    int end = absoluteEnd();
+    if(lazy)
+        start = std::max(start, this->absoluteRendered + 1);
+
+    for(int abs = start; abs < end; abs++) {
+        Line *L = getNthLine(abs - this->absolute);
+        this->totalRendered -= L->renderLines;
+        L->updateRenderLines(view);
+        this->totalRendered += L->renderLines;
+    }
+
+    // FIXME: Why -2?
+    this->absoluteRendered = std::max(this->absoluteRendered, end - 2);
+}
+
+Text::Text(): lines {}
+{
+    this->renderNeeded = false;
+    this->renderWidth = 0;
+    this->renderLines = 0;
+}
+
+bool Text::alloc(int backlogSize, int maximumLineCount)
+{
+    backlogSize = std::max(backlogSize, 1);
+    maximumLineCount = std::max(maximumLineCount, 1);
+
+    if(!lines.alloc(maximumLineCount, backlogSize))
+        return false;
+
+    this->renderNeeded = true;
+    this->view = View {};
+    this->renderWidth = 0;
+    this->renderLines = 0;
+
+    // FIXME: Compared to original, no newline initially.
+    return true;
+}
+
+void Text::addLine(Line *line)
+{
+    if(!line)
+        return;
+
+    this->lines.addLine(line);
+    this->renderNeeded = true;
+
+    /* This is a good time to clean up the backlog. */
+    // TODO: This might actually be a performance bottleneck, because we do a
+    // long loop only to find out that the total size is still reasonable!
+    lines.cleanBacklog();
+}
+
+void Text::computeView(View const &view)
+{
+    /* If a view with the same width was previously computed, do a lazy update:
+       recompute only the last lines. */
+    bool lazy = view.isEquivalentTo(this->view);
+    this->view = view;
+    this->renderWidth = view.columns;
+    this->renderLines = view.rows;
+
+    this->lines.updateRender(view, lazy);
+}
+
+ScrollPos Text::clampScrollPos(ScrollPos pos)
+{
+    /* No scrolling case */
+    if(this->lines.totalRendered < this->renderLines)
+        return 0;
+
+    return std::max(0, std::min(pos,
+        this->lines.totalRendered - this->renderLines));
+}
+
+} /* namespace RichText */
+
+namespace ImGui {
+
+static float RenderLine(float x, float y, RichText::Line *L,
+    RichText::View const &view, float dy, int show_from, int show_until)
+{
+    char const *p = L->data;
+    char const *endline = p + L->size;
+    int line_offset = 0;
+    int line_number = 0;
+
+    while(p < endline) {
+        char const *endscreen = p + std::min(view.columns, (uint)strlen(p));
+        // char const *endscreen = view.font->CalcWordWrapPositionA(1.0f,
+        // textStart, textEnd, widthRemaining);
+        int len = endscreen - p;
+
+        if(line_number >= show_from && line_number < show_until) {
+            ImGui::SetCursorScreenPos({x, y});
+            ImGui::TextUnformatted(p, p + len);
+            y += dy;
+        }
+
+        p += len;
+        line_offset += len;
+        line_number++;
+    }
+
+    // printf("[%s] %d/%d render lines\n", L->data, L->renderLines, line_number);
+
+    return y;
+}
+
+void AddRichTextFrame(RichText::Text &RT, RichText::View &view)
+{
+    ImGui::PushFont(fontMono);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg,
+        ImGui::GetStyle().Colors[ImGuiCol_TitleBg]);
+
+    // ImGui::Text("scroll:%lld pos:%d totalLines:%d", scroll, pos, total_lines);
+    // ImGui::Text("cols:%u rows:%u", view.columns, view.rows);
+
+    //---
+
+    ImGui::BeginChild("##console", {}, ImGuiChildFlags_FrameStyle);
+
+    /* Figure out the geometry of the frame */
+    ImVec2 frameSize = ImGui::GetContentRegionAvail();
+    /* Subtract scrollbar width */
+    float scrollbarWidth = ImGui::GetStyle().ScrollbarSize;
+    frameSize.x -= scrollbarWidth;
+
+    view.columns = (uint)GlyphsInWidth(frameSize.x);
+    view.rows = (uint)(frameSize.y / ImGui::GetTextLineHeight());
+    RT.computeView(view);
+
+    int totalLines = RT.lines.totalRendered;
+    int visibleLines = RT.renderLines;
+
+    RichText::ScrollPos pos =
+        std::max((ImS64)0, totalLines - visibleLines - view.scroll);
+
+    float x = ImGui::GetCursorScreenPos().x;
+    float y0 = ImGui::GetCursorScreenPos().y;
+    float y = y0;
+    float dy = ImGui::GetTextLineHeight();
+
+    /* Show only visible lines. We want to avoid counting all the lines in the
+       console, and instead start from the end. */
+    int line_y = visibleLines + pos;
+    int L_start = RT.lines.absoluteStart();
+    int L_end = RT.lines.absoluteEnd();
+    int i = L_end;
+
+    while(i > L_start && line_y > 0)
+        line_y -= RT.lines.getLine(--i)->renderLines;
+
+    /* If there isn't enough content to fill the view, start at the top. */
+    line_y = std::min(line_y, pos);
+
+    while(i < L_end && line_y < visibleLines) {
+        RichText::Line *L = RT.lines.getLine(i);
+
+        // TODO: Handle formats etc.
+        y = RenderLine(x, y, L, view, dy, -line_y, visibleLines - line_y);
+        line_y += L->renderLines;
+        i++;
+    }
+
+    /* Manual scrollbar, based on
+       https://github.com/ocornut/imgui/issues/8215#issuecomment-2527561330 */
+
+    if(totalLines > visibleLines) {
+        ImGuiWindow *win = ImGui::GetCurrentWindow();
+        ImS64 scroll_max = totalLines;
+        ImS64 scroll_visible_size = visibleLines;
+
+        // Hack to use GetWindowScrollbarRect()
+        win->ScrollbarSizes.x = win->ScrollbarSizes.y = scrollbarWidth;
+
+        ImRect scrollbarRect = ImGui::GetWindowScrollbarRect(win, ImGuiAxis_Y);
+        ImGuiID scrollbarID = ImGui::GetWindowScrollbarID(win, ImGuiAxis_Y);
+        ImGui::ScrollbarEx(scrollbarRect, scrollbarID, ImGuiAxis_Y,
+            &view.scroll, scroll_visible_size, scroll_max, ImDrawFlags_None);
+
+        win->ScrollbarSizes.x = win->ScrollbarSizes.y = 0.0f;
+    }
+
+    //---
+
+    ImGui::EndChild();
+
+    float wheel = ImGui::GetIO().MouseWheel;
+    if(ImGui::IsItemHovered() && wheel != 0) {
+        int dy = (wheel < 0) ? -3 : +3;
+        view.scroll = std::max(0, std::min(totalLines - visibleLines,
+            (int)view.scroll - dy));
+    }
+
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
 }
 
 } /* namespace ImGui */

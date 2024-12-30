@@ -863,6 +863,8 @@ MQ_INLINE void trapa(mqMachine *mach, mqCpu *cpu, int imm) {
 void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
 {
 #define _OPCODE opcode
-#define _DECIDE(X, ...) X(mach, cpu, ##__VA_ARGS__)
+#define _DECIDE(X, ...) return X(mach, cpu, ##__VA_ARGS__)
 #include "autogen/sh-isa.inc"
+
+    mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL, 0);
 }

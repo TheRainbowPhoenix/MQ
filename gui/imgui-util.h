@@ -7,6 +7,8 @@
 #include <azur/gl/gl.h>
 #include <imgui.h>
 #include <glm/glm.hpp>
+#include <string>
+#include <vector>
 
 /* Number of frames we expect Dear ImGui to need to settle its layout after
    starting for the first time, resizing windows, etc. */
@@ -107,6 +109,209 @@ struct HexViewer {
 };
 
 void AddHexViewer(HexViewer &HV);
+
+} /* namespace ImGui */
+
+//=== Rich text data structure for the console ===============================//
+
+namespace RichText {
+
+/* View guiding how to layout the text. To be independent from Dear Imgui, one
+   could abstract the computational part of this (e.g. max width + width of
+   text primitive) and leave the ImGui details to the renderer. I've gonna
+   leave this here for now. */
+struct View {
+    //=== User settings ===//
+
+    /* Rendering font. */
+    ImFont *font = NULL;
+    /* Scrolling position in lines. TODO: Scroll in pixels? */
+    ImS64 scroll = 0;
+
+    //=== Values set by the rendering function ===//
+
+    /* Dimensions of the rendering area; only mono fonts for now, so grid. */
+    uint columns = 0, rows = 0;
+
+    /* Check that two views are such that layouts computed for one can be
+       reused for another. In essence, this reveals what data is essential and
+       what data is just graphical options or current widget state. */
+    bool isEquivalentTo(View const &other) const {
+        return this->columns == other.columns;
+    }
+};
+
+struct Format {
+    u16 position, length;
+    /* TODO: More format information */
+    u32 color;
+};
+
+struct Line {
+    /* Format information, range-based */
+    // FIXME: Get leaked when destroying the object...
+    Format *formats;
+    u16 formatCount;
+    /* Number of non-NUL bytes */
+    u16 size;
+    /* Number of render lines occupied */
+    u16 renderLines;
+    /* Raw NUL-terminated data */
+    char data[];
+
+    /* Update the number of render lines. */
+    void updateRenderLines(View const &view);
+
+    static Line *make(char const *str, int size=-1);
+
+// FIXME
+/* Render a vertical slice of the wrapped line. */
+// int console_fline_render(int x, int y, console_fline_t *FL, int w, int dy,
+//     int show_from, int show_until, int cursor);
+};
+
+struct Buffer {
+    /* A rotating array of `capacity` lines starting at position `start` and
+       holding `size` lines. The array is pre-allocated. */
+    Line **lines;
+
+    /* Invariants:
+       - capacity > 0
+       - 0 <= size <= capacity
+       - 0 <= start < capacity
+       - When size is 0, start is undefined. */
+    u16 capacity, start, size;
+
+    /* Total number of rendered lines for the buffer. */
+    u16 totalRendered;
+
+    /* To keep track of lines' identity, the rotating array includes an extra
+       numbering system. Each line is assigned an *absolute* line number which
+       starts at 1 and increases every time a line is added. That number is
+       independent of rotation.
+
+       Absolute line number of the next line to be removed. This identifies
+       the `start` line, unless the buffer is empty. Regardless, the interval
+       [buf->absolute .. buf->absolute + buf->size) always covers exactly the
+       set of lines that are held in the buffer. */
+    int absolute;
+
+    /* To avoid memory explosion, the rotating array can be set to clean up old
+       lines when the total memory consumption is too high. `backlog_size`
+       specifies how many bytes of text lines are allowed to hold. */
+    int backlogSize;
+    /* Total size of current lines, in bytes. */
+    int totalSize;
+
+    /* Last absolute line that has been laid out for rendering. Lazy layout
+       would start at `absolute_rendered+1`. */
+    int absoluteRendered;
+
+    /* Initial state has zero capacity. */
+    Buffer();
+    ~Buffer();
+
+    /* Initialize by allocating `line_count` lines. The buffer will allow up to
+       `backlog_size` bytes of text data and clean up lines past that limit.
+       This function does not free pre-existing data in `buf`. */
+    bool alloc(int capacity, int backlogSize);
+
+    /* Free resources and reset the state. */
+    void reset();
+
+    /* Absolute line numbers of the "start" and "end" of the buffer. The set of
+       lines in the buffer is always [start ... end). If the buffer is empty,
+       the interval is empty and neither line number is in the buffer. */
+    int absoluteStart() const { return this->absolute; }
+    int absoluteEnd() const { return this->absolute + this->size; }
+
+    /* Get a pointer to the line with the given absolute number. */
+    Line *getLine(int absoluteNumber) const;
+
+    /* Add a new line to the buffer (recycling an old one if needed). Takes
+       ownership of the added line. */
+    void addLine(Line *line);
+
+    /* Recycle the `n` oldest lines from the buffer. */
+    void recycleOldestLines(int n);
+
+    /* Clean up lines to try and keep the memory footprint of the text under
+       `backlog_size` bytes. Always keeps at least the last line. */
+    void cleanBacklog();
+
+    /* Update the render width computation for all lines in the buffer. If
+       `lazy` is false, all lines are re-laid out. But render width often
+       remains the same for many frames, and lines only get added. In this
+       case, `lazy` can be set to true, and only lines added or edited since
+       the previous render will be re-laid out. */
+    void updateRender(View const &view, bool lazy);
+
+private:
+    /* Lines in the buffer are identified by their positions within the `lines`
+       array, which are integers equipped with modulo arithmetic (we call them
+       "indices"). We abstract away the rotation by numbering stored lines from
+       0 to buf->size - 1, and we call these numbers "nths". When we want to
+       identify lines independent of rotation, we use their absolute line number.
+
+       Such numbers refer to lines stored in the buffer if:
+         (index)   0 <= index < size
+         (nth)     0 <= nth < size
+         (abs)     0 <= abs - buf->absolute < size */
+
+    int nthToIndex(int nth) const;
+
+    /* Get the nth line. */
+    Line *getNthLine(int nth) const;
+
+    /* Move `index` by `diff`; assumes |diff| <= this->capacity. */
+    int indexAdd(int index, int diff) const;
+};
+
+/* Scroll position measured as a number of lines up from the bottom. */
+using ScrollPos = int;
+
+struct Text {
+    /* A rotating array of lines. Never empty. */
+    Buffer lines;
+    /* Whether new data has been added and a frame should be rendered. */
+    bool renderNeeded;
+    /* View parameters from last computeView(). */
+    View view;
+    // FIXME: Get rid of renderWidth/renderLines?
+    i16 renderWidth;
+    i16 renderLines;
+
+    /* Initiale state has zero capacity. */
+    Text();
+    /* Initialize with specified storage limits. */
+    // TODO: In principle, could be called multiple times. Not coded yet.
+    bool alloc(int backlogSize, int maximumLineCount);
+
+    /* Add a new line. */
+    void addLine(Line *line);
+
+    /* Compute a view of the console for rendering and scrolling. */
+    void computeView(View const &view);
+
+    /* Render at (x,y). The render `width`, the number of `lines` and
+       the text `font` are all as specified by the latest console_compute_view().
+       `dy` indicates line height. */
+    // FIXME
+    // void render(int x, int y, int dy,
+    //    scrollpos_t pos);
+
+    // TODO: Selection & editing features
+
+private:
+    /* Clamp a scrolling position to the range valid of the last computed view. */
+    ScrollPos clampScrollPos( ScrollPos pos);
+};
+
+} /* namespace RichText */
+
+namespace ImGui {
+
+void AddRichTextFrame(RichText::Text &RT, RichText::View &view);
 
 } /* namespace ImGui */
 
