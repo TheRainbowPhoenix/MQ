@@ -101,9 +101,10 @@ private:
 
 /* State retained from one frame to the next in the memory window. */
 struct MemoryWindowState {
-    /* Currently-selected chunk and page. */
+    /* Current selection */
     int selectedChunk = -1;
     int selectedPage = -1;
+    int selectedIO = -1;
 };
 /* Actions emitted from the memory window. */
 struct MemoryWindowAction {

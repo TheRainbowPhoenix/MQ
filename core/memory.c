@@ -104,6 +104,36 @@ static mqMMIOPage *mq_MMIOPage_create(void)
     return mmpg;
 }
 
+static bool mq_MMIOPage_allocMap(mqMMIOPage *mmpg, int length)
+{
+    if(length <= mmpg->length)
+        return true;
+
+    u8 *new_map = realloc(mmpg->map, length * sizeof *mmpg->map);
+    if(!new_map)
+        return false;
+
+    memset(new_map + mmpg->length, 0x00,
+        (length - mmpg->length) * sizeof *mmpg->map);
+    mmpg->length = length;
+    mmpg->map = new_map;
+    return true;
+}
+
+static bool mq_MMIOPage_allocIO(mqMMIOPage *mmpg, int ioCount)
+{
+    if(ioCount <= mmpg->ioCount)
+        return true;
+
+    mqMMIO *new_io = realloc(mmpg->io, ioCount * sizeof *mmpg->io);
+    if(!new_io)
+        return false;
+
+    mmpg->io = new_io;
+    mmpg->ioCount = ioCount;
+    return true;
+}
+
 void mq_MMIOPage_reset(mqMMIOPage *mmpg)
 {
     free(mmpg->map);
@@ -193,6 +223,62 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
     return true;
 }
 
+mqMMIOPage *mq_chunk_createMMIOPage(
+    mqChunk *chunk, u32 addr, int length, int ioCount)
+{
+    u32 pageNum = (addr & 0xfffff) >> 12;
+    if(!MQ_PAGEPTR_ISNULL(chunk->pages[pageNum]))
+        return NULL;
+
+    mqMMIOPage *mmpg = mq_MMIOPage_create();
+    if(!mmpg)
+        return NULL;
+    if(!mq_MMIOPage_allocMap(mmpg, length)
+        || !mq_MMIOPage_allocIO(mmpg, ioCount)) {
+        mq_MMIOPage_destroy(mmpg);
+        return NULL;
+    }
+
+    chunk->pages[pageNum] = MQ_PAGEPTR_MKMMIOPAGE(mmpg);
+    return mmpg;
+}
+
+int mq_page_addIO(mqMMIOPage *mmpg, char const *name, int flags, void *read,
+    void *write, void *value, void *data)
+{
+    /* Reallocate the IO array if we need more space. */
+    if(mmpg->ioUsed >= 256)
+        return -1;
+    if(mmpg->ioUsed >= mmpg->ioCount
+        && !mq_MMIOPage_allocIO(mmpg, mmpg->ioUsed + 4))
+        return -1;
+
+    int index = mmpg->ioUsed;
+    mqMMIO *io = &mmpg->io[index];
+    io->name = name;
+    io->flags = flags;
+    io->read = read;
+    io->write = write;
+    io->value = value;
+    io->data = data;
+    mmpg->ioUsed++;
+    return index + 1;
+}
+
+bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size)
+{
+    address &= 0xfff;
+    if(address + size > 0x1000)
+        size = 0x1000 - address;
+    if((uint)ioID > 0xff || size < 0
+        || !mq_MMIOPage_allocMap(mmpg, address + size))
+        return false;
+
+    for(int i = 0; i < size; i++)
+        mmpg->map[address + i] = ioID;
+    return true;
+}
+
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 {
     if(!buffer)
@@ -278,39 +364,44 @@ bool mq_memory_load(mqMemory *mem, u32 baseAddr, void const *data, int size)
 //=== Standard memory access functions =======================================//
 
 static bool _mq_chunk_read_pure(
-    mqChunk const *chunk, u32 addr, int size, u32 *out)
+    mqChunk const *chunk, u32 addr, int size, u32 *out, mqMMIOPage **mmpg)
 {
-    if(chunk) {
-        u32 chunkOffset = addr & 0xfffff;
-        mqPagePointer pagePtr = chunk->pages[chunkOffset >> 12];
+    if(!chunk)
+        return false;
 
-        if(MQ_LIKELY(MQ_PAGEPTR_ISBUFFER(pagePtr))) {
-            void *page = MQ_PAGEPTR_BUFFER(pagePtr);
-            if(size == 4)
-                *out = mq_buffer_read32(page, chunkOffset & 0xfff);
-            else if(size == 2)
-                *out = mq_buffer_read16(page, chunkOffset & 0xfff);
-            else
-                *out = mq_buffer_read8(page, chunkOffset & 0xfff);
-            return true;
-        }
+    u32 chunkOffset = addr & 0xfffff;
+    mqPagePointer pagePtr = chunk->pages[chunkOffset >> 12];
 
-        else if(MQ_LIKELY(!MQ_PAGEPTR_ISNULL(pagePtr))) {
-            // TODO: MMIO reads
-            fprintf(stderr, "TODO: MMIO page read!\n");
-            exit(1);
-        }
+    if(MQ_LIKELY(MQ_PAGEPTR_ISBUFFER(pagePtr))) {
+        void *page = MQ_PAGEPTR_BUFFER(pagePtr);
+        if(size == 4)
+            *out = mq_buffer_read32(page, chunkOffset & 0xfff);
+        else if(size == 2)
+            *out = mq_buffer_read16(page, chunkOffset & 0xfff);
+        else
+            *out = mq_buffer_read8(page, chunkOffset & 0xfff);
+        return true;
     }
 
-    // TODO: Handle special cases related to TLB/Cache areas
+    if(mmpg && MQ_LIKELY(!MQ_PAGEPTR_ISNULL(pagePtr)))
+        *mmpg = MQ_PAGEPTR_MMIOPAGE(pagePtr);
+
     return false;
 }
 
 bool _mq_chunk_read(
     mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out)
 {
-    if(_mq_chunk_read_pure(chunk, addr, size, out))
+    mqMMIOPage *mmpg = NULL;
+    if(_mq_chunk_read_pure(chunk, addr, size, out, &mmpg))
         return true;
+
+    if(mmpg) {
+        fprintf(stderr, "TODO: Handle MMIO read\n");
+        exit(1);
+    }
+
+    // TODO: Handle special cases related to TLB/Cache areas
 
     /* Memory accesses outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently return undefined values in P1-P4. */
@@ -406,7 +497,8 @@ bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out)
         return true;
     }
 
-    return _mq_chunk_read_pure(MQ_CHUNKPTR_DETAILS(chunkPtr), addr, size, out);
+    mqChunk *ch = MQ_CHUNKPTR_DETAILS(chunkPtr);
+    return _mq_chunk_read_pure(ch, addr, size, out, NULL);
 }
 
 //=== Miscellaneous ==========================================================//

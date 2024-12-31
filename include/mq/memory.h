@@ -111,7 +111,7 @@ typedef void *mqPagePointer;
 #define MQ_PAGEPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
 #define MQ_PAGEPTR_ISMMIOPAGE(PTR) (((uintptr_t)(PTR) & 1) != 0)
 #define MQ_PAGEPTR_BUFFER(PTR) ((void *)(PTR))
-#define MQ_PAGEPTR_MMIOPAGE(PTR) ((mqMMIOPage *)((uintptr_t)(PTR) & -1))
+#define MQ_PAGEPTR_MMIOPAGE(PTR) ((mqMMIOPage *)((uintptr_t)(PTR) & -2))
 #define MQ_PAGEPTR_MKBUFFER(PTR) ((mqPagePointer)(PTR))
 #define MQ_PAGEPTR_MKMMIOPAGE(PTR) ((mqPagePointer)((uintptr_t)(PTR) | 1))
 
@@ -133,21 +133,59 @@ struct mqChunk {
 struct mqMMIOPage {
     /* Length of the range. The range always starts at offset 0 in the page. */
     int length;
-    /* Mapping of bytes [0..length) in the page to into structures. */
+    /* Mapping of bytes [0..length) in the page to IO structures. */
     u8 *map;
     /* List of IO structures, indexed by map[address & 0xfff]. */
     struct mqMMIO *io;
+    int ioCount;
+    /* io is preallocated; number of entries used in the array. */
+    int ioUsed;
+};
+
+/* Flags setting general behaviors for I/O accesses. */
+enum {
+    /* Alignment options--these are coded on low bits so that access with size
+       S is allowed if (S & flags != 0). Not critical, but neat. */
+    MQ_MMIO_1_ALIGNED   = 0x0001,
+    MQ_MMIO_2_ALIGNED   = 0x0002,
+    MQ_MMIO_4_ALIGNED   = 0x0004,
+    MQ_MMIO_UNALIGNED   = 0x0007,
+
+    /* Default read behaviors where the value of an u8/u16/u32 is returned
+       directly without invoking a read callback. In this case the read
+       function is ignored. The `value` pointer is an u8/u16/u32 *. */
+    MQ_MMIO_READU8      = 0x0010,
+    MQ_MMIO_READU16     = 0x0020,
+    MQ_MMIO_READU32     = 0x0040,
+
+    /* The behavior of read/write functions does not depent on access address
+       or size. This can be set if the address/alignment constraints are
+       completely captured by the map in mqMMIOPage and alignment flags. This
+       affects the prototypes of read/write, see struct mqMMIO. */
+    MQ_MMIO_RELOC       = 0x0100,
 };
 
 /* Information on a memory-mapped I/O unit. */
-typedef bool mq_mmio_read_t(u32 addr, int size, u32 *result);
-typedef bool mq_mmio_write_t(u32 addr, int size, u32 value);
 struct mqMMIO {
-   /* General read/write functions for pages that don't use buffers. addresses
-      are given as full 32-bit values because this is generally used for MMIO,
-      for which the full address is more recognizable. */
-   mq_mmio_read_t *read;
-   mq_mmio_write_t *write;
+    /* MQ_MMIO_* flags */
+    int flags;
+    /* Read and write function pointers. The prototypes are
+       - u32 read(void *data, u32 addr, int size)
+         void write(void *data, u32 value, u32 addr, int size)
+         if MQ_MMIO_RELOC is clear;
+       - u32 read(void *data)
+         void write(void *data, u32 value)
+         if MQ_MMIO_RELOC is set.
+       If MQ_MMIO_READU*, the read pointer is ignored and can be NULL. NULL
+       pointers in any other situation is treated as a fatal error. */
+    void *read;
+    void *write;
+    /* Value pointer for MQ_MMIO_READ{U8,U16,u32} */
+    void *value;
+    /* Data pointer passed as first argument to read/write */
+    void *data;
+    /* Printable name; no specific constraints */
+    char const *name;
 };
 
 typedef struct mqMemory mqMemory;
@@ -187,6 +225,22 @@ mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr);
    true on success, false if the page already exists (in which case the call is
    a no-op). */
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
+
+/* Create an MMIO page in a chunk. The given map length and MMIO count are used
+   to preallocate if not zero. Returns true on success, false if the page
+   already exists (in which case the call is a no-op). */
+mqMMIOPage *mq_chunk_createMMIOPage(
+    mqChunk *chunk, u32 addr, int preallocLength, int preallocIOCount);
+
+/* Add an IO unit to an MMIO page. This doesn't map the IO to memory yet.
+   Returns an integer identifying the IO to be used in mq_page_mapIO(), or a
+   negative value on error. */
+int mq_page_addIO(mqMMIOPage *mmpg, char const *name, int flags, void *read,
+    void *write, void *value, void *data);
+
+/* Map an IO unit previously added to the given page. The high bits of addr
+   are ignored. */
+bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size);
 
 /* Create a series of chunks or pages matching the given memory interval. The
    start address must be page-aligned; the size will be rounded up to the next

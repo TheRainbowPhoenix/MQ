@@ -44,6 +44,51 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
         cpu->pc = 0x00300000;
         cpu->syscallHandler = 0x80020070;
     }
+
+    /* MPU registers are initialized here (most to 0). */
+}
+
+static void write_TRA(mqCpu *cpu, u32 value)
+{
+    cpu->TRA = value & 0x000003fc;
+}
+
+static void write_EXPEVT(mqCpu *cpu, u32 value)
+{
+    cpu->EXPEVT = value & 0x00000fff;
+}
+
+static void write_INTEVT(mqCpu *cpu, u32 value)
+{
+    cpu->INTEVT = value & 0x00003fff;
+}
+
+bool mq_cpu_setupModule(mqCpu *cpu, mqMemory *mem)
+{
+    // TODO: Area 7 addresses for MMIO?
+    mqChunk *ch = mq_memory_createChunk(mem, 0xff000000);
+    if(!ch)
+        return false;
+
+    mqMMIOPage *mmpg = mq_chunk_createMMIOPage(ch, 0xff000000, 0, 0);
+    if(!mmpg)
+        return false;
+
+    int TRA_ID = mq_page_addIO(mmpg, "TRA",
+        MQ_MMIO_4_ALIGNED | MQ_MMIO_READU32 | MQ_MMIO_RELOC, NULL,
+        write_TRA, &cpu->TRA, cpu);
+    int EXPEVT_ID = mq_page_addIO(mmpg, "EXPEVT",
+        MQ_MMIO_4_ALIGNED | MQ_MMIO_READU32 | MQ_MMIO_RELOC, NULL,
+        write_EXPEVT, &cpu->EXPEVT, cpu);
+    int INTEVT_ID = mq_page_addIO(mmpg, "INTEVT",
+        MQ_MMIO_4_ALIGNED | MQ_MMIO_READU32 | MQ_MMIO_RELOC, NULL,
+        write_INTEVT, &cpu->INTEVT, cpu);
+
+    bool b = true;
+    b = b && mq_page_mapIO(mmpg, TRA_ID, 0xff000020, 1);
+    b = b && mq_page_mapIO(mmpg, EXPEVT_ID, 0xff000024, 1);
+    b = b && mq_page_mapIO(mmpg, INTEVT_ID, 0xff000028, 1);
+    return b;
 }
 
 static u16 const exc_CodeTable[SH_NUM_EXCEPTIONS] = {
@@ -104,7 +149,7 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
         // TODO: Set INTEVT. Requires INTC providing the interrupt code.
     }
     else {
-        u32 code = exc_exceptionCode(exc); // TODO: Set EXPEVT.
+        cpu->EXPEVT = exc_exceptionCode(exc) & 0xfff;
     }
 
     // TODO: Break from sleep
@@ -148,7 +193,7 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
        || exc == SH_EXC_WRITE_TLBPROT)
         ; // TODO: TEA = value;
     else if(exc == SH_EXC_TRAP)
-        ; // TODO: TRA = value << 2
+        cpu->TRA = (value & 0xff) << 2;
 }
 
 bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value)

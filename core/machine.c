@@ -54,6 +54,9 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
+        mq_cpu_setupModule(&mach->cpu, mach->memory);
+
+        // TODO: Where does register initialization go?!
 
         /* P0 program code */
         void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);

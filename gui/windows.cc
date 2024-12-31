@@ -33,8 +33,20 @@ static void AddChunkList(
 
         if(clicked && s.selectedChunk != (int)i) {
             s.selectedChunk = i;
+            s.selectedPage = -1;
+            s.selectedIO = -1;
             a.type = a.Type::MWA_VIEW_HEX;
             a.address = i << 20;
+
+            /* Autoselect page #0 if there is exactly one non-null page */
+            if(MQ_CHUNKPTR_ISDETAILS(mem->chunks[i])) {
+                mqChunk *ch = MQ_CHUNKPTR_DETAILS(mem->chunks[i]);
+                int nonnullPages = 0;
+                for(int i = 0; i < 256 && nonnullPages < 2; i++)
+                    nonnullPages += ch->pages[i] != MQ_PAGEPTR_NULL;
+                if(nonnullPages == 1)
+                    s.selectedPage = 0;
+            }
         }
 
         totalChunks++;
@@ -76,15 +88,16 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
         ImGui::SetNextItemAllowOverlap();
         bool clicked = ImGui::Selectable(addr, (int)i == s.selectedPage);
         ImGui::SameLine(0, 7);
-        if(MQ_PAGEPTR_ISBUFFER(chunk->pages[i])) {
-            ImGui::SameLine(0, 7);
-            ImGui::PushFont(fontSans);
+        ImGui::PushFont(fontSans);
+        if(MQ_PAGEPTR_ISBUFFER(chunk->pages[i]))
             ImGui::TextDisabled("(Buffer)");
-            ImGui::PopFont();
-        }
+        else if(MQ_PAGEPTR_ISMMIOPAGE(chunk->pages[i]))
+            ImGui::TextDisabled("(IO)");
+        ImGui::PopFont();
 
         if(clicked) {
             s.selectedPage = i;
+            s.selectedIO = -1;
             a.type = a.Type::MWA_VIEW_HEX;
             a.address = chunkBase + (i << 12);
         }
@@ -106,12 +119,53 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
         ImGui::Text("This is a buffer page.");
         return;
     }
-    mqMMIOPage *mmioPage = MQ_PAGEPTR_MMIOPAGE(pagePtr);
+    mqMMIOPage *mmpg = MQ_PAGEPTR_MMIOPAGE(pagePtr);
 
-    ImGui::Text("TODO: MMIO listing");
+    ImVec2 avl = ImGui::GetContentRegionAvail();
+    avl.x -= 4;
+    avl.y -= ImGui::GetTextLineHeightWithSpacing();
+    // TODO: More clearly split list and IO details
+    avl.y /= 2;
+    if(!ImGui::BeginListBox("##memory-ios", avl))
+        return;
+
+    ImGui::PushFont(fontMono);
+
+    char str[16];
+
+    for(int i = 0; i < mmpg->length; i++) {
+        sprintf(str, "%08x", addr + i);
+        if(!mmpg->map[i])
+            continue;
+
+        mqMMIO *io = &mmpg->io[mmpg->map[i] - 1];
+
+        ImGui::SetNextItemAllowOverlap();
+        bool clicked = ImGui::Selectable(str, i == s.selectedIO);
+        if(io->name) {
+            ImGui::SameLine(0, 7);
+            ImGui::TextDisabled(io->name);
+        }
+
+        if(clicked)
+            s.selectedIO = i;
+    }
+
+    ImGui::PopFont();
+    ImGui::EndListBox();
+    ImGui::Text("Total: %d IOs", mmpg->ioCount);
+
+    if(s.selectedIO >= 0) {
+        mqMMIO *io = &mmpg->io[mmpg->map[s.selectedIO] - 1];
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::PushFont(fontMono);
+        ImGui::TextUnformatted(io->name);
+        ImGui::PopFont();
+    }
+
     (void)mach;
-    (void)s;
-    (void)addr;
     (void)a;
 }
 

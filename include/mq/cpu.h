@@ -13,6 +13,7 @@
 MQ_START_DEFS
 
 struct mqMachine;
+struct mqMemory;
 
 /* Control and system registers. The numbering for 0..31 follows the encoding
    of lds/ldc instructions, 32 and above are in a random order. */
@@ -99,6 +100,8 @@ struct mqCpu
 
     /* Mask of pending exceptions */
     u32 excMask;
+    /* Exception handling registers */
+    u32 TRA, EXPEVT, INTEVT;
 
     /* Syscall emulation address. If this address is hit a syscall will be
        emulated. This is set to 0 when syscall emulation is disabled */
@@ -116,7 +119,11 @@ enum {
 };
 
 void mq_cpu_reset(mqCpu *cpu);
+
+/* Initialize the CPU state for the given emulation scenario. */
 void mq_cpu_initialize(mqCpu *cpu, int initializeKind);
+/* Setup module IO for the CPU's internal mechanisms. */
+bool mq_cpu_setupModule(mqCpu *cpu, struct mqMemory *mem);
 
 //=== Emulation routines =====================================================//
 
