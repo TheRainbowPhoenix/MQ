@@ -25,11 +25,14 @@ void mq_machine_reset(mqMachine *mach)
     memset(&mach->system, 0, sizeof mach->system);
     mach->initialized = false;
     mach->stuck = false;
-    mach->interrupt = false;
 
     if(mach->display)
         mq_display_destroy(mach->display);
     mach->display = NULL;
+
+    if(mach->keyboard)
+        mq_keyboard_destroy(mach->keyboard);
+    mach->keyboard = NULL;
 
     mq_heap_reset();
 }
@@ -40,6 +43,8 @@ void mq_machine_destroy(mqMachine *mach)
     mq_memory_destroy(mach->memory);
     if(mach->display)
         mq_display_destroy(mach->display);
+    if(mach->keyboard)
+        mq_keyboard_destroy(mach->keyboard);
     free(mach);
 }
 
@@ -77,11 +82,13 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         mach->display = mq_display_create();
         mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
+
+        mach->keyboard = mq_keyboard_create();
+        mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
     }
 
     mach->initialized = true;
     mach->stuck = false;
-    mach->interrupt = false;
 }
 
 bool mq_machine_load_g3a(mqMachine *mach, char const *path)
@@ -121,7 +128,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         return 0;
 
     for(int i = 0; i < cycles; i++) {
-        if(mach->stuck || mach->interrupt)
+        if(mach->stuck)
             return i;
         mq_cpu_cycle(mach, &mach->cpu);
     }

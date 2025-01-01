@@ -2,6 +2,7 @@
 #include <mq/machine.h>
 #include <mq/system/heap.h>
 #include <mq/interfaces/display.h>
+#include <mq/interfaces/keyboard.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -161,32 +162,17 @@ static void render(void)
     ImGui::PopStyleVar();
 
     if(ImGui::Begin("Keyboard", nullptr, 0)) {
-        // ImVec2 p = ImGui::GetCursorScreenPos();
-        // ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        // draw_list->AddText({p.x+30,p.y+30}, 0xffff00ff, "F1");
-        // draw_list->AddText({p.x+60,p.y+30}, 0xffff00ff, "F2");
-
-        char const *names[] = {
-            "F1",     "F2",     "F3",     "F4",     "F5",     "F6",
-            "SHIFT",  "OTPN",   "VARS",   "MENU",   "◀",      "▲",
-            "ALPHA",  "x2",     "^",      "EXIT",   "▼",      "▶",
-            "XOT",    "log",    "ln",     "sin",    "cos",    "tan",
-            "o/o",    "S<->D",  "(",      ")",      ",",      "→",
-            "7",      "8",      "9",      "DEL",    "AC/ON",
-            "4",      "5",      "6",      "×",      "÷",
-            "1",      "2",      "3",      "+",      "-",
-            "0",      ".",      "x10^",   "(-)",    "EXE",
-        };
-        int i = 0;
-        for(int y = 0; y < 9; y++) {
-            int rowLength = 6, width = 60;
-            if(y >= 5)
-                    rowLength = 5, width = 72;
-
-            for(int x = 0; x < rowLength; x++) {
-                ImGui::SetCursorPos({20.f + width * x, 30.f + 30 * y});
-                ImGui::Button(names[i], {width-5.f, 24});
-                i++;
+        mqKeyboard *kbd = mach->keyboard;
+        if(kbd) {
+            for(uint i = 0; i < kbd->keyCount; i++) {
+                mqKeyboardKey *key = &kbd->keyInfo[i];
+                float x = key->geometry.x, y = key->geometry.y;
+                float w = key->geometry.w, h = key->geometry.h;
+                char str[64];
+                snprintf(str, sizeof str, "%s##key%d", key->name, i);
+                ImGui::SetCursorPos({x, y});
+                if(ImGui::Button(str, {w, h}))
+                    printf("clicked key #%d\n", i);
             }
         }
     }

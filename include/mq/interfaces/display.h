@@ -30,7 +30,7 @@ struct mqDisplay {
     uint width, height;
     /* Pointer to raw pixel values in row-major, left-to-right order */
     void *data;
-    /* Tracker for whether the display has changerd since some UI/consumer-
+    /* Tracker for whether the display has changed since some UI/consumer-
        directed event. This can be set to false by users. */
     bool dirty;
 };

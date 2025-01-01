@@ -21,6 +21,7 @@ set(SOURCES
   core/memory.c
 
   interfaces/display.c
+  interfaces/keyboard.c
 
   system/heap.c
 

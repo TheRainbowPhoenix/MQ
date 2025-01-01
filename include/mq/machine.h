@@ -12,6 +12,7 @@
 #include <mq/cpu.h>
 #include <mq/memory.h>
 #include <mq/interfaces/display.h>
+#include <mq/interfaces/keyboard.h>
 MQ_START_DEFS
 
 // TODO
@@ -24,8 +25,8 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
-    /* A UI interrupt has been requested. */
-    bool interrupt;
+
+    /* TODO: MPU details/peripheral modules */
 
     /* System emulation details */
     struct {
@@ -34,8 +35,15 @@ struct mqMachine
         u32 heapSize;
     } system;
 
-    /* Display peripheral associated with the machine. May be NULL. */
+    /* Generic devices associated with the machine to interface either with the
+       user or with host system resources. */
+
+    /* Display; may be NULL. */
     mqDisplay *display;
+    // Keyboard; may be NULL.
+    mqKeyboard *keyboard;
+    // TODO: Real-time tiemr; may be NULL.
+    // mqTimer *timer;
 };
 
 typedef struct mqMachine mqMachine;
