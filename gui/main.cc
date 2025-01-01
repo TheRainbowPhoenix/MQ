@@ -117,6 +117,20 @@ static void render(void)
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height));
 
+    bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
+    if(ImGui::BeginMainMenuBar()) {
+        if(ImGui::BeginMenu("File")) {
+            open = open || ImGui::MenuItem("Open...", "Ctrl+O");
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    }
+    if(open) {
+        std::string path = openFileDialog();
+        if(path.size())
+            printf("Open! %s\n", path.c_str());
+    }
+
     auto dock = ImGui::DockSpaceOverViewport();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));

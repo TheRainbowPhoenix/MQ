@@ -28,6 +28,7 @@ set(SOURCES
   gui/imgui-util.cc
   gui/main.cc
   gui/texture.cc
+  gui/util.cc
   gui/windows.cc)
 
 set(ASSETS)
