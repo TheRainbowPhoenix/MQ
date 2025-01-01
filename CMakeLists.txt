@@ -16,12 +16,16 @@ endif()
 set(SOURCES
   core/cpu.c
   core/defs.c
+  core/hooks.c
   core/insn.c
   core/machine.c
   core/memory.c
+  core/mq.c
 
   interfaces/display.c
   interfaces/keyboard.c
+
+  modules/keysc.c
 
   system/heap.c
 

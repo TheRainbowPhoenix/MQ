@@ -69,25 +69,17 @@ bool mq_cpu_setupModule(mqCpu *cpu, mqMemory *mem)
     mqChunk *ch = mq_memory_createChunk(mem, 0xff000000);
     if(!ch)
         return false;
-
     mqMMIOPage *mmpg = mq_chunk_createMMIOPage(ch, 0xff000000, 0, 0);
     if(!mmpg)
         return false;
 
-    int TRA_ID = mq_page_addIO(mmpg, "TRA",
-        MQ_MMIO_4_ALIGNED | MQ_MMIO_READU32 | MQ_MMIO_RELOC, NULL,
-        write_TRA, &cpu->TRA, cpu);
-    int EXPEVT_ID = mq_page_addIO(mmpg, "EXPEVT",
-        MQ_MMIO_4_ALIGNED | MQ_MMIO_READU32 | MQ_MMIO_RELOC, NULL,
-        write_EXPEVT, &cpu->EXPEVT, cpu);
-    int INTEVT_ID = mq_page_addIO(mmpg, "INTEVT",
-        MQ_MMIO_4_ALIGNED | MQ_MMIO_READU32 | MQ_MMIO_RELOC, NULL,
-        write_INTEVT, &cpu->INTEVT, cpu);
-
     bool b = true;
-    b = b && mq_page_mapIO(mmpg, TRA_ID, 0xff000020, 1);
-    b = b && mq_page_mapIO(mmpg, EXPEVT_ID, 0xff000024, 1);
-    b = b && mq_page_mapIO(mmpg, INTEVT_ID, 0xff000028, 1);
+    b &= mq_page_mapRegister32(mmpg, "TRA", 0xff000020,
+        NULL, write_TRA, &cpu->TRA, cpu);
+    b &= mq_page_mapRegister32(mmpg, "EXPEVT", 0xff000024,
+        NULL, write_EXPEVT, &cpu->EXPEVT, cpu);
+    b &= mq_page_mapRegister32(mmpg, "INTEVT", 0xff000028,
+        NULL, write_INTEVT, &cpu->INTEVT, cpu);
     return b;
 }
 

@@ -59,5 +59,10 @@ void mq_keyboard_destroy(mqKeyboard *kbd);
 /* Initialize a keyboard with a standard layout. */
 void mq_keyboard_initialize(mqKeyboard *kbd, enum mqKeyboardStandardLayout l);
 
+/* Check whether a key is pressed. */
+bool mq_keyboard_isKeyPressed(mqKeyboard *kbd, uint keyNumber);
+/* Set whether a key is pressed (from GUI code). */
+void mq_keyboard_setKeyPressed(mqKeyboard *kbd, uint keyNumber, bool pressed);
+
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_KEYBOARD_H */

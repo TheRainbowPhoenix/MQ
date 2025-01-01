@@ -279,6 +279,36 @@ bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size)
     return true;
 }
 
+bool mq_page_mapRegister8(mqMMIOPage *mmpg, char const *name, u32 addr,
+   void *read, void *write, u8 *value, void *data)
+{
+    int flags = MQ_MMIO_SIZE_1 | MQ_MMIO_RELOC;
+    if(!read)
+        flags |= MQ_MMIO_READU8;
+    int ioID = mq_page_addIO(mmpg, name, flags, read, write, value, data);
+    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
+}
+
+bool mq_page_mapRegister16(mqMMIOPage *mmpg, char const *name, u32 addr,
+   void *read, void *write, u16 *value, void *data)
+{
+    int flags = MQ_MMIO_SIZE_2 | MQ_MMIO_RELOC;
+    if(!read)
+        flags |= MQ_MMIO_READU16;
+    int ioID = mq_page_addIO(mmpg, name, flags, read, write, value, data);
+    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
+}
+
+bool mq_page_mapRegister32(mqMMIOPage *mmpg, char const *name, u32 addr,
+   void *read, void *write, u32 *value, void *data)
+{
+    int flags = MQ_MMIO_SIZE_4 | MQ_MMIO_RELOC;
+    if(!read)
+        flags |= MQ_MMIO_READU32;
+    int ioID = mq_page_addIO(mmpg, name, flags, read, write, value, data);
+    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
+}
+
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 {
     if(!buffer)
@@ -396,9 +426,35 @@ bool _mq_chunk_read(
     if(_mq_chunk_read_pure(chunk, addr, size, out, &mmpg))
         return true;
 
-    if(mmpg) {
-        fprintf(stderr, "TODO: Handle MMIO read\n");
-        exit(1);
+    u32 pgAddr = addr & 0xfff;
+    int ioID;
+    if(mmpg && mmpg->length > (int)pgAddr && (ioID = mmpg->map[pgAddr])) {
+        mqMMIO *io = &mmpg->io[ioID - 1];
+
+        /* Check access size */
+        if(size & io->flags) {
+            /* Handle default reads; vaguely in frequency order */
+            if(io->flags & MQ_MMIO_READU32)
+                return *(u32 *)io->value;
+            if(io->flags & MQ_MMIO_READU16)
+                return *(u16 *)io->value;
+            if(io->flags & MQ_MMIO_READU8)
+                return *(u8 *)io->value;
+
+            /* Use the generic functions */
+            if(MQ_UNLIKELY(!io->read))
+                mq_log(MQ_LOG_ERROR, "NULL MMIO at %08x (r)", addr);
+            else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
+                u32 (*f)(void *data) = io->read;
+                *out = f(io->data);
+                return true;
+            }
+            else {
+                u32 (*f)(void *data, u32 addr, int size) = io->read;
+                *out = f(io->data, addr, size);
+                return true;
+            }
+        }
     }
 
     // TODO: Handle special cases related to TLB/Cache areas

@@ -1,4 +1,5 @@
 #include "gui.h"
+#include <mq/mq.h>
 #include <mq/machine.h>
 #include <mq/system/heap.h>
 #include <mq/interfaces/display.h>
@@ -171,8 +172,14 @@ static void render(void)
                 char str[64];
                 snprintf(str, sizeof str, "%s##key%d", key->name, i);
                 ImGui::SetCursorPos({x, y});
-                if(ImGui::Button(str, {w, h}))
-                    printf("clicked key #%d\n", i);
+                if(mq_keyboard_isKeyPressed(kbd, i)) {
+                    // TODO: Visual effect for keyboard-based key presses
+                    // (or add a shortcut to the button-not sure what's best)
+                    ImGui::Button(str, {w, h});
+                }
+                else
+                    ImGui::Button(str, {w, h});
+                mq_keyboard_setKeyPressed(kbd, i, ImGui::IsItemActive());
             }
         }
     }
@@ -624,6 +631,7 @@ int main(void)
 
     ConsoleText.alloc(1024, 30);
     mq_log_handler(handle_log);
+    mq_init();
 
     mach = mq_machine_create();
 
@@ -692,5 +700,6 @@ int main(void)
         mq_machine_destroy(mach);
         mach = nullptr;
     }
+    mq_quit();
     return rc;
 }

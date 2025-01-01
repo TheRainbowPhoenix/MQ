@@ -5,7 +5,10 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/machine.h>
+#include <mq/mq.h>
+#include <mq/hooks.h>
 #include <mq/system/heap.h>
+#include <mq/modules/keysc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -26,6 +29,12 @@ void mq_machine_reset(mqMachine *mach)
     mach->initialized = false;
     mach->stuck = false;
 
+    if(mach->modules) {
+        mq_callhook_module_cleanup(mach);
+        free(mach->modules);
+    }
+    mach->modules = NULL;
+
     if(mach->display)
         mq_display_destroy(mach->display);
     mach->display = NULL;
@@ -45,12 +54,18 @@ void mq_machine_destroy(mqMachine *mach)
         mq_display_destroy(mach->display);
     if(mach->keyboard)
         mq_keyboard_destroy(mach->keyboard);
+    if(mach->modules) {
+        mq_callhook_module_cleanup(mach);
+        free(mach->modules);
+    }
     free(mach);
 }
 
 void mq_machine_initialize(mqMachine *mach, int initializeKind)
 {
     mq_machine_reset(mach);
+    if(mq_module_count())
+        mach->modules = calloc(mq_module_count(), sizeof *mach->modules);
 
     if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
@@ -61,7 +76,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
         mq_cpu_setupModule(&mach->cpu, mach->memory);
 
-        // TODO: Where does register initialization go?!
+        // TODO[machine]: More precise memory setup for CG add-in
 
         /* P0 program code */
         void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
@@ -78,13 +93,13 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mach->system.heapAddress = 0x8c100000;
         mach->system.heapSize = 128 << 10;
 
-        // TODO[machine]: More precise memory setup for CG add-in
-
         mach->display = mq_display_create();
         mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
 
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
+
+        mq_module_keysc_setup(mach);
     }
 
     mach->initialized = true;

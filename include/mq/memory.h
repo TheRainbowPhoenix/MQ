@@ -133,7 +133,8 @@ struct mqChunk {
 struct mqMMIOPage {
     /* Length of the range. The range always starts at offset 0 in the page. */
     int length;
-    /* Mapping of bytes [0..length) in the page to IO structures. */
+    /* Mapping of bytes [0..length) in the page to IO structures. Value 0 is
+       the absence of a mapping. Value v ≥ 1 maps to io[v - 1]. */
     u8 *map;
     /* List of IO structures, indexed by map[address & 0xfff]. */
     struct mqMMIO *io;
@@ -144,12 +145,12 @@ struct mqMMIOPage {
 
 /* Flags setting general behaviors for I/O accesses. */
 enum {
-    /* Alignment options--these are coded on low bits so that access with size
-       S is allowed if (S & flags != 0). Not critical, but neat. */
-    MQ_MMIO_1_ALIGNED   = 0x0001,
-    MQ_MMIO_2_ALIGNED   = 0x0002,
-    MQ_MMIO_4_ALIGNED   = 0x0004,
-    MQ_MMIO_UNALIGNED   = 0x0007,
+    /* Access size options--these are coded on low bits so that access with
+       size S is allowed if (S & flags != 0). Not critical, but neat. */
+    MQ_MMIO_SIZE_1      = 0x0001,
+    MQ_MMIO_SIZE_2      = 0x0002,
+    MQ_MMIO_SIZE_4      = 0x0004,
+    MQ_MMIO_UNSIZED     = 0x0007,
 
     /* Default read behaviors where the value of an u8/u16/u32 is returned
        directly without invoking a read callback. In this case the read
@@ -241,6 +242,17 @@ int mq_page_addIO(mqMMIOPage *mmpg, char const *name, int flags, void *read,
 /* Map an IO unit previously added to the given page. The high bits of addr
    are ignored. */
 bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size);
+
+/* Add and map a peripheral register (common kind of IO). Registrers are
+   accessed from a single address with their size as the alignment. flags are
+   implied to be `MQ_MMIO_SIZE_<SIZE> | MQ_MMIO_RELOC`, with an extra
+   `MQ_MMIO_READU<SIZE>` if the read function is set to NULL.  */
+bool mq_page_mapRegister8(mqMMIOPage *mmpg, char const *name, u32 addr,
+   void *read, void *write, u8 *value, void *data);
+bool mq_page_mapRegister16(mqMMIOPage *mmpg, char const *name, u32 addr,
+   void *read, void *write, u16 *value, void *data);
+bool mq_page_mapRegister32(mqMMIOPage *mmpg, char const *name, u32 addr,
+   void *read, void *write, u32 *value, void *data);
 
 /* Create a series of chunks or pages matching the given memory interval. The
    start address must be page-aligned; the size will be rounded up to the next

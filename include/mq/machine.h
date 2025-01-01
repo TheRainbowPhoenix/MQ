@@ -15,6 +15,10 @@
 #include <mq/interfaces/keyboard.h>
 MQ_START_DEFS
 
+/* Module IDs. These are used to organize the module array in mqMachine while
+   ensuring there are no conflicts. Can be assigned dynamically. */
+typedef int mqModuleID;
+
 // TODO
 struct mqMachine
 {
@@ -26,7 +30,8 @@ struct mqMachine
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
 
-    /* TODO: MPU details/peripheral modules */
+    /* Data from hardware modules; the array has size mq_module_count(). */
+    void **modules;
 
     /* System emulation details */
     struct {
