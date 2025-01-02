@@ -13,7 +13,7 @@ if(AZUR_PLATFORM STREQUAL gint)
   message(FATAL_ERROR "gint not supported, this only runs on computer!")
 endif()
 
-set(SOURCES
+set(LIB_SOURCES
   core/cpu.c
   core/defs.c
   core/hooks.c
@@ -27,16 +27,7 @@ set(SOURCES
 
   modules/keysc.c
 
-  system/heap.c
-
-  gui/display-window.cc
-  gui/imgui-util.cc
-  gui/main.cc
-  gui/texture.cc
-  gui/util.cc
-  gui/windows.cc)
-
-set(ASSETS)
+  system/heap.c)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
   COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/autogen"
@@ -50,6 +41,18 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
 set_source_files_properties(core/insn.c PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc")
 
+#=== Main GUI executable ======================================================#
+
+set(GUI_SOURCES
+  gui/display-window.cc
+  gui/imgui-util.cc
+  gui/main.cc
+  gui/texture.cc
+  gui/util.cc
+  gui/windows.cc)
+
+set(ASSETS)
+
 if(AZUR_PLATFORM STREQUAL emscripten)
   configure_file(gui/emscripten/index.html index.html)
   list(APPEND ASSETS
@@ -60,9 +63,9 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   )
 endif()
 
-add_executable(mq ${SOURCES} ${ASSETS})
+add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} ${ASSETS})
 target_compile_options(mq PRIVATE
-  -O0 -g -Wall -Wextra -Wno-pointer-arith -fsanitize=address)
+  -O2 -g -Wall -Wextra -Wno-pointer-arith -fsanitize=address)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}")
@@ -94,4 +97,16 @@ if(AZUR_PLATFORM STREQUAL emscripten)
 
   # Generate an accompanying HTML file
   set_target_properties(mq PROPERTIES SUFFIX ".html")
+endif()
+
+#=== Headless executable ======================================================#
+
+if(NOT AZUR_PLATFORM STREQUAL emscripten)
+  add_executable(mq-headless ${LIB_SOURCES} headless/main.c)
+  target_compile_options(mq-headless PRIVATE
+    -O2 -flto=auto -g -Wall -Wextra -Wno-pointer-arith -pg)
+  target_include_directories(mq-headless PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_BINARY_DIR}")
+  target_link_options(mq-headless PRIVATE -flto=auto -pg)
 endif()

@@ -4,3 +4,4 @@ __pycache__
 /*.g3a
 /*.tar
 /*.sublime-*
+/gmon.out
