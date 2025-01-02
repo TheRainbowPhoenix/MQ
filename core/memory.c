@@ -543,7 +543,7 @@ bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out)
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
     u32 chunkOff = addr & 0xfffff;
-    if(chunkPtr && MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
         if(size == 4)
             *out = mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
         else if(size == 2)
@@ -555,6 +555,24 @@ bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out)
 
     mqChunk *ch = MQ_CHUNKPTR_DETAILS(chunkPtr);
     return _mq_chunk_read_pure(ch, addr, size, out, NULL);
+}
+
+void *mq_memory_access(mqMemory *mem, u32 addr)
+{
+    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    u32 chunkOffset = addr & 0xfffff;
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr)))
+        return MQ_CHUNKPTR_BUFFER(chunkPtr) + chunkOffset;
+
+    mqChunk *ch = MQ_CHUNKPTR_DETAILS(chunkPtr);
+    if(!ch)
+        return NULL;
+
+    mqPagePointer pagePtr = ch->pages[chunkOffset >> 12];
+    if(MQ_LIKELY(MQ_PAGEPTR_ISBUFFER(pagePtr)))
+        return MQ_PAGEPTR_BUFFER(pagePtr) + (chunkOffset & 0xfff);
+
+    return NULL;
 }
 
 //=== Miscellaneous ==========================================================//

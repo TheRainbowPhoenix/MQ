@@ -259,11 +259,17 @@ bool mq_page_mapRegister32(mqMMIOPage *mmpg, char const *name, u32 addr,
    page-size multiple. This function creates buffer chunks or buffer pages
    as needed to cover the interval, which needs to be initially empty. If
    `buffer` is NULL, one will be allocated (contiguously). On error, returns
-   false; the memory will be partially modified. */
+   false; the memory will be partially modified.
+
+   WARNING: MQ assumes that blocks do not touch. Specifically, it assumes that
+            contiguous pieces of emulated-data (like strings of arrays) are not
+            split over two blocks and hence belong to a single buffer. If you
+            need to map two blocks directly one after another, make sure they
+            are backed by two consecutive regions of a single large buffer. */
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer);
 
-/* Load data from a buffer into memory. This applies endianness swaps to match
-   the internal buffer format and works across chunk and page boundaries.
+/* Load data from a host buffer into memory. This applies endianness swaps to
+   match the internal buffer format and works across chunk and page boundaries.
    Returns true on success, false if the designated range is not entirely
    covered by buffer chunks and buffer pages. */
 bool mq_memory_load(mqMemory *mem, u32 addr, void const *data, int size);
@@ -360,6 +366,14 @@ bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value);
    status and value. This is used for UI code that manipulates the memory. */
 bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out);
 bool mq_memory_write_pure(mqMemory *mem, u32 addr, int size, u32 value);
+
+/* Get direct access to emulated memory via a pointer. This function returns a
+   pointer into an emulated buffer, pointing to at least as many bytes as the
+   emulated pointer points to in the emulated program. Note that the internal
+   buffer is 4-byte endian-swapped. If this function is not called with a
+   4-aligned parameter then data might need to be fetched before the teturn
+   pointer of this function. */
+void *mq_memory_access(mqMemory *mem, u32 addr);
 
 //=== Misc. information ======================================================//
 

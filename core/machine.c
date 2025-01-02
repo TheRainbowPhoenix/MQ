@@ -174,16 +174,11 @@ void mq_mach_syscall(mqMachine *mach)
     case 0x025f: /* Bdisp_PutDisp_DD() */
         if(mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565,
                                396, 224)) {
-            // TODO: Much faster memcpy() is needed here
-            u32 src = 0x8c000000;
+            u16 *src = mq_memory_access(mach->memory, 0x8c000000);
             u16 *dst = mach->display->data + 6;
             for(int y = 0; y < 216; y++) {
-                for(int x = 0; x < 384; x++) {
-                    u32 word;
-                    mq_memory_read16(&mach->cpu, mach->memory, src, &word);
-                    src += 2;
-                    dst[x] = word;
-                }
+                for(int x = 0; x < 384; x++)
+                    dst[x] = *(u16 *)((uintptr_t)(src++) ^ 2);
                 dst += mach->display->width;
             }
             mqDisplay_setDirty(mach->display, true);
@@ -197,17 +192,12 @@ void mq_mach_syscall(mqMachine *mach)
         break;
 
     case 0x1dd0: { /* memcpy() */
-        // TODO: This is a super slow memcpy()
-        u32 dst = mach->cpu.r[4];
-        u32 src = mach->cpu.r[5];
+        // TODO: Optimized aligned memcpy() + put that in mq_memory()
+        u8 *dst = mq_memory_access(mach->memory, mach->cpu.r[4]);
+        u8 *src = mq_memory_access(mach->memory, mach->cpu.r[5]);
         u32 len = mach->cpu.r[6];
-        for(u32 i = 0; i < len; i++) {
-            u32 byte;
-            if(!mq_memory_read8(&mach->cpu, mach->memory, src + i, &byte))
-                break;
-            if(!mq_memory_write(&mach->cpu, mach->memory, dst + i, 1, byte))
-                break;
-        }
+        for(u32 i = 0; i < len; i++)
+            *(u8 *)((uintptr_t)(dst++) ^ 3) = *(u8 *)((uintptr_t)(src++) ^ 3);
         mach->cpu.r[0] = mach->cpu.r[4];
         break;
     }
