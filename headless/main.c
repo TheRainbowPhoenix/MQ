@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
 
 void fatal(int rc, char const *fmt, ...);
 
@@ -20,6 +21,9 @@ int main(int argc, char **argv)
         fatal(argc != 2, "usage: %s <add-in file>\n", argv[0]);
 
     char const *addinFile = argv[1];
+    struct timespec tpStart, tpEnd;
+
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tpStart);
 
     mq_init();
     mqMachine *mach = mq_machine_create();
@@ -30,11 +34,16 @@ int main(int argc, char **argv)
     if(!mq_machine_load_g3a(mach, addinFile))
         fatal(1, "could not load %s\n", addinFile);
 
-    printf("Waiting 1 billion cycles...\n");
-    mq_machine_cycle(mach, 1000*1000*1000);
+    printf("Waiting 100 million cycles...\n");
+    mq_machine_cycle(mach, 100*1000*1000);
 
     mq_machine_destroy(mach);
     mq_quit();
+
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &tpEnd);
+    int64_t sec = tpEnd.tv_sec - tpStart.tv_sec;
+    int64_t msec = (tpEnd.tv_nsec - tpStart.tv_nsec) / 1000000 + 1000 * sec;
+    printf("Total time: %ld ms\n", msec);
     return 0;
 }
 

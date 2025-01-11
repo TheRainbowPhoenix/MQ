@@ -48,7 +48,7 @@ static u32 read_KIUDATA(mqMachine *mach, u32 addr, int size)
             KIUDATA |= (0x0100 << key->col);
     }
 
-    mq_log(MQ_LOG_WARNING, "[KEYSC KIUDATA @ %08x -> %04x", addr, KIUDATA);
+    // mq_log(MQ_LOG_WARNING, "[KEYSC KIUDATA @ %08x -> %04x", addr, KIUDATA);
     return KIUDATA;
 }
 

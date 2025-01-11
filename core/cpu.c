@@ -170,7 +170,7 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
 
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
 {
-    mq_log(MQ_LOG_DEBUG, "Exception raised! %s (%08x)",
+    mq_log(MQ_LOG_DEBUG, "[PC=%08x] Exception raised! %s (%08x)", cpu->pc,
         mq_cpu_exceptionName(exc), value);
 
     cpu->excMask |= (1 << exc);

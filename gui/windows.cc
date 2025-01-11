@@ -42,10 +42,16 @@ static void AddChunkList(
             if(MQ_CHUNKPTR_ISDETAILS(mem->chunks[i])) {
                 mqChunk *ch = MQ_CHUNKPTR_DETAILS(mem->chunks[i]);
                 int nonnullPages = 0;
-                for(int i = 0; i < 256 && nonnullPages < 2; i++)
-                    nonnullPages += ch->pages[i] != MQ_PAGEPTR_NULL;
+                int firstPage = -1;
+                for(int i = 0; i < 256 && nonnullPages < 2; i++) {
+                    if(ch->pages[i] != MQ_PAGEPTR_NULL) {
+                        nonnullPages++;
+                        firstPage = i;
+                    }
+                }
+                printf("non null pages: %d\n", nonnullPages);
                 if(nonnullPages == 1)
-                    s.selectedPage = 0;
+                    s.selectedPage = firstPage;
             }
         }
 
@@ -95,7 +101,7 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
             ImGui::TextDisabled("(IO)");
         ImGui::PopFont();
 
-        if(clicked) {
+        if(clicked && s.selectedPage != (int)i) {
             s.selectedPage = i;
             s.selectedIO = -1;
             a.type = a.Type::MWA_VIEW_HEX;

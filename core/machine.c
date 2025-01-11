@@ -156,7 +156,10 @@ void mq_mach_syscall(mqMachine *mach)
 
     // TODO: Check syscall API version
 
-    if(syscallID != 0x1e6 /* happens too often */)
+    /* Log except for syscalls that happen often */
+    if(syscallID != 0x1e6 && syscallID != 0x25f && syscallID != 0x2c1 &&
+       syscallID != 0x1dd0 && !(syscallID >= 0x1f41 && syscallID <= 0x1f46)
+       && syscallID != 0x1170)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
@@ -189,6 +192,22 @@ void mq_mach_syscall(mqMachine *mach)
         // FIXME: GetTicks() more than trivial counter
         static int ticks = 0;
         mach->cpu.r[0] = ++ticks;
+        break;
+
+    case 0x1170: { /* itoa() */
+        int num = mach->cpu.r[4];
+        char *dst = mq_memory_access(mach->memory, mach->cpu.r[5]);
+        char str[32];
+        int len = sprintf(str, "%d", num);
+        for(int i = 0; i <= len; i++)
+            *(u8 *)((uintptr_t)(dst++) ^ 3) = str[i];
+        // This differs from SimLo prototype but likely right? I didn't check.
+        mach->cpu.r[0] = mach->cpu.r[5];
+        break;
+    }
+
+    case 0x1da3: /* Bfile_OpenFile_OS() */
+        mach->cpu.r[0] = -1;
         break;
 
     case 0x1dd0: { /* memcpy() */
