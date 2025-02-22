@@ -181,6 +181,24 @@ static void render(void)
                     ImGui::Button(str, {w, h});
                 mq_keyboard_setKeyPressed(kbd, i, ImGui::IsItemActive());
             }
+
+            if(kbd && ImGui::IsWindowFocused()) {
+                ImGui::SetNextFrameWantCaptureKeyboard(true);
+                if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_LEFT, true);
+                if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_UP, true);
+                if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_DOWN, true);
+                if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_RIGHT, true);
+                if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_SHIFT, true);
+                if(ImGui::IsKeyDown(ImGuiKey_Enter))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXE, true);
+                if(ImGui::IsKeyDown(ImGuiKey_Escape))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXIT, true);
+            }
         }
     }
     ImGui::End();

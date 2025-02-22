@@ -11,6 +11,21 @@
 #include <mq/defs.h>
 MQ_START_DEFS
 
+/* A unified calculator key enumeration that the GUI can use to assign
+   shortcuts to keyboard keys. This enumeration covers the set of keys of (at
+   least) all supported models. */
+enum mqKeyboardKeycode {
+   /* F-keys */
+   MQ_KEY_F1, MQ_KEY_F2, MQ_KEY_F3, MQ_KEY_F4, MQ_KEY_F5, MQ_KEY_F6,
+   /* Main control keys */
+   MQ_KEY_SHIFT, MQ_KEY_ALPHA, MQ_KEY_EXIT, MQ_KEY_MENU, MQ_KEY_OPTN,
+   MQ_KEY_VARS, MQ_KEY_SETTINGS, MQ_KEY_CATALOG, MQ_KEY_TOOLS,
+   MQ_KEY_EXE, MQ_KEY_OK,
+   /* Arrow keys and similar directional keys */
+   MQ_KEY_UP, MQ_KEY_DOWN, MQ_KEY_LEFT, MQ_KEY_RIGHT,
+   MQ_KEY_PREVTAB, MQ_KEY_NEXTTAB, MQ_KEY_PAGEUP, MQ_KEY_PAGEDOWN,
+};
+
 /* A physical keyboard key. */
 struct mqKeyboardKey {
     /* Key name/label for UI display */
@@ -20,6 +35,8 @@ struct mqKeyboardKey {
     /* Internal row/column layout for this keyboard. This specifies how the
        hardware module maps keys to I/O registers. */
     int row, col;
+    /* Associated keycode for GUI identification */
+    enum mqKeyboardKeycode keycode;
 };
 
 struct mqKeyboard {
@@ -63,6 +80,11 @@ void mq_keyboard_initialize(mqKeyboard *kbd, enum mqKeyboardStandardLayout l);
 bool mq_keyboard_isKeyPressed(mqKeyboard *kbd, uint keyNumber);
 /* Set whether a key is pressed (from GUI code). */
 void mq_keyboard_setKeyPressed(mqKeyboard *kbd, uint keyNumber, bool pressed);
+
+/* Set whether all keys associated with a keycode is pressed (from GUI code),
+   if there are any. */
+void mq_keyboard_setKeycodePressed(
+   mqKeyboard *kbd, enum mqKeyboardKeycode keycode, bool pressed);
 
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_KEYBOARD_H */
