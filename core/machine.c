@@ -86,6 +86,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBlock(mach->memory, 0x08100000, 512 << 10, uram);
         /* VRAM */
         u32 VRAMsize = 384 * 216 * 2 + 1024; // margin for buffer overflows...
+        VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
         void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", VRAMsize);
         mq_memory_createBlock(mach->memory, 0x8c000000, VRAMsize, vram);
 

@@ -393,7 +393,7 @@ bool mq_memory_load(mqMemory *mem, u32 baseAddr, void const *data, int size)
 
 //=== Standard memory access functions =======================================//
 
-static bool _mq_chunk_read_pure(
+bool _mq_chunk_read_pure(
     mqChunk const *chunk, u32 addr, int size, u32 *out, mqMMIOPage **mmpg)
 {
     if(!chunk)
@@ -459,15 +459,29 @@ bool _mq_chunk_read(
 
     // TODO: Handle special cases related to TLB/Cache areas
 
+    /* In add-in modes we have a 4-kB page mapped at NULL. This has the effect
+       of masking enough programming errors (even in well-written programs)
+       that we *need* to emulate it. I don't want to set up a page for it as
+       the memory shouldn't exist, hopefully none of the bugged code relies on
+       reading bootcode bytes from there! */
+    // TODO: Limit NULL page accesses to add-in mode
+    if(addr < 0x00001000) {
+        mq_log(MQ_LOG_WARNING, "[PC=%08x] NULL page read @ %08x -> return 0",
+            cpu->pc, addr);
+        *out = 0;
+        return true;
+    }
     /* Memory accesses outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently return undefined values in P1-P4. */
-    // TODO: Memory access exception type: instruction read vs. data read.
-    if(addr < 0x80000000)
-        return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
+    else if(addr >= 0x80000000) {
+        mq_log(MQ_LOG_WARNING,
+            "[PC=%08x] unhandled read @ %08x -> returning 0",
+            cpu->pc, addr);
+        *out = 0;
+        return true;
+    }
 
-    mq_log(MQ_LOG_WARNING, "unhandled read @ %08x -> returning 0", addr);
-    *out = 0;
-    return true;
+    return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
 }
 
 static bool _mq_chunk_write(
@@ -527,6 +541,14 @@ bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value)
     if(mq_memory_write_pure(mem, addr, size, value))
         return true;
 
+    /* Writes to NULL pages; see equivalent for reads. */
+    // TODO: Limit NULL writes to add-ins
+    if(addr < 0x00001000) {
+        mq_log(MQ_LOG_WARNING,
+            "[PC=%08x] NULL page write @ %08x -> ignoring",
+            cpu->pc, addr);
+        return true;
+    }
     /* Memory writes outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently do nothing in P1-P4. */
     // TODO: Memory access exception type: instruction read vs. data read.

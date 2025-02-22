@@ -24,7 +24,7 @@ void mq_log_default_handler(enum mq_log_priority priority, char *str)
 static void (*loghandler)(enum mq_log_priority, char *) =
     mq_log_default_handler;
 
-void mq_log(enum mq_log_priority priority, char *fmt, ...)
+void mq_log(enum mq_log_priority priority, char const *fmt, ...)
 {
     char *str = NULL;
     va_list args;

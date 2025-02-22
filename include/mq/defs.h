@@ -55,7 +55,7 @@ enum mq_log_priority {
 };
 
 /* Log a message, printf()-style. */
-void mq_log(enum mq_log_priority priority, char *fmt, ...);
+void mq_log(enum mq_log_priority priority, char const *fmt, ...);
 
 /* Set the message handler. NULL resets to the default. */
 void mq_log_handler(void (*handler)(enum mq_log_priority, char *));
