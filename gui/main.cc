@@ -615,10 +615,10 @@ static int update(void)
         /* Limit the number of cycles for each GUI frame to not lock the GUI.
            TODO: Proper "real-time" controls, e.g limit to 20 ms.
            I don't think I want threads here, too annoying to sync. */
-        int cycles = std::min(input.mq_cycles, 200000);
+        int cycles = std::min(input.mq_cycles, 500000);
         cyclesLeft = input.mq_cycles - cycles;
         if(cycles < 0) {
-            cycles = 200000;
+            cycles = 500000;
             cyclesLeft = -1;
         }
         mq_machine_cycle(mach, cycles);

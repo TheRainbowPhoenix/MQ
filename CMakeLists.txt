@@ -65,11 +65,11 @@ endif()
 
 add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} ${ASSETS})
 target_compile_options(mq PRIVATE
-  -O2 -g -Wall -Wextra -Wno-pointer-arith -fsanitize=address)
+  -O3 -flto=auto -g -Wall -Wextra -Wno-pointer-arith -fsanitize=address)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_options(mq PRIVATE -fsanitize=address)
+target_link_options(mq PRIVATE -flto=auto -fsanitize=address)
 
 if(AZUR_PLATFORM STREQUAL linux)
   target_link_libraries(mq Azur::Azur Azur::GLM Azur::ImGui)
@@ -104,9 +104,9 @@ endif()
 if(NOT AZUR_PLATFORM STREQUAL emscripten)
   add_executable(mq-headless ${LIB_SOURCES} headless/main.c)
   target_compile_options(mq-headless PRIVATE
-    -O2 -flto=auto -g -Wall -Wextra -Wno-pointer-arith -pg)
+    -O3 -flto=auto -g -Wall -Wextra -Wno-pointer-arith)
   target_include_directories(mq-headless PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_BINARY_DIR}")
-  target_link_options(mq-headless PRIVATE -flto=auto -pg)
+  target_link_options(mq-headless PRIVATE -flto=auto)
 endif()

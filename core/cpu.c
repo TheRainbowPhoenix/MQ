@@ -200,35 +200,45 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
 
     // printf("Cycle: pc=%08x\n", cpu->pc);
 
-    /* We don't check whether the syscall address is 0 here, since this is a
-       hot path. We raise the exception if pc=0 in the syscall handler. */
-    if(MQ_UNLIKELY(cpu->pc == cpu->syscallHandler)) {
-        mq_mach_syscall(mach);
-        goto endCycle;
-    }
-
     /* Fetch the next instruction. */
     // TODO: Same-basic-block prefetching optimization.
-    u32 ins;
-    if(mq_memory_read16(cpu, mach->memory, cpu->pc, &ins)) {
+    u32 ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
+    if(MQ_LIKELY(ins != 0)) {
         // printf("  -> ins=%04x\n", ins);
         /* Decode and execute the instruction. */
         _mq_cpu_execute(mach, cpu, ins);
     }
+    /* Only check for the syscall handler if the read fails. This means we can
+       only emulate syscalls if we don't map the syscall stub. If we do map it,
+       then we can always set it to jump somewhere we don't and set the syscall
+       handler to that address. */
+    else if(cpu->pc == cpu->syscallHandler && cpu->pc) {
+        mq_mach_syscall(mach);
+        goto endCycle;
+    }
+    else {
+        mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
+    }
 
     /* In case of a delay slot, continue. */
-    if(cpu->inDelaySlot && mq_memory_read16(cpu, mach->memory, cpu->pc, &ins)) {
-        // printf("  -> delay ins=%04x\n", ins);
-        _mq_cpu_execute(mach, cpu, ins);
-
-        cpu->pc = cpu->delaySlotTarget;
-        cpu->inDelaySlot = false;
+    if(MQ_UNLIKELY(cpu->inDelaySlot)) {
+        ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
+        if(MQ_LIKELY(ins != 0)) {
+            // printf("  -> delay ins=%04x\n", ins);
+            _mq_cpu_execute(mach, cpu, ins);
+            cpu->pc = cpu->delaySlotTarget;
+            cpu->inDelaySlot = false;
+        }
+        else {
+            // TODO: Should that be illegal slot?
+            mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
+        }
     }
 
 endCycle:
     /* Check for exceptions or interrupts. This is done *after* running the
        instruction because some exceptions are re-execution type. */
-    if(cpu->excMask) {
+    if(MQ_UNLIKELY(cpu->excMask)) {
         int exc = highestPriorityException(cpu->excMask);
         if(!handleException(cpu, exc, previousPC))
             mach->stuck = true;

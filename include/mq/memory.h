@@ -243,7 +243,7 @@ int mq_page_addIO(mqMMIOPage *mmpg, char const *name, int flags, void *read,
    are ignored. */
 bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size);
 
-/* Add and map a peripheral register (common kind of IO). Registrers are
+/* Add and map a peripheral register (common kind of IO). Registers are
    accessed from a single address with their size as the alignment. flags are
    implied to be `MQ_MMIO_SIZE_<SIZE> | MQ_MMIO_RELOC`, with an extra
    `MQ_MMIO_READU<SIZE>` if the read function is set to NULL.  */
@@ -309,6 +309,8 @@ MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 // internal
 bool _mq_chunk_read(
     mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out);
+bool _mq_chunk_read_pure(
+    mqChunk const *chunk, u32 addr, int size, u32 *out, mqMMIOPage **mmpg);
 
 /* Read 32 bits from memory at the given address. On success, returns true and
    sets *out. On error, raises an exception with the machine, leaves *out
@@ -357,6 +359,25 @@ MQ_INLINE bool mq_memory_read8(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
     }
 
     return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 1, out);
+}
+
+/* Read an opcode from the given address. The is a pure read. Returns 0 in case
+   of error, which is an invalid opcode anyway. */
+MQ_INLINE u32 mq_memory_read_opcode(mqCpu *cpu, mqMemory *mem, u32 addr)
+{
+    if(MQ_UNLIKELY(addr & 1)) {
+        mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, addr);
+        return 0;
+    }
+
+    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr)))
+        return mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+
+    mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
+    u32 out;
+    bool b = _mq_chunk_read_pure(chunk, addr, 2, &out, NULL);
+    return b ? out : 0;
 }
 
 /* Write to memory. Returns true on success, false if an exception occurs. */

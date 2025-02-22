@@ -34,8 +34,8 @@ int main(int argc, char **argv)
     if(!mq_machine_load_g3a(mach, addinFile))
         fatal(1, "could not load %s\n", addinFile);
 
-    printf("Waiting 100 million cycles...\n");
-    mq_machine_cycle(mach, 100*1000*1000);
+    printf("Waiting 1 billion cycles...\n");
+    mq_machine_cycle(mach, 1000*1000*1000);
 
     mq_machine_destroy(mach);
     mq_quit();
