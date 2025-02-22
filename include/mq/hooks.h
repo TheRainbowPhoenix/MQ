@@ -22,6 +22,7 @@
 MQ_START_DEFS
 
 struct mqMachine;
+struct mqMemory;
 
 /* [init] Hook that runs in mq_init(). */
 typedef void mq_hook_init_t(void);
@@ -37,6 +38,24 @@ void mq_callhook_quit(void);
 typedef void mq_hook_module_cleanup_t(struct mqMachine *mach);
 bool mq_hook_module_cleanup(mq_hook_module_cleanup_t *function);
 void mq_callhook_module_cleanup(struct mqMachine *mach);
+
+/* [memory_read] hook that runs when there is an uncaught memory read in a
+   configurable memory area. If multiple hooks cover the same address one of
+   them will be used but which is unspecified. */
+typedef bool mq_hook_memory_read_t(
+    struct mqMachine *mach, struct mqMemory *mem, u32 addr, int sz, u32 *res);
+bool mq_hook_memory_read(mq_hook_memory_read_t *function);
+bool mq_callhook_memory_read(
+    struct mqMachine *mach, struct mqMemory *mem, u32 addr, int sz, u32 *res);
+
+/* [memory_write] hook that runs when there is an uncaught memory write in a
+   configurable memory area. If multiple hooks cover the same address one of
+   them will be used but which is unspecified. */
+typedef bool mq_hook_memory_write_t(
+    struct mqMachine *mach, struct mqMemory *mem, u32 addr, int sz, u32 value);
+bool mq_hook_memory_write(mq_hook_memory_write_t *function);
+bool mq_callhook_memory_write(
+    struct mqMachine *mach, struct mqMemory *mem, u32 addr, int sz, u32 value);
 
 /* Register a hook with an anonymous constructor */
 #define MQ_HOOK_REGISTER(NAME, FUNCTION) MQ_HKR2(NAME, __COUNTER__, FUNCTION)

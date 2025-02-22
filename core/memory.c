@@ -5,6 +5,8 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/memory.h>
+#include <mq/machine.h>
+#include <mq/hooks.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // TODO: Remove
@@ -199,11 +201,17 @@ bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer)
     return true;
 }
 
-mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr)
+mqChunk *mq_memory_getOrCreateChunk(mqMemory *mem, u32 addr)
 {
     u32 chunkNum = addr >> 20;
-    if(!MQ_CHUNKPTR_ISNULL(mem->chunks[chunkNum]))
-        return NULL;
+    mqChunkPointer ptr = mem->chunks[chunkNum];
+
+    if(!MQ_CHUNKPTR_ISNULL(ptr)) {
+        if(MQ_CHUNKPTR_ISDETAILS(ptr))
+            return MQ_CHUNKPTR_DETAILS(ptr);
+        else
+            return NULL;
+    }
 
     mqChunk *chunk = mq_chunk_create();
     if(!chunk)
@@ -223,12 +231,18 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
     return true;
 }
 
-mqMMIOPage *mq_chunk_createMMIOPage(
+mqMMIOPage *mq_chunk_getOrCreateMMIOPage(
     mqChunk *chunk, u32 addr, int length, int ioCount)
 {
     u32 pageNum = (addr & 0xfffff) >> 12;
-    if(!MQ_PAGEPTR_ISNULL(chunk->pages[pageNum]))
-        return NULL;
+    mqPagePointer ptr = chunk->pages[pageNum];
+
+    if(!MQ_PAGEPTR_ISNULL(ptr)) {
+        if(MQ_PAGEPTR_ISMMIOPAGE(ptr))
+            return MQ_PAGEPTR_MMIOPAGE(ptr);
+        else
+            return NULL;
+    }
 
     mqMMIOPage *mmpg = mq_MMIOPage_create();
     if(!mmpg)
@@ -336,7 +350,7 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 
         /* Otherwise, fall back to allocating a page. */
         mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-        if(MQ_CHUNKPTR_ISNULL(chunkPtr) && !mq_memory_createChunk(mem, addr))
+        if(!mq_memory_getOrCreateChunk(mem, addr))
             return false;
         else if(MQ_CHUNKPTR_ISBUFFER(chunkPtr))
             return false;
@@ -420,7 +434,7 @@ bool _mq_chunk_read_pure(
 }
 
 bool _mq_chunk_read(
-    mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out)
+    mqMachine *mach, mqChunk const *chunk, u32 addr, int size, u32 *out)
 {
     mqMMIOPage *mmpg = NULL;
     if(_mq_chunk_read_pure(chunk, addr, size, out, &mmpg))
@@ -457,6 +471,9 @@ bool _mq_chunk_read(
         }
     }
 
+    if(mq_callhook_memory_read(mach, mach->memory, addr, size, out))
+        return true;
+
     // TODO: Handle special cases related to TLB/Cache areas
 
     /* In add-in modes we have a 4-kB page mapped at NULL. This has the effect
@@ -467,7 +484,7 @@ bool _mq_chunk_read(
     // TODO: Limit NULL page accesses to add-in mode
     if(addr < 0x00001000) {
         mq_log(MQ_LOG_WARNING, "[PC=%08x] NULL page read @ %08x -> return 0",
-            cpu->pc, addr);
+            mach->cpu.pc, addr);
         *out = 0;
         return true;
     }
@@ -476,12 +493,12 @@ bool _mq_chunk_read(
     else if(addr >= 0x80000000) {
         mq_log(MQ_LOG_WARNING,
             "[PC=%08x] unhandled read @ %08x -> returning 0",
-            cpu->pc, addr);
+            mach->cpu.pc, addr);
         *out = 0;
         return true;
     }
 
-    return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
+    return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
 }
 
 static bool _mq_chunk_write(
@@ -510,6 +527,8 @@ static bool _mq_chunk_write(
         exit(1);
     }
 
+    // TODO: Hook writes
+
     return false;
 }
 
@@ -533,10 +552,11 @@ bool mq_memory_write_pure(mqMemory *mem, u32 addr, int size, u32 value)
     return _mq_chunk_write(MQ_CHUNKPTR_DETAILS(chunkPtr), addr, size, value);
 }
 
-bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value)
+bool mq_memory_write(
+    mqMachine *mach, mqMemory *mem, u32 addr, int size, u32 value)
 {
     if(MQ_UNLIKELY(addr & (size - 1)))
-        return mq_cpu_raiseException_false(cpu, SH_EXC_WRITE_ADDR, addr);
+        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_WRITE_ADDR, addr);
 
     if(mq_memory_write_pure(mem, addr, size, value))
         return true;
@@ -546,14 +566,14 @@ bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value)
     if(addr < 0x00001000) {
         mq_log(MQ_LOG_WARNING,
             "[PC=%08x] NULL page write @ %08x -> ignoring",
-            cpu->pc, addr);
+            mach->cpu.pc, addr);
         return true;
     }
     /* Memory writes outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently do nothing in P1-P4. */
     // TODO: Memory access exception type: instruction read vs. data read.
     if(addr < 0x80000000)
-        return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
+        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
 
     return true;
 }

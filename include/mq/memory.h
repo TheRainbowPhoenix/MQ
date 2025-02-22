@@ -43,6 +43,7 @@
 #define MQ_MEMORY_H
 
 #include <mq/cpu.h>
+#include <mq/machine.h>
 MQ_START_DEFS
 
 /* ILRAM is 16kB and repeats for 2MB.
@@ -119,12 +120,12 @@ typedef void *mqPagePointer;
    chunk is divided into 4-kB pages, all of which can independently be backed
    by a buffer or define an MMIO range. */
 struct mqChunk {
-   /* Array of pointers to pages.
-      * If the LSB is clear this is a buffer pointer, and it can't be NULL.
-      * If the LSB is set this clearing it yields an mqMMIOPage * if not NULL.
-      * An empty page is indicated with (mqPagePointer)1. */
+    /* Array of pointers to pages.
+       * If the LSB is clear this is a buffer pointer, and it can't be NULL.
+       * If the LSB is set this clearing it yields an mqMMIOPage * if not NULL.
+       * An empty page is indicated with (mqPagePointer)1. */
     // TODO: Use the other bit for writeability.
-   mqPagePointer pages[256];
+    mqPagePointer pages[256];
 };
 
 /* An MMIO range of up to 4 kiB. This structure defines fairly rich info
@@ -177,8 +178,9 @@ struct mqMMIO {
        - u32 read(void *data)
          void write(void *data, u32 value)
          if MQ_MMIO_RELOC is set.
-       If MQ_MMIO_READU*, the read pointer is ignored and can be NULL. NULL
-       pointers in any other situation is treated as a fatal error. */
+       If MQ_MMIO_READU*, the read pointer is ignored and can be NULL. The
+       write pointer can always be NULL, which is treated as a read-only I/O
+       and write accesses are logged as warnings. */
     void *read;
     void *write;
     /* Value pointer for MQ_MMIO_READ{U8,U16,u32} */
@@ -218,9 +220,10 @@ void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size);
    no-op). */
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *data);
 
-/* Create a standard (broken-down) chunk. Returns a pointer to the chunk
-   structure, NULL if the chunk already exists. */
-mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr);
+/* Create a standard (broken-down) chunk. Returns a pointer to the existing or
+   newly-allocated chunk structure. Returns NULL if the chunk already exists as
+   a buffer chunk. */
+mqChunk *mq_memory_getOrCreateChunk(mqMemory *mem, u32 addr);
 
 /* Create a buffer page in a chunk, the backing data cannot be NULL. Returns
    true on success, false if the page already exists (in which case the call is
@@ -228,9 +231,10 @@ mqChunk *mq_memory_createChunk(mqMemory *mem, u32 addr);
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
 
 /* Create an MMIO page in a chunk. The given map length and MMIO count are used
-   to preallocate if not zero. Returns true on success, false if the page
-   already exists (in which case the call is a no-op). */
-mqMMIOPage *mq_chunk_createMMIOPage(
+   to preallocate if not zero and the page doesn't exist. Returns a pointer to
+   the existing or newly-allocated page, false if the page already exists as a
+   buffer. */
+mqMMIOPage *mq_chunk_getOrCreateMMIOPage(
     mqChunk *chunk, u32 addr, int preallocLength, int preallocIOCount);
 
 /* Add an IO unit to an MMIO page. This doesn't map the IO to memory yet.
@@ -308,7 +312,7 @@ MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 
 // internal
 bool _mq_chunk_read(
-    mqCpu *cpu, mqChunk const *chunk, u32 addr, int size, u32 *out);
+    mqMachine *mach, mqChunk const *chunk, u32 addr, int size, u32 *out);
 bool _mq_chunk_read_pure(
     mqChunk const *chunk, u32 addr, int size, u32 *out, mqMMIOPage **mmpg);
 
@@ -318,11 +322,12 @@ bool _mq_chunk_read_pure(
    are handled in the internal `_mq_chunk_read()` function. The output pointer
    should disappear with inlining and the alignment check can be contextually
    optimized out. */
-MQ_INLINE bool mq_memory_read32(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
+MQ_INLINE bool mq_memory_read32(
+    mqMachine *mach, mqMemory *mem, u32 addr, u32 *out)
 {
     // TODO: Memory access exception type: instruction read vs. data read.
     if(MQ_UNLIKELY(addr & 3))
-        return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
+        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
@@ -330,15 +335,16 @@ MQ_INLINE bool mq_memory_read32(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
         return true;
     }
 
-    return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 4, out);
+    return _mq_chunk_read(mach, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 4, out);
 }
 
 /* Read 16 bits from the given address. */
-MQ_INLINE bool mq_memory_read16(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
+MQ_INLINE bool mq_memory_read16(
+    mqMachine *mach, mqMemory *mem, u32 addr, u32 *out)
 {
     // TODO: Memory access exception type: instruction read vs. data read.
     if(MQ_UNLIKELY(addr & 1))
-        return mq_cpu_raiseException_false(cpu, SH_EXC_READ_ADDR, addr);
+        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
 
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
@@ -346,11 +352,12 @@ MQ_INLINE bool mq_memory_read16(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
         return true;
     }
 
-    return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 2, out);
+    return _mq_chunk_read(mach, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 2, out);
 }
 
 /* Read 8 bits from the given address. */
-MQ_INLINE bool mq_memory_read8(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
+MQ_INLINE bool mq_memory_read8(
+    mqMachine *mach, mqMemory *mem, u32 addr, u32 *out)
 {
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
@@ -358,7 +365,7 @@ MQ_INLINE bool mq_memory_read8(mqCpu *cpu, mqMemory *mem, u32 addr, u32 *out)
         return true;
     }
 
-    return _mq_chunk_read(cpu, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 1, out);
+    return _mq_chunk_read(mach, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 1, out);
 }
 
 /* Read an opcode from the given address. The is a pure read. Returns 0 in case
@@ -381,7 +388,8 @@ MQ_INLINE u32 mq_memory_read_opcode(mqCpu *cpu, mqMemory *mem, u32 addr)
 }
 
 /* Write to memory. Returns true on success, false if an exception occurs. */
-bool mq_memory_write(mqCpu *cpu, mqMemory *mem, u32 addr, int size, u32 value);
+bool mq_memory_write(
+    mqMachine *mach, mqMemory *mem, u32 addr, int size, u32 value);
 
 /* Read/write from memory, with no exceptions/side-effects. Just returns the
    status and value. This is used for UI code that manipulates the memory. */

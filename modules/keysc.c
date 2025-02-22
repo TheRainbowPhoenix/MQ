@@ -5,6 +5,7 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/modules/keysc.h>
+#include <mq/memory.h>
 #include <mq/hooks.h>
 #include <mq/mq.h>
 #include <stdio.h>
@@ -61,10 +62,10 @@ static void write_KIUDATA(mqKEYSC *KEYSC, u32 addr, int size)
 
 bool mq_module_keysc_setup(mqMachine *mach)
 {
-    mqChunk *ch = mq_memory_createChunk(mach->memory, 0xa44b0000);
+    mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xa44b0000);
     if(!ch)
         return false;
-    mqMMIOPage *mmpg = mq_chunk_createMMIOPage(ch, 0xa44b0000, 0, 0);
+    mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xa44b0000, 0, 0);
     if(!mmpg)
         return false;
 

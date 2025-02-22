@@ -5,10 +5,12 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/machine.h>
+#include <mq/memory.h>
 #include <mq/mq.h>
 #include <mq/hooks.h>
 #include <mq/system/heap.h>
 #include <mq/modules/keysc.h>
+#include <mq/modules/mmu.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -100,6 +102,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
+        mq_module_mmu_setup(mach);
         mq_module_keysc_setup(mach);
     }
 
@@ -164,7 +167,7 @@ void mq_mach_syscall(mqMachine *mach)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
-    case 0x0029: /* ??? */
+    case 0x0029: /* ??? - Glib_AddInAplExecutionCheck something like that. */
         mq_log(MQ_LOG_WARNING, "Ignoring %%029, what is that?");
         /* Just return 0. */
         mach->cpu.r[0] = 0;

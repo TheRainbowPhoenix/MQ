@@ -6,6 +6,7 @@
 // mq.insn: Emulation code for SuperH instructions
 
 #include <mq/machine.h>
+#include <mq/memory.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -347,39 +348,39 @@ MQ_INLINE void mova(mqMachine *mach, mqCpu *cpu, int disp) {
 }
 MQ_INLINE void movb_r(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b @rm, rn */
-    if(mq_memory_read8(cpu, mach->memory, cpu->r[m], &cpu->r[n]))
+    if(mq_memory_read8(mach, mach->memory, cpu->r[m], &cpu->r[n]))
         cpu->r[n] = (i8)cpu->r[n];
     cpu->pc += 2;
 }
 MQ_INLINE void movw_r(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w @rm, rn */
-    if(mq_memory_read16(cpu, mach->memory, cpu->r[m], &cpu->r[n]))
+    if(mq_memory_read16(mach, mach->memory, cpu->r[m], &cpu->r[n]))
         cpu->r[n] = (i16)cpu->r[n];
     cpu->pc += 2;
 }
 MQ_INLINE void movl_r(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l @rm, rn */
-    mq_memory_read32(cpu, mach->memory, cpu->r[m], &cpu->r[n]);
+    mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->r[n]);
     cpu->pc += 2;
 }
 MQ_INLINE void movb_w(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b rm, @rn */
-    mq_memory_write(cpu, mach->memory, cpu->r[n], 1, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n], 1, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movw_w(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w rm, @rn */
-    mq_memory_write(cpu, mach->memory, cpu->r[n], 2, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n], 2, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movl_w(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l rm, @rn */
-    mq_memory_write(cpu, mach->memory, cpu->r[n], 4, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n], 4, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movb_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b @rm+, rn */
-    if(mq_memory_read8(cpu, mach->memory, cpu->r[m], &cpu->r[n])) {
+    if(mq_memory_read8(mach, mach->memory, cpu->r[m], &cpu->r[n])) {
         cpu->r[m] += 1;
         cpu->r[n] = (i8)cpu->r[n];
     }
@@ -387,7 +388,7 @@ MQ_INLINE void movb_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void movw_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w @rm+, rn */
-    if(mq_memory_read16(cpu, mach->memory, cpu->r[m], &cpu->r[n])) {
+    if(mq_memory_read16(mach, mach->memory, cpu->r[m], &cpu->r[n])) {
         cpu->r[m] += 2;
         cpu->r[n] = (i16)cpu->r[n];
     }
@@ -395,38 +396,38 @@ MQ_INLINE void movw_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void movl_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l @rm+, rn */
-    if(mq_memory_read32(cpu, mach->memory, cpu->r[m], &cpu->r[n]))
+    if(mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->r[n]))
         cpu->r[m] += 4;
     cpu->pc += 2;
 }
 MQ_INLINE void movb_w_predec(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b rm, @-rn */
-    if(mq_memory_write(cpu, mach->memory, cpu->r[n]-1, 1, cpu->r[m]))
+    if(mq_memory_write(mach, mach->memory, cpu->r[n]-1, 1, cpu->r[m]))
         cpu->r[n] -= 1;
     cpu->pc += 2;
 }
 MQ_INLINE void movw_w_predec(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w rm, @-rn */
-    if(mq_memory_write(cpu, mach->memory, cpu->r[n]-2, 2, cpu->r[m]))
+    if(mq_memory_write(mach, mach->memory, cpu->r[n]-2, 2, cpu->r[m]))
         cpu->r[n] -= 2;
     cpu->pc += 2;
 }
 MQ_INLINE void movl_w_predec(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l rm, @-rn */
-    if(mq_memory_write(cpu, mach->memory, cpu->r[n]-4, 4, cpu->r[m]))
+    if(mq_memory_write(mach, mach->memory, cpu->r[n]-4, 4, cpu->r[m]))
         cpu->r[n] -= 4;
     cpu->pc += 2;
 }
 MQ_INLINE void movl_w_rm_drn(
     mqMachine *mach, mqCpu *cpu, int n, int m, int disp) {
     /* mov.l rm, @(disp, rn) */
-    mq_memory_write(cpu, mach->memory, cpu->r[n] + (disp << 2), 4, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n] + (disp << 2), 4, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movl_r_drm_rn(
     mqMachine *mach, mqCpu *cpu, int n, int m, int disp) {
     /* mov.l @(disp, rm), rn */
-    mq_memory_read32(cpu, mach->memory, cpu->r[m] + (disp << 2), &cpu->r[n]);
+    mq_memory_read32(mach, mach->memory, cpu->r[m] + (disp << 2), &cpu->r[n]);
     cpu->pc += 2;
 }
 MQ_INLINE void movw_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
@@ -434,7 +435,7 @@ MQ_INLINE void movw_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
     if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     u32 targetAddr = cpu->pc + 4 + (disp << 1);
-    if(mq_memory_read16(cpu, mach->memory, targetAddr, &cpu->r[n]))
+    if(mq_memory_read16(mach, mach->memory, targetAddr, &cpu->r[n]))
         cpu->r[n] = (i16)cpu->r[n];
     cpu->pc += 2;
 }
@@ -443,61 +444,61 @@ MQ_INLINE void movl_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
     if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     u32 targetAddr = (cpu->pc & -4) + 4 + (disp << 2);
-    mq_memory_read32(cpu, mach->memory, targetAddr, &cpu->r[n]);
+    mq_memory_read32(mach, mach->memory, targetAddr, &cpu->r[n]);
     cpu->pc += 2;
 }
 MQ_INLINE void movb_r_drm_r0(mqMachine *mach, mqCpu *cpu, int m, int disp) {
     /* mov.b @(disp,rm), r0 */
-    if(mq_memory_read8(cpu, mach->memory, cpu->r[m] + disp, &cpu->r[0]))
+    if(mq_memory_read8(mach, mach->memory, cpu->r[m] + disp, &cpu->r[0]))
         cpu->r[0] = (i8)cpu->r[0];
     cpu->pc += 2;
 }
 MQ_INLINE void movw_r_drm_r0(mqMachine *mach, mqCpu *cpu, int m, int disp) {
     /* mov.w @(disp,rm), r0 */
-    if(mq_memory_read16(cpu, mach->memory, cpu->r[m] + (disp << 1), &cpu->r[0]))
+    if(mq_memory_read16(mach, mach->memory, cpu->r[m] + (disp << 1), &cpu->r[0]))
         cpu->r[0] = (i16)cpu->r[0];
     cpu->pc += 2;
 }
 MQ_INLINE void movb_w_r0_drn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
     /* mov.b r0, @(disp,rn) */
-    mq_memory_write(cpu, mach->memory, cpu->r[n] + disp, 1, cpu->r[0]);
+    mq_memory_write(mach, mach->memory, cpu->r[n] + disp, 1, cpu->r[0]);
     cpu->pc += 2;
 }
 MQ_INLINE void movw_w_r0_drn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
     /* mov.w r0, @(disp,rn) */
-    mq_memory_write(cpu, mach->memory, cpu->r[n] + (disp << 1), 2, cpu->r[0]);
+    mq_memory_write(mach, mach->memory, cpu->r[n] + (disp << 1), 2, cpu->r[0]);
     cpu->pc += 2;
 }
 MQ_INLINE void movb_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b @(r0,rm), rn */
-    if(mq_memory_read8(cpu, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]))
+    if(mq_memory_read8(mach, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]))
         cpu->r[n] = (i8)cpu->r[n];
     cpu->pc += 2;
 }
 MQ_INLINE void movw_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w @(r0,rm), rn */
-    if(mq_memory_read16(cpu, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]))
+    if(mq_memory_read16(mach, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]))
         cpu->r[n] = (i16)cpu->r[n];
     cpu->pc += 2;
 }
 MQ_INLINE void movl_r_r0rm_rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l @(r0,rm), rn */
-    mq_memory_read32(cpu, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]);
+    mq_memory_read32(mach, mach->memory, cpu->r[m] + cpu->r[0], &cpu->r[n]);
     cpu->pc += 2;
 }
 MQ_INLINE void movb_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b rm, @(r0,rn) */
-    mq_memory_write(cpu, mach->memory, cpu->r[n] + cpu->r[0], 1, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n] + cpu->r[0], 1, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movw_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w rm, @(r0,rn) */
-    mq_memory_write(cpu, mach->memory, cpu->r[n] + cpu->r[0], 2, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n] + cpu->r[0], 2, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void movl_w_rm_r0rn(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l rm, @(r0,rn) */
-    mq_memory_write(cpu, mach->memory, cpu->r[n] + cpu->r[0], 4, cpu->r[m]);
+    mq_memory_write(mach, mach->memory, cpu->r[n] + cpu->r[0], 4, cpu->r[m]);
     cpu->pc += 2;
 }
 
@@ -528,13 +529,13 @@ MQ_INLINE void ldcl(mqMachine *mach, mqCpu *cpu, int m, int c) {
         return;
     }
     /* ldc.l @rm+, <control> */
-    if(mq_memory_read32(cpu, mach->memory, cpu->r[m], &cpu->spRegs[c]))
+    if(mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->spRegs[c]))
         cpu->r[m] += 4;
     cpu->pc += 2;
 }
 MQ_INLINE void ldsl(mqMachine *mach, mqCpu *cpu, int m, int s) {
     /* lds.l @rm+, <system> */
-    if(mq_memory_read32(cpu, mach->memory, cpu->r[m], &cpu->spRegs[s+16]))
+    if(mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->spRegs[s+16]))
         cpu->r[m] += 4;
     cpu->pc += 2;
 }
@@ -550,13 +551,13 @@ MQ_INLINE void sts(mqMachine *mach, mqCpu *cpu, int n, int s) {
 }
 MQ_INLINE void stcl(mqMachine *mach, mqCpu *cpu, int n, int c) {
     /* stc.l <control>, @-rn */
-    if(mq_memory_write(cpu, mach->memory, cpu->r[n]-4, 4, cpu->spRegs[c]))
+    if(mq_memory_write(mach, mach->memory, cpu->r[n]-4, 4, cpu->spRegs[c]))
         cpu->r[n] -= 4;
     cpu->pc += 2;
 }
 MQ_INLINE void stsl(mqMachine *mach, mqCpu *cpu, int n, int s) {
     /* sts.l <system>, @-rn */
-    if(mq_memory_write(cpu, mach->memory, cpu->r[n]-4, 4,
+    if(mq_memory_write(mach, mach->memory, cpu->r[n]-4, 4,
                        cpu->spRegs[s + 16]))
         cpu->r[n] -= 4;
     cpu->pc += 2;

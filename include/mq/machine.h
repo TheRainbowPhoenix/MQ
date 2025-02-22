@@ -10,10 +10,11 @@
 #define MQ_MACHINE_H
 
 #include <mq/cpu.h>
-#include <mq/memory.h>
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
 MQ_START_DEFS
+
+struct mqMemory;
 
 /* Module IDs. These are used to organize the module array in mqMachine while
    ensuring there are no conflicts. Can be assigned dynamically. */
@@ -23,7 +24,7 @@ typedef int mqModuleID;
 struct mqMachine
 {
     mqCpu cpu;
-    mqMemory *memory;
+    struct mqMemory *memory;
 
     /* Machine is initialized to a reasonable state. */
     bool initialized;

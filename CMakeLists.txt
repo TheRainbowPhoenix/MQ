@@ -26,6 +26,7 @@ set(LIB_SOURCES
   interfaces/keyboard.c
 
   modules/keysc.c
+  modules/mmu.c
 
   system/heap.c)
 

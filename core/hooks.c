@@ -41,3 +41,25 @@ void mq_callhook_module_cleanup(struct mqMachine *mach)
     for(int i = 0; hk_module_cleanup[i]; i++)
         hk_module_cleanup[i](mach);
 }
+
+MQ_DEFINE_HOOK(memory_read, 32)
+bool mq_callhook_memory_read(
+    struct mqMachine *mach, struct mqMemory *mem, u32 addr, int sz, u32 *res)
+{
+    for(int i = 0; hk_memory_read[i]; i++) {
+        if(hk_memory_read[i](mach, mem, addr, sz, res))
+            return true;
+    }
+    return false;
+}
+
+MQ_DEFINE_HOOK(memory_write, 32)
+bool mq_callhook_memory_write(
+    struct mqMachine *mach, struct mqMemory *mem, u32 addr, int sz, u32 value)
+{
+    for(int i = 0; hk_memory_write[i]; i++) {
+        if(hk_memory_write[i](mach, mem, addr, sz, value))
+            return true;
+    }
+    return false;
+}

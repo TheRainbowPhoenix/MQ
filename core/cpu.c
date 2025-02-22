@@ -76,10 +76,10 @@ static u32 read_PRR(void)
 bool mq_cpu_setupModule(mqCpu *cpu, mqMemory *mem)
 {
     // TODO: Area 7 addresses for MMIO?
-    mqChunk *ch = mq_memory_createChunk(mem, 0xff000000);
+    mqChunk *ch = mq_memory_getOrCreateChunk(mem, 0xff000000);
     if(!ch)
         return false;
-    mqMMIOPage *mmpg = mq_chunk_createMMIOPage(ch, 0xff000000, 0, 0);
+    mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xff000000, 0, 0);
     if(!mmpg)
         return false;
 

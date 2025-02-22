@@ -7,6 +7,7 @@
 #include "shader.h"
 #include "texture.h"
 #include <mq/machine.h>
+#include <mq/memory.h>
 
 //=== Display window =========================================================//
 
