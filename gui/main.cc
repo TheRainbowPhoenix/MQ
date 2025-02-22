@@ -31,6 +31,7 @@ struct DelayedInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
     bool mq_initialize_gravity_duck = false;
+    bool mq_initialize_gintctl = false;
     int mq_cycles = 0;
     bool mq_heap_init = false;
 
@@ -228,6 +229,8 @@ static void render(void)
 
         if(ImGui::Button("Reset and load GravityDuck.g3a"))
             input.mq_initialize_gravity_duck = true;
+        if(ImGui::Button("Reset and load gintctl.g3a"))
+            input.mq_initialize_gintctl = true;
 
         if(mach->initialized) {
             ImGui::Text("Cycle:");
@@ -609,6 +612,11 @@ static int update(void)
     if(input.mq_initialize_gravity_duck) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         mq_machine_load_g3a(mach, "GravityDuck.g3a");
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_initialize_gintctl) {
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_load_g3a(mach, "gintctl.g3a");
         render_needed = std::max(render_needed, 1);
     }
     else if(input.mq_cycles) {

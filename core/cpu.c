@@ -63,6 +63,16 @@ static void write_INTEVT(mqCpu *cpu, u32 value)
     cpu->INTEVT = value & 0x00003fff;
 }
 
+static u32 read_PVR(void)
+{
+    return 0x10300b00;
+}
+
+static u32 read_PRR(void)
+{
+    return 0x00002c00;
+}
+
 bool mq_cpu_setupModule(mqCpu *cpu, mqMemory *mem)
 {
     // TODO: Area 7 addresses for MMIO?
@@ -80,6 +90,10 @@ bool mq_cpu_setupModule(mqCpu *cpu, mqMemory *mem)
         NULL, write_EXPEVT, &cpu->EXPEVT, cpu);
     b &= mq_page_mapRegister32(mmpg, "INTEVT", 0xff000028,
         NULL, write_INTEVT, &cpu->INTEVT, cpu);
+    b &= mq_page_mapRegister32(mmpg, "PVR", 0xff000030,
+        read_PVR, NULL, NULL, NULL);
+    b &= mq_page_mapRegister32(mmpg, "PRR", 0xff000044,
+        read_PRR, NULL, NULL, NULL);
     return b;
 }
 
