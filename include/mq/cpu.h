@@ -153,6 +153,9 @@ MQ_INLINE int mq_cpu_getT(mqCpu *cpu)
     return cpu->spRegs[SH_SR] & 1;
 }
 
+/* Set the entire SR register. This swaps the register banks if RB changes. */
+void mq_cpu_setSR(mqCpu *cpu, u32 SR);
+
 /* Set a delay slot with the given target destination. */
 MQ_INLINE void mq_cpu_setDelaySlot(mqCpu *cpu, u32 targetAddress)
 {

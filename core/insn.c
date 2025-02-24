@@ -13,6 +13,8 @@
 
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
+// TODO[insn]: None of the privileged instructions check for SR.MD yet!
+
 /* addc/subc builtins aren't available on old-ish versions of GCC. */
 #define ADDC(_A, _B, _CARRY_IN, _CARRY_OUT) \
     ({ __typeof__(_A) _s; \
@@ -506,8 +508,8 @@ MQ_INLINE void ldc(mqMachine *mach, mqCpu *cpu, int m, int c) {
     if(c == SH_SR) {
         if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
             return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-        fprintf(stderr, "error: not implemented: ldc into sr\n");
-        mach->stuck = true;
+        mq_cpu_setSR(cpu, cpu->r[m]);
+        cpu->pc += 2;
         return;
     }
     /* ldc rm, <control> */
@@ -524,8 +526,10 @@ MQ_INLINE void ldcl(mqMachine *mach, mqCpu *cpu, int m, int c) {
     if(c == SH_SR) {
         if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
             return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-        fprintf(stderr, "error: not implemented: ldc.l into sr\n");
-        mach->stuck = true;
+        u32 SR;
+        if(mq_memory_read32(mach, mach->memory, cpu->r[m], &SR))
+            mq_cpu_setSR(cpu, SR);
+        cpu->pc += 2;
         return;
     }
     /* ldc.l @rm+, <control> */
@@ -697,6 +701,58 @@ MQ_INLINE void movt(mqMachine *mach, mqCpu *cpu, int n) {
     cpu->pc += 2;
 }
 
+MQ_INLINE void pref(mqMachine *mach, mqCpu *cpu, int n) {
+    /* pref @rn */
+    static bool done = false;
+    if(!done)
+        mq_log(MQ_LOG_WARNING, "pref instruction used and ignored");
+    done = true;
+    cpu->pc += 2;
+}
+MQ_INLINE void ocbi(mqMachine *mach, mqCpu *cpu, int n) {
+    /* ocbi @rn */
+    static bool done = false;
+    if(!done)
+        mq_log(MQ_LOG_WARNING, "ocbi instruction used and ignored");
+    done = true;
+    cpu->pc += 2;
+}
+MQ_INLINE void ocbp(mqMachine *mach, mqCpu *cpu, int n) {
+    /* ocbp @rn */
+    static bool done = false;
+    if(!done)
+        mq_log(MQ_LOG_WARNING, "ocbp instruction used and ignored");
+    done = true;
+    cpu->pc += 2;
+}
+MQ_INLINE void ocbwb(mqMachine *mach, mqCpu *cpu, int n) {
+    /* ocbwp @rn */
+    static bool done = false;
+    if(!done)
+        mq_log(MQ_LOG_WARNING, "ocbwb instruction used and ignored");
+    done = true;
+    cpu->pc += 2;
+}
+MQ_INLINE void prefi(mqMachine *mach, mqCpu *cpu, int n) {
+    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
+        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
+    static bool done = false;
+    if(!done)
+        mq_log(MQ_LOG_WARNING, "prefi instruction used and ignored");
+    done = true;
+    cpu->pc += 2;
+}
+MQ_INLINE void icbi(mqMachine *mach, mqCpu *cpu, int n) {
+    /* icbi @rn */
+    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
+        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
+    static bool done = false;
+    if(!done)
+        mq_log(MQ_LOG_WARNING, "icbi instruction used and ignored");
+    done = true;
+    cpu->pc += 2;
+}
+
 //===//
 
 MQ_INLINE void movlil(mqMachine *mach, mqCpu *cpu, int m) {
@@ -707,36 +763,8 @@ MQ_INLINE void movcol(mqMachine *mach, mqCpu *cpu, int n) {
     fprintf(stderr, "error: not implemented: movcol\n");
     mach->stuck = true;
 }
-MQ_INLINE void pref(mqMachine *mach, mqCpu *cpu, int n) {
-    fprintf(stderr, "error: not implemented: pref\n");
-    mach->stuck = true;
-}
-MQ_INLINE void ocbi(mqMachine *mach, mqCpu *cpu, int n) {
-    fprintf(stderr, "error: not implemented: ocbi\n");
-    mach->stuck = true;
-}
-MQ_INLINE void ocbp(mqMachine *mach, mqCpu *cpu, int n) {
-    fprintf(stderr, "error: not implemented: ocbp\n");
-    mach->stuck = true;
-}
-MQ_INLINE void ocbwb(mqMachine *mach, mqCpu *cpu, int n) {
-    fprintf(stderr, "error: not implemented: ocbwb\n");
-    mach->stuck = true;
-}
 MQ_INLINE void movcal(mqMachine *mach, mqCpu *cpu, int n) {
     fprintf(stderr, "error: not implemented: movcal\n");
-    mach->stuck = true;
-}
-MQ_INLINE void prefi(mqMachine *mach, mqCpu *cpu, int n) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-    fprintf(stderr, "error: not implemented: prefi\n");
-    mach->stuck = true;
-}
-MQ_INLINE void icbi(mqMachine *mach, mqCpu *cpu, int n) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-    fprintf(stderr, "error: not implemented: icbi\n");
     mach->stuck = true;
 }
 MQ_INLINE void ldtlb(mqMachine *mach, mqCpu *cpu) {

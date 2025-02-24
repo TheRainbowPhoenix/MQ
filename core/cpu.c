@@ -257,6 +257,23 @@ endCycle:
     }
 }
 
+void mq_cpu_setSR(mqCpu *cpu, u32 SR)
+{
+    // TODO[cpu]: SR mask depends on processor type (SH3 vs. SH4AL-DSP)
+    SR &= 0x7fff1fff;
+
+    /* Swap register banks if we change the value of RB */
+    if((SR ^ cpu->spRegs[SH_SR]) & 0x20000000) {
+        for(int i = 0; i < 8; i++) {
+            u32 tmp = cpu->r[i];
+            cpu->r[i] = cpu->spRegs[SH_RnBANK + i];
+            cpu->spRegs[SH_RnBANK + i] = tmp;
+        }
+    }
+
+    cpu->spRegs[SH_SR] = SR;
+}
+
 char const *mq_cpu_specialRegisterName(int spReg)
 {
     static char const spreg_names[SH_NUM_SPECIAL_REGS][8] = {
