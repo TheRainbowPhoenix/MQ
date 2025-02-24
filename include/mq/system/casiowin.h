@@ -37,6 +37,7 @@ struct mqCasiowin {
     /* Strings which get read from different offsets. Not NUL-terminated! */
     char str_version[10];
     char str_serial[8];
+    char str_date[14];
 };
 
 typedef struct mqCasiowin mqCasiowin;
