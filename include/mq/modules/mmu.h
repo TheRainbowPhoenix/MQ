@@ -32,7 +32,6 @@
 #define MQ_MODULES_MMU_H
 
 #include <mq/machine.h>
-#include <mq/interfaces/keyboard.h>
 MQ_START_DEFS
 
 struct mqMMU {

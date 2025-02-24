@@ -79,11 +79,11 @@ bool mq_keysc_setup(mqMachine *mach)
     if(!KEYSC)
         return false;
 
-    bool b = true;
+    bool ok = true;
     int ioID = mq_page_addIO(mmpg, "KIUDATA*", MQ_MMIO_SIZE_2, read_KIUDATA,
         write_KIUDATA, NULL, mach);
     for(int i = 0; i < 6; i++)
-        b &= mq_page_mapIO(mmpg, ioID, 0xa44b0000 + 2*i, 1);
+        ok &= mq_page_mapIO(mmpg, ioID, 0xa44b0000 + 2*i, 1);
 
     // 0xa44b000c KIUCNTREG
     // 0xa44b000e KIAUTOFIXREG
@@ -95,11 +95,11 @@ bool mq_keysc_setup(mqMachine *mach)
     // 0xa44b001a KOUTPINSET
     // 0xa44b001c KINPINSET
 
-    if(b)
+    if(ok)
         mach->modules[moduleID] = KEYSC;
     else
         free(KEYSC);
-    return b;
+    return ok;
 }
 
 static void mq_keysc_cleanup(mqMachine *mach)

@@ -74,8 +74,6 @@ static void write_IRMCR(mqMachine *mach, u32 value)
 
 bool mq_mmu_setup(mqMachine *mach)
 {
-    bool ok = true;
-
     mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xff000000);
     if(!ch)
         return false;
@@ -85,13 +83,14 @@ bool mq_mmu_setup(mqMachine *mach)
 
     mqMMU *MMU = calloc(1, sizeof *MMU);
     if(!MMU)
-        goto end;
+        return false;
 
     /* Initial values after a reset, as per manual */
     MMU->MMUCR = 0x00000000;
     MMU->PASCR = 0x00000082;
     MMU->IRMCR = 0x00000000;
 
+    bool ok = true;
     ok &= mq_page_mapRegister32(mmpg, "PTEH", 0xff000000,
         NULL, write_PTEH, &MMU->PTEH, mach);
     ok &= mq_page_mapRegister32(mmpg, "PTEL", 0xff000004,
@@ -107,10 +106,9 @@ bool mq_mmu_setup(mqMachine *mach)
     ok &= mq_page_mapRegister32(mmpg, "IRMCR", 0xff000078,
         NULL, write_IRMCR, &MMU->IRMCR, mach);
 
-end:
     if(ok)
         mach->modules[moduleID] = MMU;
-    else if(MMU)
+    else
         free(MMU);
     return ok;
 }

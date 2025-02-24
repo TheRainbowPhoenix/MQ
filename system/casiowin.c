@@ -69,8 +69,6 @@ bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
     if(!OSBase || (OSBase & 0xfff))
         return false;
 
-    bool ok = true;
-
     mqChunk *ch1 = mq_memory_getOrCreateChunk(mach->memory, OSBase & ~0xfffff);
     if(!ch1)
         return false;
@@ -95,13 +93,14 @@ bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
 
     mqCasiowin *Casiowin = calloc(1, sizeof *Casiowin);
     if(!Casiowin)
-        goto end;
+        return false;
 
     Casiowin->version = version;
     memcpy(Casiowin->str_version, os_version_string(version), 10);
     memcpy(Casiowin->str_serial, "mq000000", 8);
     memcpy(Casiowin->str_date, os_date_string(version), 14);
 
+    bool ok = true;
     ok &= mq_page_mapString(mmpg_eboot, "CW_SERIAL", OSBase - 0x30,
         Casiowin->str_serial, 8);
     ok &= mq_page_mapString(mmpg_os, "CW_VERSION", OSBase + 0x20,
@@ -112,10 +111,9 @@ bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
             Casiowin->str_date, 14);
     }
 
-end:
     if(ok)
         mach->modules[moduleID] = Casiowin;
-    else if(Casiowin)
+    else
         free(Casiowin);
     return ok;
 }
