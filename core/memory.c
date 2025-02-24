@@ -323,6 +323,48 @@ bool mq_page_mapRegister32(mqMMIOPage *mmpg, char const *name, u32 addr,
     return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
 }
 
+/* Helper function for reading string I/Os. */
+static u32 readStringIO(struct mqMMIO *io, u32 addr, int size)
+{
+    char const *str = io->value;
+    uintptr_t data = (uintptr_t)io->data;
+    u16 offset = (addr & 0xffff) - (data & 0xffff);
+    u16 string_size = data >> 16;
+
+    if(offset + size > string_size) {
+        mq_log(MQ_LOG_WARNING,
+            "readStringIO: %dB @%08x reads out-of-bounds of %08x/%d",
+            size, addr, addr - offset, (int)string_size);
+    }
+
+    u32 res = 0;
+    for(int i = 0; i < size; i++) {
+        res <<= 8;
+        if(offset + i < string_size)
+            res += str[offset + i];
+    }
+
+    // mq_log(MQ_LOG_DEBUG,
+    //     "readStringIO: %dB @%08x from %08x/%d \"%.*s\"+%d (%s) -> %08x",
+    //     size, addr, addr - offset, (int)string_size,
+    //     (int)string_size, str, offset, io->name, res);
+
+    return res;
+}
+
+bool mq_page_mapString(mqMMIOPage *mmpg, char const *name, u32 addr,
+    void *str, u16 size)
+{
+    /* Pack both the string size and its start address in the data field. */
+    MQ_STATIC_ASSERT(sizeof(void *) >= 4);
+    MQ_STATIC_ASSERT(sizeof(uintptr_t) >= 4);
+    uintptr_t data = (size << 16) | (addr & 0xffff);
+
+    int ioID = mq_page_addIO(mmpg, name, MQ_MMIO_UNSIZED, readStringIO, NULL,
+        str, (void *)data);
+    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, size);
+}
+
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 {
     if(!buffer)
@@ -366,6 +408,121 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
     }
 
     return true;
+}
+
+void mq_memory_unbindArea(mqMemory *mem, u32 addr, u32 length)
+{
+    if((addr & 0xfffff) || (length & 0xfffff))
+        return;
+
+    int startChunkNum = addr >> 20;
+    int chunkCount = length >> 20;
+
+    for(int i = startChunkNum; i < startChunkNum + chunkCount; i++) {
+        mqChunkPointer chunkPtr = mem->chunks[i];
+        if(MQ_CHUNKPTR_ISNULL(chunkPtr) || MQ_CHUNKPTR_ISBUFFER(chunkPtr)) {
+            mem->chunks[i] = MQ_CHUNKPTR_NULL;
+            continue;
+        }
+
+        mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
+        int remainingPages = 0;
+
+        for(int j = 0; j < 256; j++) {
+            mqPagePointer pagePtr = chunk->pages[j];
+            if(MQ_PAGEPTR_ISNULL(pagePtr) || MQ_PAGEPTR_ISBUFFER(pagePtr)) {
+                chunk->pages[j] = MQ_PAGEPTR_NULL;
+                continue;
+            }
+            else remainingPages++;
+        }
+
+        if(remainingPages == 0) {
+            mq_chunk_destroy(chunk);
+            mem->chunks[i] = MQ_CHUNKPTR_NULL;
+        }
+        else {
+            mq_log(MQ_LOG_WARNING, "%d pages left while unbinding chunk %08x",
+                remainingPages, (u32)i << 20);
+        }
+    }
+}
+
+bool mq_memory_copyBuffersInChunk(
+    mqMemory *mem, u32 sourceAddress, u32 targetAddress)
+{
+    if((sourceAddress & 0xfffff) || (targetAddress & 0xfffff))
+        return false;
+
+    int sourceChunkNum = (sourceAddress | 0x80000000) >> 20;
+    int targetChunkNum = targetAddress >> 20;
+
+    if(!MQ_CHUNKPTR_ISNULL(mem->chunks[targetChunkNum]))
+        return false;
+
+    mqChunkPointer ptr = mem->chunks[sourceChunkNum];
+
+    /* Copy null or buffer chunks directly */
+    if(MQ_CHUNKPTR_ISNULL(ptr) || MQ_CHUNKPTR_ISBUFFER(ptr)) {
+        mem->chunks[targetChunkNum] = ptr;
+        return true;
+    }
+
+    /* Copy broken-down chunks with a new chunk allocation. We can't easily
+       share the same mqChunkPointer because all entries of mem->chunks have
+       contractually independent ownership so it'd be freed twice. */
+    bool ok = true;
+    for(int i = 0; i < 256; i++) {
+        ok &= mq_memory_copyBuffersInPage(mem, sourceAddress, targetAddress);
+        sourceAddress += (1 << 12);
+        targetAddress += (1 << 12);
+    }
+
+    return ok;
+}
+
+bool mq_memory_copyBuffersInPage(
+    mqMemory *mem, u32 sourceAddress, u32 targetAddress)
+{
+    if((sourceAddress & 0xfff) || (targetAddress & 0xfff))
+        return false;
+
+    int sourceChunkNum = (sourceAddress | 0x80000000) >> 20;
+    int targetChunkNum = targetAddress >> 20;
+
+    mqChunk *targetChunk;
+
+    if(MQ_CHUNKPTR_ISNULL(mem->chunks[sourceChunkNum]))
+        return false;
+    if(MQ_CHUNKPTR_ISBUFFER(mem->chunks[sourceChunkNum])) {
+        // TODO[mq_memory_copyBuffersInPage]: Map page from buffer chunk
+        mq_log(MQ_LOG_ERROR,
+            "page copy to %08x from buffer chunk at %08x is TODO o(x_x)o",
+            targetAddress, sourceAddress);
+        return false;
+    }
+    mqChunk *sourceChunk = MQ_CHUNKPTR_DETAILS(mem->chunks[sourceChunkNum]);
+
+    /* Allocate the target chunk if needed. */
+    if(MQ_CHUNKPTR_ISBUFFER(mem->chunks[targetChunkNum]))
+        return false;
+    if(MQ_CHUNKPTR_ISNULL(mem->chunks[targetChunkNum])) {
+        targetChunk = mq_chunk_create();
+        if(!targetChunk)
+            return false;
+        mem->chunks[targetChunkNum] = MQ_CHUNKPTR_MKDETAILS(targetChunk);
+    }
+    else targetChunk = MQ_CHUNKPTR_DETAILS(mem->chunks[targetChunkNum]);
+
+    int sourcePageNum = (sourceAddress & 0xfffff) >> 12;
+    int targetPageNum = (targetAddress & 0xfffff) >> 12;
+    mqPagePointer sourcePagePtr = sourceChunk->pages[sourcePageNum];
+
+    if(MQ_PAGEPTR_ISNULL(sourcePagePtr) || MQ_PAGEPTR_ISBUFFER(sourcePagePtr)) {
+        targetChunk->pages[targetPageNum] = sourcePagePtr;
+        return true;
+    }
+    return false;
 }
 
 //=== Large-scale memory access functions ====================================//
@@ -464,8 +621,8 @@ bool _mq_chunk_read(
                 return true;
             }
             else {
-                u32 (*f)(void *data, u32 addr, int size) = io->read;
-                *out = f(io->data, addr, size);
+                u32 (*f)(struct mqMMIO *io, u32 addr, int size) = io->read;
+                *out = f(io, addr, size);
                 return true;
             }
         }
@@ -526,6 +683,10 @@ static bool _mq_chunk_write(
         fprintf(stderr, "TODO: MMIO page write!\n");
         exit(1);
     }
+
+    // TODO: Writes should set the dirty bit on MMU regions
+    // To do that reasonably fast we need to associate buffers with relevant
+    // MMU entries.
 
     // TODO: Hook writes
 

@@ -28,6 +28,7 @@ set(LIB_SOURCES
   modules/keysc.c
   modules/mmu.c
 
+  system/casiowin.c
   system/heap.c)
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"

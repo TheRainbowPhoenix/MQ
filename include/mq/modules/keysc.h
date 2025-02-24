@@ -19,9 +19,6 @@
 #include <mq/interfaces/keyboard.h>
 MQ_START_DEFS
 
-/* Setup the KEYSC module for a given machine. */
-bool mq_module_keysc_setup(mqMachine *mach);
-
 struct mqKEYSC {
     /* KIUDATA (key status) is not represented and is instead computed from the
        machine's keyboard interface at each access. */
@@ -38,6 +35,12 @@ struct mqKEYSC {
 };
 
 typedef struct mqKEYSC mqKEYSC;
+
+/* Setup the KEYSC module for a given machine. */
+bool mq_keysc_setup(mqMachine *mach);
+
+/* Get the KEYSC module info of a machine, NULL if the module is not used. */
+mqKEYSC *mq_keysc_get(mqMachine *mach);
 
 MQ_END_DEFS
 #endif /* MQ_MODULES_KEYSC_H */

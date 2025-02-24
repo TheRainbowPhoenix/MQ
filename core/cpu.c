@@ -39,8 +39,6 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
         cpu->spRegs[SH_SR] = 0x40000000; // MD=1
         cpu->r[4] = 0; // isAppli
         cpu->r[5] = 0; // optNum
-        // TODO: Initial r15 directly in P1
-        cpu->r[15] = 0x08100000 + (512 << 10);
         cpu->pc = 0x00300000;
         cpu->syscallHandler = 0x80020070;
     }
@@ -73,7 +71,7 @@ static u32 read_PRR(void)
     return 0x00002c00;
 }
 
-bool mq_cpu_setupModule(mqCpu *cpu, mqMemory *mem)
+bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
 {
     // TODO: Area 7 addresses for MMIO?
     mqChunk *ch = mq_memory_getOrCreateChunk(mem, 0xff000000);

@@ -1,6 +1,7 @@
 #include "gui.h"
 #include "imgui-util.h"
 #include <stdio.h>
+#include <mq/modules/mmu.h>
 
 static void AddChunkList(
     mqMachine *mach, MemoryWindowState &s, MemoryWindowAction &a)
@@ -49,7 +50,6 @@ static void AddChunkList(
                         firstPage = i;
                     }
                 }
-                printf("non null pages: %d\n", nonnullPages);
                 if(nonnullPages == 1)
                     s.selectedPage = firstPage;
             }
@@ -250,3 +250,123 @@ MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state)
     return a;
 }
 
+MMUWindowAction AddMMUWindow(mqMachine *mach)
+{
+    MMUWindowAction a;
+
+    if(ImGui::Begin("MMU"))
+        a = AddMMUWindowContents(mach);
+    ImGui::End();
+
+    return a;
+}
+
+MMUWindowAction AddMMUWindowContents(mqMachine *mach)
+{
+    MMUWindowAction a;
+
+    mqMMU *MMU = mq_mmu_get(mach);
+    if(!MMU) {
+        ImGui::Text("Machine does not have an MMU module.");
+        return a;
+    }
+
+    if(ImGui::Button("Bind"))
+        a.type = MMUWindowAction::Type::MMUWA_BIND;
+    ImGui::SameLine();
+    if(ImGui::Button("Unbind"))
+        a.type = MMUWindowAction::Type::MMUWA_UNBIND;
+
+    if(ImGui::BeginTable("UTLB", 13,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter)) {
+        ImGui::TableSetupColumn("id", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("VPN", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("D", ImGuiTableColumnFlags_WidthFixed, 10);
+        ImGui::TableSetupColumn("V", ImGuiTableColumnFlags_WidthFixed, 10);
+        ImGui::TableSetupColumn("ASID", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("PPN", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("V", ImGuiTableColumnFlags_WidthFixed, 10);
+        ImGui::TableSetupColumn("SZ", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("PR", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("C", ImGuiTableColumnFlags_WidthFixed, 10);
+        ImGui::TableSetupColumn("D", ImGuiTableColumnFlags_WidthFixed, 10);
+        ImGui::TableSetupColumn("SH", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("WT", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableHeadersRow();
+
+        char const *SZ_str[4] = { "1 kB", "4 kB", "64 kB", "1 MB" };
+        char const *PR_str[4] = { "K:r", "K:rw", "U:r", "U:rw" };
+
+        for(int i = 0; i < 64; i++) {
+            auto addr = mq_mmu_decode_address(MMU->UTLB[i].addr);
+            auto data = mq_mmu_decode_data(MMU->UTLB[i].data);
+            int SZ = (data.SZ1 << 1) + data.SZ0;
+
+            auto color = ImGui::GetStyle().Colors[ImGuiCol_Text];
+            if(addr.V && data.V)
+                {}
+            else if(!addr.V && !data.V)
+                color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+            else
+                color = ImGui::GetStyle().Colors[ImGuiCol_PlotLinesHovered];
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", i);
+
+            ImGui::TableNextColumn();
+            ImGui::PushFont(fontMono);
+            ImGui::Text("%08x %08x", MMU->UTLB[i].addr, addr.VPN << 10);
+            ImGui::PopFont();
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", addr.D);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", addr.V);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", addr.ASID);
+
+            ImGui::TableNextColumn();
+            ImGui::PushFont(fontMono);
+            ImGui::Text("%08x %08x", MMU->UTLB[i].data, data.PPN << 10);
+            ImGui::PopFont();
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", data.V);
+
+            ImGui::TableNextColumn();
+            if(SZ >= 0 && SZ < 4)
+                ImGui::Text(SZ_str[SZ]);
+            else
+                ImGui::Text("%d", SZ);
+
+            ImGui::TableNextColumn();
+            if(data.PR >= 0 && data.PR < 4)
+                ImGui::Text(PR_str[data.PR]);
+            else
+                ImGui::Text("%d", data.PR);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", data.C);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", data.D);
+
+            ImGui::TableNextColumn();
+            ImGui::Text(data.SH ? "SH" : "NS");
+
+            ImGui::TableNextColumn();
+            ImGui::Text(data.WT ? "WT" : "CB");
+
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::EndTable();
+    }
+
+    return a;
+}

@@ -4,6 +4,7 @@
 #include <mq/system/heap.h>
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
+#include <mq/modules/mmu.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -34,6 +35,8 @@ struct DelayedInput {
     bool mq_initialize_gintctl = false;
     int mq_cycles = 0;
     bool mq_heap_init = false;
+    bool mq_mmu_unbind = false;
+    bool mq_mmu_bind = false;
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -462,6 +465,12 @@ ImGui::End();
     }
     ImGui::End();
 
+    MMUWindowAction MMUWA = AddMMUWindow(mach);
+    if(MMUWA.type == MMUWA.Type::MMUWA_BIND)
+        input.mq_mmu_bind = true;
+    if(MMUWA.type == MMUWA.Type::MMUWA_UNBIND)
+        input.mq_mmu_unbind = true;
+
     if(ImGui::Begin("Hex Viewer")) {
         ImGui::PushFont(fontMono);
         ImGui::AddHexViewer(HV);
@@ -490,6 +499,7 @@ ImGui::End();
         ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Memory", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
+        ImGui::DockBuilderDockWindow("MMU", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
@@ -642,6 +652,14 @@ static int update(void)
     }
     if(input.ui_pattern_rgb && mach->display) {
         generate_rgb_pattern(mach->display);
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_mmu_bind && mach) {
+        mq_mmu_bind(mach);
+        render_needed = std::max(render_needed, 1);
+    }
+    if(input.mq_mmu_unbind && mach) {
+        mq_mmu_unbind(mach);
         render_needed = std::max(render_needed, 1);
     }
 

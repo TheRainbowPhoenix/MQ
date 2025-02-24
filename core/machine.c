@@ -8,6 +8,7 @@
 #include <mq/memory.h>
 #include <mq/mq.h>
 #include <mq/hooks.h>
+#include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
 #include <mq/modules/keysc.h>
 #include <mq/modules/mmu.h>
@@ -75,25 +76,35 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         // TODO[machine]: Memory setup for FX add-in
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
+        u32 layout_addin = 0x81800000;
+        u32 layout_ram   = 0x8c180000;
+        u32 layout_heap  = 0x8c0c0000;
+
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
-        mq_cpu_setupModule(&mach->cpu, mach->memory);
+        mq_cpu_setup(&mach->cpu, mach->memory);
+
+        /* Set the stack pointer to be P1 instead of MMU, as the OS does */
+        mach->cpu.r[15] = layout_ram + (512 << 10);
 
         // TODO[machine]: More precise memory setup for CG add-in
 
         /* P0 program code */
         void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
-        mq_memory_createBlock(mach->memory, 0x00300000, 2 << 20, addin);
+        mq_memory_createBlock(mach->memory, layout_addin, 2 << 20, addin);
         /* P0 userspace RAM */
         void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
-        mq_memory_createBlock(mach->memory, 0x08100000, 512 << 10, uram);
+        mq_memory_createBlock(mach->memory, layout_ram, 512 << 10, uram);
         /* VRAM */
         u32 VRAMsize = 384 * 216 * 2 + 1024; // margin for buffer overflows...
         VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
         void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", VRAMsize);
         mq_memory_createBlock(mach->memory, 0x8c000000, VRAMsize, vram);
+        /* OS stack */
+        void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
+        mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);
 
         // TODO[machine]: Reasonable heap address on fx-CG?!
-        mach->system.heapAddress = 0x8c100000;
+        mach->system.heapAddress = layout_heap;
         mach->system.heapSize = 128 << 10;
 
         mach->display = mq_display_create();
@@ -102,8 +113,15 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        mq_module_mmu_setup(mach);
-        mq_module_keysc_setup(mach);
+        // TODO[machine]: Handle the NULL page with MMU so it shows up in TLB
+        mq_mmu_setup(mach);
+        mq_mmu_map(mach, 0x00300000, layout_addin,  0, 0x100000, 2);
+        mq_mmu_map(mach, 0x08100000, layout_ram,   55,  0x10000, 8);
+        mq_mmu_bind(mach);
+
+        mq_keysc_setup(mach);
+
+        mq_casiowin_setup(mach, MQ_CASIOWIN_CG380);
     }
 
     mach->initialized = true;
@@ -127,7 +145,7 @@ bool mq_machine_load_g3a(mqMachine *mach, char const *path)
     fclose(fp);
 
     bool x = mq_memory_load(
-        mach->memory, 0x00300000, data + 0x7000, size - 0x7000);
+        mach->memory, 0x81800000, data + 0x7000, size - 0x7000);
     free(data);
     return x;
 

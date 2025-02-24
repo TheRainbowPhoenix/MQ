@@ -98,7 +98,7 @@ private:
     Texture const *m_texture = nullptr;
 };
 
-//=== Other windows ==========================================================//
+//=== Memory window ==========================================================//
 
 /* State retained from one frame to the next in the memory window. */
 struct MemoryWindowState {
@@ -118,5 +118,16 @@ MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state);
 
 MemoryWindowAction AddMemoryWindowContents(
     mqMachine *mach, MemoryWindowState &state);
+
+//=== MMU window =============================================================//
+
+/* Actions emitted from the MMU window. */
+struct MMUWindowAction {
+    enum class Type { MMUWA_NONE, MMUWA_UNBIND, MMUWA_BIND };
+    Type type = Type::MMUWA_NONE;
+};
+
+MMUWindowAction AddMMUWindow(mqMachine *mach);
+MMUWindowAction AddMMUWindowContents(mqMachine *mach);
 
 #endif /* MQ_UI_GUI_H */

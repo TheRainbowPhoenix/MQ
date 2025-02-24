@@ -19,9 +19,15 @@ static void inithook(void)
 }
 MQ_HOOK_REGISTER(init, inithook)
 
-static u32 read_KIUDATA(mqMachine *mach, u32 addr, int size)
+mqKEYSC *mq_keysc_get(mqMachine *mach)
+{
+    return mach->modules ? mach->modules[moduleID] : NULL;
+}
+
+static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
 {
     (void)size;
+    mqMachine *mach = io->data;
     mqKeyboard *kbd = mach->keyboard;
     if(!kbd)
         return 0;
@@ -60,7 +66,7 @@ static void write_KIUDATA(mqKEYSC *KEYSC, u32 addr, int size)
     (void)KEYSC;
 }
 
-bool mq_module_keysc_setup(mqMachine *mach)
+bool mq_keysc_setup(mqMachine *mach)
 {
     mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xa44b0000);
     if(!ch)
@@ -96,10 +102,10 @@ bool mq_module_keysc_setup(mqMachine *mach)
     return b;
 }
 
-static void mq_module_keysc_cleanup(mqMachine *mach)
+static void mq_keysc_cleanup(mqMachine *mach)
 {
     mqKEYSC *KEYSC = mach->modules[moduleID];
     if(KEYSC)
         free(KEYSC);
 }
-MQ_HOOK_REGISTER(module_cleanup, mq_module_keysc_cleanup)
+MQ_HOOK_REGISTER(module_cleanup, mq_keysc_cleanup)
