@@ -59,13 +59,6 @@ static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
     return KIUDATA;
 }
 
-static void write_KIUDATA(mqKEYSC *KEYSC, u32 addr, int size)
-{
-    (void)size;
-    (void)addr;
-    (void)KEYSC;
-}
-
 bool mq_keysc_setup(mqMachine *mach)
 {
     mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xa44b0000);
@@ -81,7 +74,7 @@ bool mq_keysc_setup(mqMachine *mach)
 
     bool ok = true;
     int ioID = mq_page_addIO(mmpg, "KIUDATA*", MQ_MMIO_SIZE_2, read_KIUDATA,
-        write_KIUDATA, NULL, mach);
+        NULL, NULL, mach);
     for(int i = 0; i < 6; i++)
         ok &= mq_page_mapIO(mmpg, ioID, 0xa44b0000 + 2*i, 1);
 

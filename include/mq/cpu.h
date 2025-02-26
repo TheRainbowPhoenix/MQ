@@ -102,6 +102,8 @@ struct mqCpu
     u32 excMask;
     /* Exception handling registers */
     u32 TRA, EXPEVT, INTEVT;
+    /* CPU Operation Mode register */
+    u32 CPUOPM;
 
     /* Syscall emulation address. If this address is hit a syscall will be
        emulated. This is set to 0 when syscall emulation is disabled */

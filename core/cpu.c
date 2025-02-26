@@ -19,6 +19,7 @@ void mq_cpu_reset(mqCpu *cpu)
 void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
 {
     mq_cpu_reset(cpu);
+    cpu->CPUOPM = 0x00000320;
 
     if(initializeKind == MQ_CPU_INITIALIZE_POWERON) {
         cpu->spRegs[SH_SR] = 0x700000f0; // MD=1 RB=1 BL=1 IMASK=15
@@ -71,6 +72,11 @@ static u32 read_PRR(void)
     return 0x00002c00;
 }
 
+static void write_CPUOPM(mqCpu *cpu, u32 value)
+{
+    cpu->CPUOPM = (value & 0x00000008) | 0x00000320;
+}
+
 bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
 {
     // TODO: Area 7 addresses for MMIO?
@@ -78,6 +84,13 @@ bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
     if(!ch)
         return false;
     mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xff000000, 0, 0);
+    if(!mmpg)
+        return false;
+
+    mqChunk *ch2 = mq_memory_getOrCreateChunk(mem, 0xff2f0000);
+    if(!ch2)
+        return false;
+    mqMMIOPage *mmpg2 = mq_chunk_getOrCreateMMIOPage(ch2, 0xff2f0000, 1, 1);
     if(!mmpg)
         return false;
 
@@ -92,6 +105,8 @@ bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
         read_PVR, NULL, NULL, NULL);
     b &= mq_page_mapRegister32(mmpg, "PRR", 0xff000044,
         read_PRR, NULL, NULL, NULL);
+    b &= mq_page_mapRegister32(mmpg2, "CPUOPM", 0xff2f0000,
+        NULL, write_CPUOPM, &cpu->CPUOPM, cpu);
     return b;
 }
 
@@ -149,13 +164,6 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
         return false;
     }
 
-    if(exc_isInterrupt(exc)) {
-        // TODO: Set INTEVT. Requires INTC providing the interrupt code.
-    }
-    else {
-        cpu->EXPEVT = exc_exceptionCode(exc) & 0xfff;
-    }
-
     // TODO: Break from sleep
 
     mq_log(MQ_LOG_DEBUG, "Handling exception %s", mq_cpu_exceptionName(exc));
@@ -164,9 +172,18 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
     cpu->spRegs[SH_SGR] = cpu->r[15];
 
-    /* Set BL=1 */
-    cpu->spRegs[SH_SR] |= 0x10000000;
-    // TODO: Set BL=1 MD=1
+    /* Set BL=1, RB=1, MD=1 */
+    mq_cpu_setSR(cpu, cpu->spRegs[SH_SR] | 0x70000000);
+
+    if(exc_isInterrupt(exc)) {
+        // TODO: Set INTEVT. Requires INTC providing the interrupt code.
+        if(cpu->CPUOPM & 0x00000008) {
+            // TODO: Set IMASK to the interrupt's level
+        }
+    }
+    else {
+        cpu->EXPEVT = exc_exceptionCode(exc) & 0xfff;
+    }
 
     cpu->pc = cpu->spRegs[SH_VBR] + exc_VBROffset(exc);
 

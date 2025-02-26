@@ -115,6 +115,8 @@ typedef void *mqPagePointer;
 #define MQ_PAGEPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
 // TODO[memory]: Stop counting NULL page pointer as MMIO pages.
 #define MQ_PAGEPTR_ISMMIOPAGE(PTR) (((uintptr_t)(PTR) & 1) != 0)
+#define MQ_PAGEPTR_ISMMIOPAGE2(PTR) \
+    (((uintptr_t)(PTR) & 1) != 0 && (PTR) != MQ_PAGEPTR_NULL)
 #define MQ_PAGEPTR_BUFFER(PTR) ((void *)(PTR))
 #define MQ_PAGEPTR_MMIOPAGE(PTR) ((mqMMIOPage *)((uintptr_t)(PTR) & -2))
 #define MQ_PAGEPTR_MKBUFFER(PTR) ((mqPagePointer)(PTR))
@@ -177,7 +179,7 @@ struct mqMMIO {
     int flags;
     /* Read and write function pointers. The prototypes are
        - u32 read(struct mqMMIO *io, u32 addr, int size)
-         void write(struct mqMMIO *io, u32 value, u32 addr, int size)
+         void write(struct mqMMIO *io, u32 addr, u32 value, int size)
          if MQ_MMIO_RELOC is clear (value can then be used for extra storage);
        - u32 read(void *data)
          void write(void *data, u32 value)

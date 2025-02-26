@@ -39,12 +39,14 @@ static void write_CHCR(mqDMA_Channel *ch, u32 value)
 {
     // TODO[dma]: Consequences of writing to CHCR
     ch->CHCR = value & 0x4fefffff;
+    mq_log(MQ_LOG_ERROR, "not handling write to CHCR!");
 }
 static void write_DMAOR(mqMachine *mach, u32 value)
 {
     mqDMA *DMA = mq_dma_get(mach);
     // TODO[dma]: Consequences of writing to DMAOR
     DMA->DMAOR = value & 0xf307;
+    mq_log(MQ_LOG_ERROR, "not handling write to DMAOR!");
 }
 
 static bool mq_dma_mapChannel(mqMMIOPage *mmpg, mqDMA *DMA, int i, u32 addr)

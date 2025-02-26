@@ -678,10 +678,29 @@ static bool _mq_chunk_write(
         return true;
     }
 
-    else if(MQ_LIKELY(!MQ_PAGEPTR_ISNULL(pagePtr))) {
-        // TODO: MMIO writes
-        fprintf(stderr, "TODO: MMIO page write!\n");
-        exit(1);
+    else if(MQ_LIKELY(MQ_PAGEPTR_ISMMIOPAGE2(pagePtr))) {
+        u32 pgAddr = addr & 0xfff;
+        int ioID;
+        mqMMIOPage *mmpg = MQ_PAGEPTR_MMIOPAGE(pagePtr);
+        if(mmpg->length > (int)pgAddr && (ioID = mmpg->map[pgAddr])) {
+            mqMMIO *io = &mmpg->io[ioID - 1];
+
+            /* Check access size */
+            if(size & io->flags) {
+                if(MQ_UNLIKELY(!io->write))
+                    mq_log(MQ_LOG_WARNING, "Write to ro I/O at %08x (r)", addr);
+                else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
+                    void (*f)(void *write, u32 value) = io->write;
+                    f(io->data, value);
+                }
+                else {
+                    void (*f)(struct mqMMIO *io, u32 addr, u32 value, int size)
+                        = io->write;
+                    f(io, addr, value, size);
+                }
+                return true;
+            }
+        }
     }
 
     // TODO: Writes should set the dirty bit on MMU regions
