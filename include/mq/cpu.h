@@ -144,15 +144,34 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
 void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode);
 
-/* Set the value of the T bit; the value provided must be 0 or 1. */
+/* Set/get the value of the T bit; the value provided must be 0 or 1. */
 MQ_INLINE void mq_cpu_setT(mqCpu *cpu, int T)
 {
     cpu->spRegs[SH_SR] = (cpu->spRegs[SH_SR] & -2) + T;
 }
-/* Get the value of the T bit. */
 MQ_INLINE int mq_cpu_getT(mqCpu *cpu)
 {
     return cpu->spRegs[SH_SR] & 1;
+}
+/* Set/get the value of the Q bit; the value provided must be 0 or 1. */
+MQ_INLINE void mq_cpu_setQ(mqCpu *cpu, int Q)
+{
+    cpu->spRegs[SH_SR] &= ~(1 << 8);
+    cpu->spRegs[SH_SR] |= (Q != 0) << 8;
+}
+MQ_INLINE int mq_cpu_getQ(mqCpu *cpu)
+{
+    return (cpu->spRegs[SH_SR] >> 8) & 1;
+}
+/* Set/get the value of the M bit; the value provided must be 0 or 1. */
+MQ_INLINE void mq_cpu_setM(mqCpu *cpu, int M)
+{
+    cpu->spRegs[SH_SR] &= ~(1 << 9);
+    cpu->spRegs[SH_SR] |= (M != 0) << 9;
+}
+MQ_INLINE int mq_cpu_getM(mqCpu *cpu)
+{
+    return (cpu->spRegs[SH_SR] >> 9) & 1;
 }
 
 /* Set the entire SR register. This swaps the register banks if RB changes. */
