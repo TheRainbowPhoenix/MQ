@@ -67,7 +67,7 @@ static void write_RTCRn(struct mqMMIO *io, u32 addr, u32 value, int size)
     mqCmod *Cmod = io->userdata;
     mqCmod_RTCTimer *RT = &Cmod->timers[((addr & 0xfff) - 0x3c) >> 5];
     (void)size;
-    RT->RTCR = value & 0x03;
+    RT->RTCR = (RT->RTCR & value & 0x02) | (value & 0x01);
     // TODO[cmod]: Consequences of writing to RTCR
 }
 

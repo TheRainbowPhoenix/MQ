@@ -14,11 +14,20 @@
 #include <mq/machine.h>
 MQ_START_DEFS
 
+struct mqDMA;
+
 struct mqDMA_Channel {
+    /* Pointer to main DMA structure and channel's index. */
+    struct mqDMA *DMA;
+    int index;
+
     u32 SAR;    // Source Address Register
     u32 DAR;    // Destination Address Register
     u32 TCR;    // Transfer Count Register
     u32 CHCR;   // CHannel Control Register
+
+    /* Value of TCR when current transfer started. */
+    u32 startTCR;
 };
 
 struct mqDMA {
