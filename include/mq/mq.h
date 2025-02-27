@@ -26,5 +26,13 @@ int mq_module_register(void);
 /* Get the number of currently-registered hardware modules. */
 int mq_module_count(void);
 
+/* Register a hardware process ID. This can be used to set a hardware process
+   function on every mqMachine and dynamically update it. This should always be
+   called in the init hook. */
+int mq_process_register(void);
+
+/* Get the number of currently-registered hardware processes. */
+int mq_process_count(void);
+
 MQ_END_DEFS
 #endif /* MQ_MQ_H */

@@ -8,6 +8,7 @@
 #include <mq/hooks.h>
 
 static int moduleCount = 0;
+static int processCount = 0;
 
 void mq_init(void)
 {
@@ -27,4 +28,14 @@ int mq_module_register(void)
 int mq_module_count(void)
 {
     return moduleCount;
+}
+
+int mq_process_register(void)
+{
+    return processCount++;
+}
+
+int mq_process_count(void)
+{
+    return processCount;
 }

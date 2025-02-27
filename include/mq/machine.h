@@ -16,9 +16,9 @@ MQ_START_DEFS
 
 struct mqMemory;
 
-/* Module IDs. These are used to organize the module array in mqMachine while
-   ensuring there are no conflicts. Can be assigned dynamically. */
-typedef int mqModuleID;
+/* Type of a background process that runs every few CPU cycles.
+   TODO: Provide background process hooks with more precising timing info */
+typedef void mq_process_t(struct mqMachine *mach, int cyclesElapsed);
 
 // TODO
 struct mqMachine
@@ -33,6 +33,12 @@ struct mqMachine
 
     /* Data from hardware modules; the array has size mq_module_count(). */
     void **modules;
+    /* List of background processes; the array has size mq_process_count(). */
+    mq_process_t **processes;
+    /* Number of cycles left before running background processes */
+    int processTimer;
+    /* How many cycles between each run of background processes */
+    int processFrequency;
 
     /* System emulation details */
     struct {
@@ -70,6 +76,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind);
 bool mq_machine_load_g3a(mqMachine *mach, char const *path);
 
 int mq_machine_cycle(mqMachine *mach, int cycles);
+
+void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed);
 
 void mq_mach_syscall(mqMachine *mach);
 

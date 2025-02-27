@@ -41,6 +41,10 @@ void mq_machine_reset(mqMachine *mach)
     }
     mach->modules = NULL;
 
+    if(mach->processes)
+        free(mach->processes);
+    mach->processes = NULL;
+
     if(mach->display)
         mq_display_destroy(mach->display);
     mach->display = NULL;
@@ -56,14 +60,16 @@ void mq_machine_destroy(mqMachine *mach)
 {
     mq_cpu_reset(&mach->cpu);
     mq_memory_destroy(mach->memory);
-    if(mach->display)
-        mq_display_destroy(mach->display);
-    if(mach->keyboard)
-        mq_keyboard_destroy(mach->keyboard);
     if(mach->modules) {
         mq_callhook_module_cleanup(mach);
         free(mach->modules);
     }
+    if(mach->processes)
+        free(mach->processes);
+    if(mach->display)
+        mq_display_destroy(mach->display);
+    if(mach->keyboard)
+        mq_keyboard_destroy(mach->keyboard);
     free(mach);
 }
 
@@ -72,6 +78,11 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     mq_machine_reset(mach);
     if(mq_module_count())
         mach->modules = calloc(mq_module_count(), sizeof *mach->modules);
+    if(mq_process_count())
+        mach->processes = calloc(mq_process_count(), sizeof *mach->processes);
+
+    mach->processFrequency = 64;
+    mach->processTimer = mach->processFrequency;
 
     if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
@@ -174,11 +185,25 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         return 0;
 
     for(int i = 0; i < cycles; i++) {
-        if(mach->stuck)
+        if(MQ_UNLIKELY(mach->stuck))
             return i;
         mq_cpu_cycle(mach, &mach->cpu);
+
+        if(--mach->processTimer == 0)
+            mq_machine_runProcesses(mach, mach->processFrequency);
     }
     return cycles;
+}
+
+void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
+{
+    for(int i = 0; i < mq_process_count(); i++) {
+        mq_process_t *proc = mach->processes[i];
+        if(proc)
+            proc(mach, cyclesElapsed);
+    }
+
+    mach->processTimer = mach->processFrequency;
 }
 
 void mq_mach_syscall(mqMachine *mach)
