@@ -20,7 +20,7 @@ static void AddChunkList(
 
     for(uint i = 0; i < 0x1000; i++) {
         sprintf(addr, "%08x", i << 20);
-        if(MQ_CHUNKPTR_ISNULL(mem->chunks[i]))
+        if(mem->chunks[i] == MQ_CHUNKPTR_NULL)
             continue;
 
         ImGui::SetNextItemAllowOverlap();
@@ -28,7 +28,8 @@ static void AddChunkList(
         if(MQ_CHUNKPTR_ISBUFFER(mem->chunks[i])) {
             ImGui::SameLine(0, 7);
             ImGui::PushFont(fontSans);
-            ImGui::TextDisabled("(Buffer)");
+            // TODO: Get buffer name!
+            ImGui::TextDisabled("(%s)", "Buffer");
             ImGui::PopFont();
         }
 
@@ -40,8 +41,8 @@ static void AddChunkList(
             a.address = i << 20;
 
             /* Autoselect page #0 if there is exactly one non-null page */
-            if(MQ_CHUNKPTR_ISDETAILS(mem->chunks[i])) {
-                mqChunk *ch = MQ_CHUNKPTR_DETAILS(mem->chunks[i]);
+            mqChunk *ch = MQ_CHUNKPTR_GET(mem->chunks[i]);
+            if(ch) {
                 int nonnullPages = 0;
                 int firstPage = -1;
                 for(int i = 0; i < 256 && nonnullPages < 2; i++) {
@@ -67,13 +68,13 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
     mqChunkPointer chunkPtr, MemoryWindowAction &a)
 {
     (void)mach;
-    if(MQ_CHUNKPTR_ISNULL(chunkPtr))
+    if(chunkPtr == MQ_CHUNKPTR_NULL)
         return;
     if(MQ_CHUNKPTR_ISBUFFER(chunkPtr)) {
         ImGui::Text("This is a buffer chunk.");
         return;
     }
-    mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
+    mqChunk *chunk = MQ_CHUNKPTR_GET(chunkPtr);
 
     ImVec2 avl = ImGui::GetContentRegionAvail();
     avl.x -= 4;
@@ -88,7 +89,7 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
 
     for(uint i = 0; i < 256; i++) {
         sprintf(addr, "%08x", chunkBase + (i << 12));
-        if(MQ_PAGEPTR_ISNULL(chunk->pages[i]))
+        if(chunk->pages[i] == MQ_PAGEPTR_NULL)
             continue;
 
         ImGui::SetNextItemAllowOverlap();
@@ -97,7 +98,7 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
         ImGui::PushFont(fontSans);
         if(MQ_PAGEPTR_ISBUFFER(chunk->pages[i]))
             ImGui::TextDisabled("(Buffer)");
-        else if(MQ_PAGEPTR_ISMMIOPAGE(chunk->pages[i]))
+        else
             ImGui::TextDisabled("(IO)");
         ImGui::PopFont();
 
@@ -119,13 +120,13 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
 static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
         mqPagePointer pagePtr, MemoryWindowAction &a)
 {
-    if(MQ_PAGEPTR_ISNULL(pagePtr))
+    if(pagePtr == MQ_PAGEPTR_NULL)
         return;
     if(MQ_PAGEPTR_ISBUFFER(pagePtr)) {
         ImGui::Text("This is a buffer page.");
         return;
     }
-    mqMMIOPage *mmpg = MQ_PAGEPTR_MMIOPAGE(pagePtr);
+    mqPage *pg = MQ_PAGEPTR_GET(pagePtr);
 
     ImVec2 avl = ImGui::GetContentRegionAvail();
     avl.x -= 4;
@@ -139,12 +140,12 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
 
     char str[16];
 
-    for(int i = 0; i < mmpg->length; i++) {
+    for(int i = 0; i < pg->length; i++) {
         sprintf(str, "%08x", addr + i);
-        if(!mmpg->map[i])
+        if(!pg->map[i])
             continue;
 
-        mqMMIO *io = &mmpg->io[mmpg->map[i] - 1];
+        mqMMIO *io = &pg->io[pg->map[i] - 1];
 
         ImGui::SetNextItemAllowOverlap();
         bool clicked = ImGui::Selectable(str, i == s.selectedIO);
@@ -159,10 +160,10 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
 
     ImGui::PopFont();
     ImGui::EndListBox();
-    ImGui::Text("Total: %d IOs", mmpg->ioCount);
+    ImGui::Text("Total: %d IOs", pg->ioCount);
 
     if(s.selectedIO >= 0) {
-        mqMMIO *io = &mmpg->io[mmpg->map[s.selectedIO] - 1];
+        mqMMIO *io = &pg->io[pg->map[s.selectedIO] - 1];
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
@@ -189,16 +190,16 @@ MemoryWindowAction AddMemoryWindowContents(
 
     if(s.selectedChunk >= 0) {
         chunkPtr = mem->chunks[s.selectedChunk];
-        if(MQ_CHUNKPTR_ISNULL(chunkPtr))
+        if(chunkPtr == MQ_CHUNKPTR_NULL)
             s.selectedChunk = -1;
         else if(!MQ_CHUNKPTR_ISBUFFER(chunkPtr))
-            chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
+            chunk = MQ_CHUNKPTR_GET(chunkPtr);
     }
 
     if(s.selectedPage >= 0) {
         if(chunk) {
             pagePtr = chunk->pages[s.selectedPage];
-            if(MQ_PAGEPTR_ISNULL(pagePtr))
+            if(pagePtr == MQ_PAGEPTR_NULL)
                 s.selectedPage = -1;
         }
         else s.selectedPage = -1;
@@ -318,7 +319,7 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
 
             ImGui::TableNextColumn();
             ImGui::PushFont(fontMono);
-            ImGui::Text("%08x %08x", MMU->UTLB[i].addr, addr.VPN << 10);
+            ImGui::Text("%08x", addr.VPN << 10);
             ImGui::PopFont();
 
             ImGui::TableNextColumn();
@@ -332,7 +333,7 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
 
             ImGui::TableNextColumn();
             ImGui::PushFont(fontMono);
-            ImGui::Text("%08x %08x", MMU->UTLB[i].data, data.PPN << 10);
+            ImGui::Text("%08x", data.PPN << 10);
             ImGui::PopFont();
 
             ImGui::TableNextColumn();

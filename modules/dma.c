@@ -49,29 +49,26 @@ static void write_DMAOR(mqMachine *mach, u32 value)
     mq_log(MQ_LOG_ERROR, "not handling write to DMAOR!");
 }
 
-static bool mq_dma_mapChannel(mqMMIOPage *mmpg, mqDMA *DMA, int i, u32 addr)
+static bool mq_dma_mapChannel(mqPage *pg, mqDMA *DMA, int i, u32 addr)
 {
     struct mqDMA_Channel *ch = &DMA->channels[i];
 
     bool ok = true;
-    ok &= mq_page_mapRegister32(mmpg, "SAR", addr,
+    ok &= mq_page_mapRegister32(pg, "SAR", addr,
         NULL, write_SAR, &ch->SAR, ch);
-    ok &= mq_page_mapRegister32(mmpg, "DAR", addr + 4,
+    ok &= mq_page_mapRegister32(pg, "DAR", addr + 4,
         NULL, write_DAR, &ch->SAR, ch);
-    ok &= mq_page_mapRegister32(mmpg, "TCR", addr + 8,
+    ok &= mq_page_mapRegister32(pg, "TCR", addr + 8,
         NULL, write_TCR, &ch->SAR, ch);
-    ok &= mq_page_mapRegister32(mmpg, "CHCR", addr + 12,
+    ok &= mq_page_mapRegister32(pg, "CHCR", addr + 12,
         NULL, write_CHCR, &ch->CHCR, ch);
     return ok;
 }
 
 bool mq_dma_setup(mqMachine *mach)
 {
-    mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xfe000000);
-    if(!ch)
-        return false;
-    mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xfe008000, 0x90, 25);
-    if(!mmpg)
+    mqPage *pg = mq_memory_getPagePrealloc(mach->memory, 0xfe008000, 0x90, 25);
+    if(!pg)
         return false;
 
     mqDMA *DMA = calloc(1, sizeof *DMA);
@@ -79,7 +76,7 @@ bool mq_dma_setup(mqMachine *mach)
         return false;
 
     bool ok = true;
-    ok &= mq_page_mapRegister16(mmpg, "DMAOR", 0xfe008060,
+    ok &= mq_page_mapRegister16(pg, "DMAOR", 0xfe008060,
         NULL, write_DMAOR, &DMA->DMAOR, mach);
 
     u32 channelAddresses[6] = {
@@ -87,7 +84,7 @@ bool mq_dma_setup(mqMachine *mach)
         0xfe008080,
     };
     for(int i = 0; i < 6; i++)
-        ok &= mq_dma_mapChannel(mmpg, DMA, i, channelAddresses[i]);
+        ok &= mq_dma_mapChannel(pg, DMA, i, channelAddresses[i]);
 
     if(ok)
         mach->modules[moduleID] = DMA;

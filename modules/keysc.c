@@ -27,7 +27,7 @@ mqKEYSC *mq_keysc_get(mqMachine *mach)
 static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
 {
     (void)size;
-    mqMachine *mach = io->data;
+    mqMachine *mach = io->userdata;
     mqKeyboard *kbd = mach->keyboard;
     if(!kbd)
         return 0;
@@ -61,11 +61,8 @@ static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
 
 bool mq_keysc_setup(mqMachine *mach)
 {
-    mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xa44b0000);
-    if(!ch)
-        return false;
-    mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xa44b0000, 0, 0);
-    if(!mmpg)
+    mqPage *pg = mq_memory_getPage(mach->memory, 0xa44b0000);
+    if(!pg)
         return false;
 
     mqKEYSC *KEYSC = calloc(1, sizeof *KEYSC);
@@ -73,10 +70,10 @@ bool mq_keysc_setup(mqMachine *mach)
         return false;
 
     bool ok = true;
-    int ioID = mq_page_addIO(mmpg, "KIUDATA*", MQ_MMIO_SIZE_2, read_KIUDATA,
+    int ioID = mq_page_addIO(pg, "KIUDATA*", MQ_MMIO_SIZE_2, read_KIUDATA,
         NULL, NULL, mach);
     for(int i = 0; i < 6; i++)
-        ok &= mq_page_mapIO(mmpg, ioID, 0xa44b0000 + 2*i, 1);
+        ok &= mq_page_mapIO(pg, ioID, 0xa44b0000 + 2*i, 1);
 
     // 0xa44b000c KIUCNTREG
     // 0xa44b000e KIAUTOFIXREG

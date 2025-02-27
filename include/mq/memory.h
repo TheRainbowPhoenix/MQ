@@ -71,18 +71,16 @@ MQ_START_DEFS
 /* A chunk pointer whose least significant bit is stolen to indicate whether
    the entire chunk is a buffer (0) or not (1). */
 typedef void *mqChunkPointer;
-/* Macros for punning around the chunk pointers. */
-#define MQ_CHUNKPTR_NULL ((mqChunkPointer)1)
-#define MQ_CHUNKPTR_ISNULL(PTR) ((uintptr_t)(PTR) == 1)
+/* Macros for manipulating chunk pointers. ISBUFFER(), GETBUFFER() and
+   MKBUFFER() are used to identify and manage buffer chunks. GET() and MK()
+   manage standard chunks. Using GET() on a buffer chunk returns NULL. */
 #define MQ_CHUNKPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
-// TODO[memory]: Stop counting NULL chunk pointer as details.
-#define MQ_CHUNKPTR_ISDETAILS(PTR) (((uintptr_t)(PTR) & 1) != 0)
-#define MQ_CHUNKPTR_ISDETAILS2(PTR) \
-    (((uintptr_t)(PTR) & 1) != 0 && (PTR) != MQ_CHUNKPTR_NULL)
-#define MQ_CHUNKPTR_BUFFER(PTR) ((void *)(PTR))
-#define MQ_CHUNKPTR_DETAILS(PTR) ((mqChunk *)((uintptr_t)(PTR) & -2))
+#define MQ_CHUNKPTR_GETBUFFER(PTR) ((void *)(PTR))
 #define MQ_CHUNKPTR_MKBUFFER(PTR) ((mqChunkPointer)(PTR))
-#define MQ_CHUNKPTR_MKDETAILS(PTR) ((mqChunkPointer)((uintptr_t)(PTR) | 1))
+#define MQ_CHUNKPTR_GET(PTR) \
+    (MQ_CHUNKPTR_ISBUFFER(PTR) ? NULL : ((mqChunk *)((uintptr_t)(PTR) & -2)))
+#define MQ_CHUNKPTR_MK(PTR) ((mqChunkPointer)((uintptr_t)(PTR) | 1))
+#define MQ_CHUNKPTR_NULL ((mqChunkPointer)1)
 
 /* A buffer of emulated memory. */
 struct mqMemoryBuffer {
@@ -109,18 +107,17 @@ struct mqMemory {
 /* A page pointer whose two least significant bits are stolen to indicate
    whether the page is a buffer or MMIO, and the MMIO map size. */
 typedef void *mqPagePointer;
-/* Macros for punning around the page pointers. */
-#define MQ_PAGEPTR_NULL ((mqPagePointer)1)
-#define MQ_PAGEPTR_ISNULL(PTR) ((uintptr_t)(PTR) == 1)
+/* Macros for manipulating page pointers. ISBUFFER(), GETBUFFER() and
+   MKBUFFER() are used to identify and manage buffer pages. GET() and MK()
+   manage standard pages. Using GET() on a buffer page returns NULL. */
 #define MQ_PAGEPTR_ISBUFFER(PTR) (((uintptr_t)(PTR) & 1) == 0)
-// TODO[memory]: Stop counting NULL page pointer as MMIO pages.
-#define MQ_PAGEPTR_ISMMIOPAGE(PTR) (((uintptr_t)(PTR) & 1) != 0)
-#define MQ_PAGEPTR_ISMMIOPAGE2(PTR) \
-    (((uintptr_t)(PTR) & 1) != 0 && (PTR) != MQ_PAGEPTR_NULL)
-#define MQ_PAGEPTR_BUFFER(PTR) ((void *)(PTR))
-#define MQ_PAGEPTR_MMIOPAGE(PTR) ((mqMMIOPage *)((uintptr_t)(PTR) & -2))
+#define MQ_PAGEPTR_GETBUFFER(PTR) ((void *)(PTR))
 #define MQ_PAGEPTR_MKBUFFER(PTR) ((mqPagePointer)(PTR))
-#define MQ_PAGEPTR_MKMMIOPAGE(PTR) ((mqPagePointer)((uintptr_t)(PTR) | 1))
+#define MQ_PAGEPTR_GET(PTR) \
+    (MQ_PAGEPTR_ISBUFFER(PTR) ? NULL : ((mqPage *)((uintptr_t)(PTR) & -2)))
+#define MQ_PAGEPTR_MK(PTR) ((mqPagePointer)((uintptr_t)(PTR) | 1))
+#define MQ_PAGEPTR_NULL ((mqPagePointer)1)
+
 
 /* Chunk contents for a chunk that's not optimized to be a whole buffer. The
    chunk is divided into 4-kB pages, all of which can independently be backed
@@ -137,7 +134,7 @@ struct mqChunk {
 /* An MMIO range of up to 4 kiB. This structure defines fairly rich info
    structures and independently maps address within the range to these
    structures. This is to avoid repeating 8-byte pointers over a large area. */
-struct mqMMIOPage {
+struct mqPage {
     /* Length of the range. The range always starts at offset 0 in the page. */
     int length;
     /* Mapping of bytes [0..length) in the page to IO structures. Value 0 is
@@ -191,18 +188,18 @@ struct mqMMIO {
     void *write;
     /* Value pointer for MQ_MMIO_READ{U8,U16,u32} */
     void *value;
-    /* Data pointer passed as first argument to read/write */
-    void *data;
+    /* User-provided data pointer passed as first argument to read/write */
+    void *userdata;
     /* Printable name; no specific constraints */
     char const *name;
 };
 
 typedef struct mqMemory mqMemory;
 typedef struct mqChunk mqChunk;
-typedef struct mqMMIOPage mqMMIOPage;
+typedef struct mqPage mqPage;
 typedef struct mqMMIO mqMMIO;
 
-//=== Memory configuration ===================================================//
+//=== Configuration of memory buffers ========================================//
 
 /* CRD functions for mqMemory. The default state is an empty memory with no
    mapped chunks. */
@@ -226,51 +223,10 @@ void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size);
    no-op). */
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *data);
 
-/* Create a standard (broken-down) chunk. Returns a pointer to the existing or
-   newly-allocated chunk structure. Returns NULL if the chunk already exists as
-   a buffer chunk. */
-mqChunk *mq_memory_getOrCreateChunk(mqMemory *mem, u32 addr);
-
 /* Create a buffer page in a chunk, the backing data cannot be NULL. Returns
    true on success, false if the page already exists (in which case the call is
    a no-op). */
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
-
-/* Create an MMIO page in a chunk. The given map length and MMIO count are used
-   to preallocate if not zero and the page doesn't exist. Returns a pointer to
-   the existing or newly-allocated page, false if the page already exists as a
-   buffer. */
-mqMMIOPage *mq_chunk_getOrCreateMMIOPage(
-    mqChunk *chunk, u32 addr, int preallocLength, int preallocIOCount);
-
-/* Add an IO unit to an MMIO page. This doesn't map the IO to memory yet.
-   Returns an integer identifying the IO to be used in mq_page_mapIO(), or a
-   negative value on error. */
-int mq_page_addIO(mqMMIOPage *mmpg, char const *name, int flags, void *read,
-    void *write, void *value, void *data);
-
-/* Map an IO unit previously added to the given page. The high bits of addr
-   are ignored. */
-bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size);
-
-/* Add and map a peripheral register (common kind of IO). Registers are
-   accessed from a single address with their size as the alignment. flags are
-   implied to be `MQ_MMIO_SIZE_<SIZE> | MQ_MMIO_RELOC`, with an extra
-   `MQ_MMIO_READU<SIZE>` if the read function is set to NULL.  */
-bool mq_page_mapRegister8(mqMMIOPage *mmpg, char const *name, u32 addr,
-   void *read, void *write, u8 *value, void *data);
-bool mq_page_mapRegister16(mqMMIOPage *mmpg, char const *name, u32 addr,
-   void *read, void *write, u16 *value, void *data);
-bool mq_page_mapRegister32(mqMMIOPage *mmpg, char const *name, u32 addr,
-   void *read, void *write, u32 *value, void *data);
-
-/* Add and map a string. This behaves like standard memory and can be read with
-   all sizes. Multi-byte reads can go out-of-bounds on higher addresses (with a
-   warning), however no multi-byte reads before the given address that would
-   hit the interval are not setup. As a result, this function only works fully
-   if the I/O address is 4-aligned. */
-bool mq_page_mapString(mqMMIOPage *mmpg, char const *name, u32 addr,
-    void *str, u16 size);
 
 /* Create a series of chunks or pages matching the given memory interval. The
    start address must be page-aligned; the size will be rounded up to the next
@@ -285,6 +241,57 @@ bool mq_page_mapString(mqMMIOPage *mmpg, char const *name, u32 addr,
             need to map two blocks directly one after another, make sure they
             are backed by two consecutive regions of a single large buffer. */
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer);
+
+//=== Configuration of memory-mapped I/O =====================================//
+
+/* Get a standard (broken-down) chunk, creating it if it doesn't exist. Returns
+   a pointer to the existing or newly-allocated chunk structure. Returns NULL
+   if the chunk already exists as a buffer chunk. */
+mqChunk *mq_memory_getChunk(mqMemory *mem, u32 addr);
+
+/* Get a standard (MMIO) page directly from the memory. This is a combination
+   of mq_memory_getChunk() and mq_chunk_getPage(). */
+mqPage *mq_memory_getPage(mqMemory *mem, u32 addr);
+/* Get an MMIO page and preallocate the specified length and I/O count. */
+mqPage *mq_memory_getPagePrealloc(
+    mqMemory *mem, u32 addr, int preallocLength, int preallocIOCount);
+
+/*** Chunk functions for manipulating pages ***/
+mqPage *mq_chunk_getPage(mqChunk *chunk, u32 addr);
+mqPage *mq_chunk_getPagePrealloc(
+    mqChunk *chunk, u32 addr, int preallocLength, int preallocIOCount);
+
+/* Add an IO unit to an page. This doesn't map the IO to memory yet. Returns an
+   integer identifying the IO to be used in mq_page_mapIO(), or a negative
+   value on error. See mqMMIO for the meaning of the arguments. */
+int mq_page_addIO(mqPage *page, char const *name, int flags, void *read,
+    void *write, void *value, void *userdata);
+
+/* Map an IO unit (previously added to the given page) to all addresses in the
+   interval [address;address+size). The high bits of addr are ignored.
+   TODO: This should be fine even with alignment constraints, but check. */
+bool mq_page_mapIO(mqPage *page, int ioID, u32 address, int size);
+
+/* Add and map a peripheral register (common kind of IO). Registers are
+   accessed from a single address with their size as the alignment. flags are
+   implied to be `MQ_MMIO_SIZE_<SIZE> | MQ_MMIO_RELOC`, with an extra
+   `MQ_MMIO_READU<SIZE>` if the read function is set to NULL.  */
+bool mq_page_mapRegister8(mqPage *page, char const *name, u32 addr,
+   void *read, void *write, u8 *value, void *userdata);
+bool mq_page_mapRegister16(mqPage *page, char const *name, u32 addr,
+   void *read, void *write, u16 *value, void *userdata);
+bool mq_page_mapRegister32(mqPage *page, char const *name, u32 addr,
+   void *read, void *write, u32 *value, void *userdata);
+
+/* Add and map a small buffer as an I/O. The I/O accepts all access sizes.
+   Multi-byte reads can reach beyond the buffer (returning 0 with a warning).
+   However if the given address is not 4-aligned, multi-byte reads before the
+   base address that would hit the buffer are ignored. Thus, this function only
+   works fully on 4-aligned base addresses. */
+bool mq_page_mapString(
+    mqPage *page, char const *name, u32 addr, void *str, u16 size);
+
+//=== TODO: Unclassified memory functions ====================================//
 
 /* Load data from a host buffer into memory. This applies endianness swaps to
    match the internal buffer format and works across chunk and page boundaries.
@@ -346,7 +353,7 @@ MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 bool _mq_chunk_read(
     mqMachine *mach, mqChunk const *chunk, u32 addr, int size, u32 *out);
 bool _mq_chunk_read_pure(
-    mqChunk const *chunk, u32 addr, int size, u32 *out, mqMMIOPage **mmpg);
+    mqChunk const *chunk, u32 addr, int size, u32 *out, mqPage **page);
 
 /* Read 32 bits from memory at the given address. On success, returns true and
    sets *out. On error, raises an exception with the machine, leaves *out
@@ -361,13 +368,13 @@ MQ_INLINE bool mq_memory_read32(
     if(MQ_UNLIKELY(addr & 3))
         return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
 
-    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
-        *out = mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+    mqChunkPointer ptr = mem->chunks[addr >> 20];
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
+        *out = mq_buffer_read32(MQ_CHUNKPTR_GETBUFFER(ptr), addr & 0xfffff);
         return true;
     }
 
-    return _mq_chunk_read(mach, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 4, out);
+    return _mq_chunk_read(mach, MQ_CHUNKPTR_GET(ptr), addr, 4, out);
 }
 
 /* Read 16 bits from the given address. */
@@ -378,26 +385,26 @@ MQ_INLINE bool mq_memory_read16(
     if(MQ_UNLIKELY(addr & 1))
         return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
 
-    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
-        *out = mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+    mqChunkPointer ptr = mem->chunks[addr >> 20];
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
+        *out = mq_buffer_read16(MQ_CHUNKPTR_GETBUFFER(ptr), addr & 0xfffff);
         return true;
     }
 
-    return _mq_chunk_read(mach, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 2, out);
+    return _mq_chunk_read(mach, MQ_CHUNKPTR_GET(ptr), addr, 2, out);
 }
 
 /* Read 8 bits from the given address. */
 MQ_INLINE bool mq_memory_read8(
     mqMachine *mach, mqMemory *mem, u32 addr, u32 *out)
 {
-    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
-        *out = mq_buffer_read8(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+    mqChunkPointer ptr = mem->chunks[addr >> 20];
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
+        *out = mq_buffer_read8(MQ_CHUNKPTR_GETBUFFER(ptr), addr & 0xfffff);
         return true;
     }
 
-    return _mq_chunk_read(mach, MQ_CHUNKPTR_DETAILS(chunkPtr), addr, 1, out);
+    return _mq_chunk_read(mach, MQ_CHUNKPTR_GET(ptr), addr, 1, out);
 }
 
 /* Read an opcode from the given address. The is a pure read. Returns 0 in case
@@ -409,13 +416,12 @@ MQ_INLINE u32 mq_memory_read_opcode(mqCpu *cpu, mqMemory *mem, u32 addr)
         return 0;
     }
 
-    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr)))
-        return mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), addr & 0xfffff);
+    mqChunkPointer ptr = mem->chunks[addr >> 20];
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr)))
+        return mq_buffer_read16(MQ_CHUNKPTR_GETBUFFER(ptr), addr & 0xfffff);
 
-    mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
     u32 out;
-    bool b = _mq_chunk_read_pure(chunk, addr, 2, &out, NULL);
+    bool b = _mq_chunk_read_pure(MQ_CHUNKPTR_GET(ptr), addr, 2, &out, NULL);
     return b ? out : 0;
 }
 

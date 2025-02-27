@@ -74,11 +74,8 @@ static void write_IRMCR(mqMachine *mach, u32 value)
 
 bool mq_mmu_setup(mqMachine *mach)
 {
-    mqChunk *ch = mq_memory_getOrCreateChunk(mach->memory, 0xff000000);
-    if(!ch)
-        return false;
-    mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xff000000, 0, 0);
-    if(!mmpg)
+    mqPage *pg = mq_memory_getPage(mach->memory, 0xff000000);
+    if(!pg)
         return false;
 
     mqMMU *MMU = calloc(1, sizeof *MMU);
@@ -91,19 +88,19 @@ bool mq_mmu_setup(mqMachine *mach)
     MMU->IRMCR = 0x00000000;
 
     bool ok = true;
-    ok &= mq_page_mapRegister32(mmpg, "PTEH", 0xff000000,
+    ok &= mq_page_mapRegister32(pg, "PTEH", 0xff000000,
         NULL, write_PTEH, &MMU->PTEH, mach);
-    ok &= mq_page_mapRegister32(mmpg, "PTEL", 0xff000004,
+    ok &= mq_page_mapRegister32(pg, "PTEL", 0xff000004,
         NULL, write_PTEL, &MMU->PTEL, mach);
-    ok &= mq_page_mapRegister32(mmpg, "TTB", 0xff000008,
+    ok &= mq_page_mapRegister32(pg, "TTB", 0xff000008,
         NULL, write_TTB, &MMU->TTB, mach);
-    ok &= mq_page_mapRegister32(mmpg, "TEA", 0xff00000c,
+    ok &= mq_page_mapRegister32(pg, "TEA", 0xff00000c,
         NULL, write_TEA, &MMU->TEA, mach);
-    ok &= mq_page_mapRegister32(mmpg, "MMUCR", 0xff000010,
+    ok &= mq_page_mapRegister32(pg, "MMUCR", 0xff000010,
         NULL, write_MMUCR, &MMU->MMUCR, mach);
-    ok &= mq_page_mapRegister32(mmpg, "PASCR", 0xff000070,
+    ok &= mq_page_mapRegister32(pg, "PASCR", 0xff000070,
         NULL, write_PASCR, &MMU->PASCR, mach);
-    ok &= mq_page_mapRegister32(mmpg, "IRMCR", 0xff000078,
+    ok &= mq_page_mapRegister32(pg, "IRMCR", 0xff000078,
         NULL, write_IRMCR, &MMU->IRMCR, mach);
 
     if(ok)
@@ -142,11 +139,13 @@ static bool readhook(
     if((addr & 0xfff00003) == 0xf6000000) {
         int index = (addr >> 8) & 0x3f;
         *res = MMU->UTLB[index].addr;
+        // mq_log(MQ_LOG_WARNING, "UTLB Address read @ %08x -> %08x", *res);
         return true;
     }
     if((addr & 0xfff00003) == 0xf7000000) {
         int index = (addr >> 8) & 0x3f;
         *res = MMU->UTLB[index].data;
+        // mq_log(MQ_LOG_WARNING, "UTLB Data read @ %08x -> %08x", *res);
         return true;
     }
     return false;

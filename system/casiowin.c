@@ -69,25 +69,15 @@ bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
     if(!OSBase || (OSBase & 0xfff))
         return false;
 
-    mqChunk *ch1 = mq_memory_getOrCreateChunk(mach->memory, OSBase & ~0xfffff);
-    if(!ch1)
-        return false;
-    mqMMIOPage *mmpg_os = mq_chunk_getOrCreateMMIOPage(ch1, OSBase, 0, 1);
-    if(!mmpg_os)
-        return false;
-    mqMMIOPage *mmpg_eboot =
-        mq_chunk_getOrCreateMMIOPage(ch1, OSBase - 0x1000, 0, 1);
-    if(!mmpg_eboot)
+    mqPage *pg_os = mq_memory_getPage(mach->memory, OSBase);
+    mqPage *pg_eboot = mq_memory_getPage(mach->memory, OSBase - 0x1000);
+    if(!pg_os || !pg_eboot)
         return false;
 
-    mqChunk *ch2 = NULL;
-    mqMMIOPage *mmpg_footer = NULL;
+    mqPage *pg_footer = NULL;
     if(footer != (u32)-1) {
-        ch2 = mq_memory_getOrCreateChunk(mach->memory, footer & ~0xfffff);
-        if(!ch2)
-            return false;
-        mmpg_footer = mq_chunk_getOrCreateMMIOPage(ch2, footer & ~0xfff, 0, 1);
-        if(!mmpg_footer)
+        pg_footer = mq_memory_getPage(mach->memory, footer & ~0xfff);
+        if(!pg_footer)
             return false;
     }
 
@@ -101,13 +91,13 @@ bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
     memcpy(Casiowin->str_date, os_date_string(version), 14);
 
     bool ok = true;
-    ok &= mq_page_mapString(mmpg_eboot, "CW_SERIAL", OSBase - 0x30,
+    ok &= mq_page_mapString(pg_eboot, "CW_SERIAL", OSBase - 0x30,
         Casiowin->str_serial, 8);
-    ok &= mq_page_mapString(mmpg_os, "CW_VERSION", OSBase + 0x20,
+    ok &= mq_page_mapString(pg_os, "CW_VERSION", OSBase + 0x20,
         Casiowin->str_version, 10);
 
-    if(mmpg_footer) {
-        ok &= mq_page_mapString(mmpg_footer, "CW_DATE", footer,
+    if(pg_footer) {
+        ok &= mq_page_mapString(pg_footer, "CW_DATE", footer,
             Casiowin->str_date, 14);
     }
 

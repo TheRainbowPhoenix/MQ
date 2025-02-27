@@ -250,8 +250,8 @@ static void render(void)
             if(ImGui::Button("1000"))
                 input.mq_cycles = 1000;
             ImGui::SameLine();
-            if(ImGui::Button("1 million"))
-                input.mq_cycles = 1000000;
+            if(ImGui::Button("10k"))
+                input.mq_cycles = 10000;
             if(ImGui::Button("Run"))
                 input.mq_cycles = -1;
             ImGui::SameLine();

@@ -27,9 +27,9 @@ static mqChunk *mq_chunk_create(void);
 static void mq_chunk_reset(mqChunk *chunk);
 static void mq_chunk_destroy(mqChunk *chunk);
 
-static mqMMIOPage *mq_MMIOPage_create(void);
-static void mq_MMIOPage_reset(mqMMIOPage *chunk);
-static void mq_MMIOPage_destroy(mqMMIOPage *chunk);
+static mqPage *mq_page_create(void);
+static void mq_page_reset(mqPage *chunk);
+static void mq_page_destroy(mqPage *chunk);
 
 //=== Object management functions ============================================//
 
@@ -50,11 +50,12 @@ mqMemory *mq_memory_create(void)
 void mq_memory_reset(mqMemory *mem)
 {
     for(int i = 0; i < 0x1000; i++) {
-        mqChunkPointer ch = mem->chunks[i];
+        mqChunkPointer ptr = mem->chunks[i];
         mem->chunks[i] = MQ_CHUNKPTR_NULL;
 
-        if(ch != MQ_CHUNKPTR_NULL && MQ_CHUNKPTR_ISDETAILS(ch))
-            mq_chunk_destroy(MQ_CHUNKPTR_DETAILS(ch));
+        mqChunk *ch = MQ_CHUNKPTR_GET(ptr);
+        if(ch)
+            mq_chunk_destroy(ch);
     }
 
     for(int i = 0; i < mem->bufferCount; i++)
@@ -85,11 +86,12 @@ static mqChunk *mq_chunk_create(void)
 static void mq_chunk_reset(mqChunk *chunk)
 {
     for(int i = 0; i < 256; i++) {
-        mqPagePointer pg = chunk->pages[i];
+        mqPagePointer ptr = chunk->pages[i];
         chunk->pages[i] = MQ_PAGEPTR_NULL;
 
-        if(pg != MQ_PAGEPTR_NULL && MQ_PAGEPTR_ISMMIOPAGE(pg))
-            mq_MMIOPage_destroy(MQ_PAGEPTR_MMIOPAGE(pg));
+        mqPage *pg = MQ_PAGEPTR_GET(ptr);
+        if(pg)
+            mq_page_destroy(pg);
     }
 }
 
@@ -99,57 +101,56 @@ static void mq_chunk_destroy(mqChunk *chunk)
     free(chunk);
 }
 
-static mqMMIOPage *mq_MMIOPage_create(void)
+static mqPage *mq_page_create(void)
 {
-    mqMMIOPage *mmpg = calloc(1, sizeof *mmpg);
+    mqPage *pg = calloc(1, sizeof *pg);
     /* All fields have default value 0. */
-    return mmpg;
+    return pg;
 }
 
-static bool mq_MMIOPage_allocMap(mqMMIOPage *mmpg, int length)
+static bool mq_page_allocMap(mqPage *pg, int length)
 {
-    if(length <= mmpg->length)
+    if(length <= pg->length)
         return true;
 
-    u8 *new_map = realloc(mmpg->map, length * sizeof *mmpg->map);
+    u8 *new_map = realloc(pg->map, length * sizeof *pg->map);
     if(!new_map)
         return false;
 
-    memset(new_map + mmpg->length, 0x00,
-        (length - mmpg->length) * sizeof *mmpg->map);
-    mmpg->length = length;
-    mmpg->map = new_map;
+    memset(new_map + pg->length, 0, (length - pg->length) * sizeof *pg->map);
+    pg->length = length;
+    pg->map = new_map;
     return true;
 }
 
-static bool mq_MMIOPage_allocIO(mqMMIOPage *mmpg, int ioCount)
+static bool mq_page_allocIO(mqPage *pg, int ioCount)
 {
-    if(ioCount <= mmpg->ioCount)
+    if(ioCount <= pg->ioCount)
         return true;
 
-    mqMMIO *new_io = realloc(mmpg->io, ioCount * sizeof *mmpg->io);
+    mqMMIO *new_io = realloc(pg->io, ioCount * sizeof *pg->io);
     if(!new_io)
         return false;
 
-    mmpg->io = new_io;
-    mmpg->ioCount = ioCount;
+    pg->io = new_io;
+    pg->ioCount = ioCount;
     return true;
 }
 
-void mq_MMIOPage_reset(mqMMIOPage *mmpg)
+void mq_page_reset(mqPage *pg)
 {
-    free(mmpg->map);
-    free(mmpg->io);
-    memset(mmpg, 0, sizeof *mmpg);
+    free(pg->map);
+    free(pg->io);
+    memset(pg, 0, sizeof *pg);
 }
 
-void mq_MMIOPage_destroy(mqMMIOPage *mmpg)
+void mq_page_destroy(mqPage *pg)
 {
-    mq_MMIOPage_reset(mmpg);
-    free(mmpg);
+    mq_page_reset(pg);
+    free(pg);
 }
 
-//=== Memory configuration functions =========================================//
+//=== Configuration of memory buffers ========================================//
 
 void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size)
 {
@@ -194,175 +195,21 @@ void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size)
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer)
 {
     u32 chunkNum = addr >> 20;
-    if(!buffer || !MQ_CHUNKPTR_ISNULL(mem->chunks[chunkNum]))
+    if(!buffer || mem->chunks[chunkNum] != MQ_CHUNKPTR_NULL)
         return false;
 
     mem->chunks[chunkNum] = MQ_CHUNKPTR_MKBUFFER(buffer);
     return true;
 }
 
-mqChunk *mq_memory_getOrCreateChunk(mqMemory *mem, u32 addr)
-{
-    u32 chunkNum = addr >> 20;
-    mqChunkPointer ptr = mem->chunks[chunkNum];
-
-    if(!MQ_CHUNKPTR_ISNULL(ptr)) {
-        if(MQ_CHUNKPTR_ISDETAILS(ptr))
-            return MQ_CHUNKPTR_DETAILS(ptr);
-        else
-            return NULL;
-    }
-
-    mqChunk *chunk = mq_chunk_create();
-    if(!chunk)
-        return NULL;
-
-    mem->chunks[chunkNum] = MQ_CHUNKPTR_MKDETAILS(chunk);
-    return chunk;
-}
-
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
 {
     u32 pageNum = (addr & 0xfffff) >> 12;
-    if(!buffer || !MQ_PAGEPTR_ISNULL(chunk->pages[pageNum]))
+    if(!buffer || chunk->pages[pageNum] != MQ_PAGEPTR_NULL)
         return false;
 
     chunk->pages[pageNum] = MQ_PAGEPTR_MKBUFFER(buffer);
     return true;
-}
-
-mqMMIOPage *mq_chunk_getOrCreateMMIOPage(
-    mqChunk *chunk, u32 addr, int length, int ioCount)
-{
-    u32 pageNum = (addr & 0xfffff) >> 12;
-    mqPagePointer ptr = chunk->pages[pageNum];
-
-    if(!MQ_PAGEPTR_ISNULL(ptr)) {
-        if(MQ_PAGEPTR_ISMMIOPAGE(ptr))
-            return MQ_PAGEPTR_MMIOPAGE(ptr);
-        else
-            return NULL;
-    }
-
-    mqMMIOPage *mmpg = mq_MMIOPage_create();
-    if(!mmpg)
-        return NULL;
-    if(!mq_MMIOPage_allocMap(mmpg, length)
-        || !mq_MMIOPage_allocIO(mmpg, ioCount)) {
-        mq_MMIOPage_destroy(mmpg);
-        return NULL;
-    }
-
-    chunk->pages[pageNum] = MQ_PAGEPTR_MKMMIOPAGE(mmpg);
-    return mmpg;
-}
-
-int mq_page_addIO(mqMMIOPage *mmpg, char const *name, int flags, void *read,
-    void *write, void *value, void *data)
-{
-    /* Reallocate the IO array if we need more space. */
-    if(mmpg->ioUsed >= 256)
-        return -1;
-    if(mmpg->ioUsed >= mmpg->ioCount
-        && !mq_MMIOPage_allocIO(mmpg, mmpg->ioUsed + 4))
-        return -1;
-
-    int index = mmpg->ioUsed;
-    mqMMIO *io = &mmpg->io[index];
-    io->name = name;
-    io->flags = flags;
-    io->read = read;
-    io->write = write;
-    io->value = value;
-    io->data = data;
-    mmpg->ioUsed++;
-    return index + 1;
-}
-
-bool mq_page_mapIO(mqMMIOPage *mmpg, int ioID, u32 address, int size)
-{
-    address &= 0xfff;
-    if(address + size > 0x1000)
-        size = 0x1000 - address;
-    if((uint)ioID > 0xff || size < 0
-        || !mq_MMIOPage_allocMap(mmpg, address + size))
-        return false;
-
-    for(int i = 0; i < size; i++)
-        mmpg->map[address + i] = ioID;
-    return true;
-}
-
-bool mq_page_mapRegister8(mqMMIOPage *mmpg, char const *name, u32 addr,
-   void *read, void *write, u8 *value, void *data)
-{
-    int flags = MQ_MMIO_SIZE_1 | MQ_MMIO_RELOC;
-    if(!read)
-        flags |= MQ_MMIO_READU8;
-    int ioID = mq_page_addIO(mmpg, name, flags, read, write, value, data);
-    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
-}
-
-bool mq_page_mapRegister16(mqMMIOPage *mmpg, char const *name, u32 addr,
-   void *read, void *write, u16 *value, void *data)
-{
-    int flags = MQ_MMIO_SIZE_2 | MQ_MMIO_RELOC;
-    if(!read)
-        flags |= MQ_MMIO_READU16;
-    int ioID = mq_page_addIO(mmpg, name, flags, read, write, value, data);
-    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
-}
-
-bool mq_page_mapRegister32(mqMMIOPage *mmpg, char const *name, u32 addr,
-   void *read, void *write, u32 *value, void *data)
-{
-    int flags = MQ_MMIO_SIZE_4 | MQ_MMIO_RELOC;
-    if(!read)
-        flags |= MQ_MMIO_READU32;
-    int ioID = mq_page_addIO(mmpg, name, flags, read, write, value, data);
-    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, 1);
-}
-
-/* Helper function for reading string I/Os. */
-static u32 readStringIO(struct mqMMIO *io, u32 addr, int size)
-{
-    char const *str = io->value;
-    uintptr_t data = (uintptr_t)io->data;
-    u16 offset = (addr & 0xffff) - (data & 0xffff);
-    u16 string_size = data >> 16;
-
-    if(offset + size > string_size) {
-        mq_log(MQ_LOG_WARNING,
-            "readStringIO: %dB @%08x reads out-of-bounds of %08x/%d",
-            size, addr, addr - offset, (int)string_size);
-    }
-
-    u32 res = 0;
-    for(int i = 0; i < size; i++) {
-        res <<= 8;
-        if(offset + i < string_size)
-            res += str[offset + i];
-    }
-
-    // mq_log(MQ_LOG_DEBUG,
-    //     "readStringIO: %dB @%08x from %08x/%d \"%.*s\"+%d (%s) -> %08x",
-    //     size, addr, addr - offset, (int)string_size,
-    //     (int)string_size, str, offset, io->name, res);
-
-    return res;
-}
-
-bool mq_page_mapString(mqMMIOPage *mmpg, char const *name, u32 addr,
-    void *str, u16 size)
-{
-    /* Pack both the string size and its start address in the data field. */
-    MQ_STATIC_ASSERT(sizeof(void *) >= 4);
-    MQ_STATIC_ASSERT(sizeof(uintptr_t) >= 4);
-    uintptr_t data = (size << 16) | (addr & 0xffff);
-
-    int ioID = mq_page_addIO(mmpg, name, MQ_MMIO_UNSIZED, readStringIO, NULL,
-        str, (void *)data);
-    return (ioID >= 0) && mq_page_mapIO(mmpg, ioID, addr, size);
 }
 
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
@@ -391,15 +238,8 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
         }
 
         /* Otherwise, fall back to allocating a page. */
-        mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
-        if(!mq_memory_getOrCreateChunk(mem, addr))
-            return false;
-        else if(MQ_CHUNKPTR_ISBUFFER(chunkPtr))
-            return false;
-
-        chunkPtr = mem->chunks[addr >> 20];
-        mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
-        if(!mq_chunk_createBufferPage(chunk, addr, buffer))
+        mqChunk *chunk = mq_memory_getChunk(mem, addr);
+        if(!chunk || !mq_chunk_createBufferPage(chunk, addr, buffer))
             return false;
 
         size -= 0x1000;
@@ -409,6 +249,169 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 
     return true;
 }
+
+//=== Configuration of memory-mapped I/O =====================================//
+
+mqChunk *mq_memory_getChunk(mqMemory *mem, u32 addr)
+{
+    u32 chunkNum = addr >> 20;
+    mqChunkPointer ptr = mem->chunks[chunkNum];
+    mqChunk *chunk = MQ_CHUNKPTR_GET(ptr);
+
+    if(ptr == MQ_CHUNKPTR_NULL) {
+        chunk = mq_chunk_create();
+        mem->chunks[chunkNum] = MQ_CHUNKPTR_MK(chunk);
+    }
+    return chunk;
+}
+
+mqPage *mq_memory_getPage(mqMemory *mem, u32 addr)
+{
+    return mq_memory_getPagePrealloc(mem, addr, 0, 0);
+}
+
+mqPage *mq_memory_getPagePrealloc(
+    mqMemory *mem, u32 addr, int length, int ioCount)
+{
+    mqChunk *chunk = mq_memory_getChunk(mem, addr);
+    return
+        chunk ? mq_chunk_getPagePrealloc(chunk, addr, length, ioCount) : NULL;
+}
+
+mqPage *mq_chunk_getPage(mqChunk *chunk, u32 addr)
+{
+    return mq_chunk_getPagePrealloc(chunk, addr, 0, 0);
+}
+
+mqPage *mq_chunk_getPagePrealloc(
+    mqChunk *chunk, u32 addr, int length, int ioCount)
+{
+    u32 pageNum = (addr & 0xfffff) >> 12;
+    mqPagePointer ptr = chunk->pages[pageNum];
+    mqPage *pg = MQ_PAGEPTR_GET(ptr);
+
+    if(ptr == MQ_PAGEPTR_NULL) {
+        pg = mq_page_create();
+        if(!pg)
+            return NULL;
+        if((length && !mq_page_allocMap(pg, length)) ||
+           (ioCount && !mq_page_allocIO(pg, ioCount))) {
+            mq_page_destroy(pg);
+            return NULL;
+        }
+        chunk->pages[pageNum] = MQ_PAGEPTR_MK(pg);
+    }
+    return pg;
+}
+
+int mq_page_addIO(mqPage *pg, char const *name, int flags, void *read,
+    void *write, void *value, void *userdata)
+{
+    /* Reallocate the IO array if we need more space. */
+    if(pg->ioUsed >= 256)
+        return -1;
+    if(pg->ioUsed >= pg->ioCount
+        && !mq_page_allocIO(pg, pg->ioUsed + 4))
+        return -1;
+
+    int index = pg->ioUsed;
+    mqMMIO *io = &pg->io[index];
+    io->name = name;
+    io->flags = flags;
+    io->read = read;
+    io->write = write;
+    io->value = value;
+    io->userdata = userdata;
+    pg->ioUsed++;
+    return index + 1;
+}
+
+bool mq_page_mapIO(mqPage *pg, int ioID, u32 address, int size)
+{
+    address &= 0xfff;
+    if(address + size > 0x1000)
+        size = 0x1000 - address;
+    if((uint)ioID > 0xff || size < 0 || !mq_page_allocMap(pg, address + size))
+        return false;
+
+    for(int i = 0; i < size; i++)
+        pg->map[address + i] = ioID;
+    return true;
+}
+
+bool mq_page_mapRegister8(mqPage *pg, char const *name, u32 addr,
+   void *read, void *write, u8 *value, void *data)
+{
+    int flags = MQ_MMIO_SIZE_1 | MQ_MMIO_RELOC;
+    if(!read)
+        flags |= MQ_MMIO_READU8;
+    int ioID = mq_page_addIO(pg, name, flags, read, write, value, data);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1);
+}
+
+bool mq_page_mapRegister16(mqPage *pg, char const *name, u32 addr,
+   void *read, void *write, u16 *value, void *data)
+{
+    int flags = MQ_MMIO_SIZE_2 | MQ_MMIO_RELOC;
+    if(!read)
+        flags |= MQ_MMIO_READU16;
+    int ioID = mq_page_addIO(pg, name, flags, read, write, value, data);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1);
+}
+
+bool mq_page_mapRegister32(mqPage *pg, char const *name, u32 addr,
+   void *read, void *write, u32 *value, void *data)
+{
+    int flags = MQ_MMIO_SIZE_4 | MQ_MMIO_RELOC;
+    if(!read)
+        flags |= MQ_MMIO_READU32;
+    int ioID = mq_page_addIO(pg, name, flags, read, write, value, data);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1);
+}
+
+/* Helper function for reading string I/Os. */
+static u32 readStringIO(struct mqMMIO *io, u32 addr, int size)
+{
+    char const *str = io->value;
+    uintptr_t userdata = (uintptr_t)io->userdata;
+    u16 offset = (addr & 0xffff) - (userdata & 0xffff);
+    u16 string_size = userdata >> 16;
+
+    if(offset + size > string_size) {
+        mq_log(MQ_LOG_WARNING,
+            "readStringIO: %dB @%08x reads out-of-bounds of %08x/%d",
+            size, addr, addr - offset, (int)string_size);
+    }
+
+    u32 res = 0;
+    for(int i = 0; i < size; i++) {
+        res <<= 8;
+        if(offset + i < string_size)
+            res += str[offset + i];
+    }
+
+    // mq_log(MQ_LOG_DEBUG,
+    //     "readStringIO: %dB @%08x from %08x/%d \"%.*s\"+%d (%s) -> %08x",
+    //     size, addr, addr - offset, (int)string_size,
+    //     (int)string_size, str, offset, io->name, res);
+
+    return res;
+}
+
+bool mq_page_mapString(
+    mqPage *pg, char const *name, u32 addr, void *str, u16 size)
+{
+    /* Pack both the string size and its start address in the data field. */
+    MQ_STATIC_ASSERT(sizeof(void *) >= 4);
+    MQ_STATIC_ASSERT(sizeof(uintptr_t) >= 4);
+    uintptr_t data = (size << 16) | (addr & 0xffff);
+
+    int ioID = mq_page_addIO(pg, name, MQ_MMIO_UNSIZED, readStringIO, NULL,
+        str, (void *)data);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, size);
+}
+
+//=== TODO: Unclassified memory functions ====================================//
 
 void mq_memory_unbindArea(mqMemory *mem, u32 addr, u32 length)
 {
@@ -420,17 +423,17 @@ void mq_memory_unbindArea(mqMemory *mem, u32 addr, u32 length)
 
     for(int i = startChunkNum; i < startChunkNum + chunkCount; i++) {
         mqChunkPointer chunkPtr = mem->chunks[i];
-        if(MQ_CHUNKPTR_ISNULL(chunkPtr) || MQ_CHUNKPTR_ISBUFFER(chunkPtr)) {
+        mqChunk *chunk = MQ_CHUNKPTR_GET(chunkPtr);
+        if(!chunk) {
             mem->chunks[i] = MQ_CHUNKPTR_NULL;
             continue;
         }
 
-        mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
         int remainingPages = 0;
 
         for(int j = 0; j < 256; j++) {
             mqPagePointer pagePtr = chunk->pages[j];
-            if(MQ_PAGEPTR_ISNULL(pagePtr) || MQ_PAGEPTR_ISBUFFER(pagePtr)) {
+            if(!MQ_PAGEPTR_GET(pagePtr)) {
                 chunk->pages[j] = MQ_PAGEPTR_NULL;
                 continue;
             }
@@ -457,14 +460,14 @@ bool mq_memory_copyBuffersInChunk(
     int sourceChunkNum = (sourceAddress | 0x80000000) >> 20;
     int targetChunkNum = targetAddress >> 20;
 
-    if(!MQ_CHUNKPTR_ISNULL(mem->chunks[targetChunkNum]))
+    if(mem->chunks[targetChunkNum] != MQ_CHUNKPTR_NULL)
         return false;
 
-    mqChunkPointer ptr = mem->chunks[sourceChunkNum];
+    mqChunkPointer srcPtr = mem->chunks[sourceChunkNum];
 
     /* Copy null or buffer chunks directly */
-    if(MQ_CHUNKPTR_ISNULL(ptr) || MQ_CHUNKPTR_ISBUFFER(ptr)) {
-        mem->chunks[targetChunkNum] = ptr;
+    if(!MQ_CHUNKPTR_GET(srcPtr)) {
+        mem->chunks[targetChunkNum] = srcPtr;
         return true;
     }
 
@@ -488,11 +491,7 @@ bool mq_memory_copyBuffersInPage(
         return false;
 
     int sourceChunkNum = (sourceAddress | 0x80000000) >> 20;
-    int targetChunkNum = targetAddress >> 20;
-
-    mqChunk *targetChunk;
-
-    if(MQ_CHUNKPTR_ISNULL(mem->chunks[sourceChunkNum]))
+    if(mem->chunks[sourceChunkNum] == MQ_CHUNKPTR_NULL)
         return false;
     if(MQ_CHUNKPTR_ISBUFFER(mem->chunks[sourceChunkNum])) {
         // TODO[mq_memory_copyBuffersInPage]: Map page from buffer chunk
@@ -501,28 +500,22 @@ bool mq_memory_copyBuffersInPage(
             targetAddress, sourceAddress);
         return false;
     }
-    mqChunk *sourceChunk = MQ_CHUNKPTR_DETAILS(mem->chunks[sourceChunkNum]);
+    mqChunk *sourceChunk = MQ_CHUNKPTR_GET(mem->chunks[sourceChunkNum]);
 
     /* Allocate the target chunk if needed. */
-    if(MQ_CHUNKPTR_ISBUFFER(mem->chunks[targetChunkNum]))
+    mqChunk *targetChunk = mq_memory_getChunk(mem, targetAddress);
+    if(!targetChunk)
         return false;
-    if(MQ_CHUNKPTR_ISNULL(mem->chunks[targetChunkNum])) {
-        targetChunk = mq_chunk_create();
-        if(!targetChunk)
-            return false;
-        mem->chunks[targetChunkNum] = MQ_CHUNKPTR_MKDETAILS(targetChunk);
-    }
-    else targetChunk = MQ_CHUNKPTR_DETAILS(mem->chunks[targetChunkNum]);
 
     int sourcePageNum = (sourceAddress & 0xfffff) >> 12;
     int targetPageNum = (targetAddress & 0xfffff) >> 12;
     mqPagePointer sourcePagePtr = sourceChunk->pages[sourcePageNum];
 
-    if(MQ_PAGEPTR_ISNULL(sourcePagePtr) || MQ_PAGEPTR_ISBUFFER(sourcePagePtr)) {
-        targetChunk->pages[targetPageNum] = sourcePagePtr;
-        return true;
-    }
-    return false;
+    if(MQ_PAGEPTR_GET(sourcePagePtr))
+        return false;
+
+    targetChunk->pages[targetPageNum] = sourcePagePtr;
+    return true;
 }
 
 //=== Large-scale memory access functions ====================================//
@@ -537,21 +530,21 @@ bool mq_memory_load(mqMemory *mem, u32 baseAddr, void const *data, int size)
         mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
         addr &= 0xfffff;
 
-        if(MQ_CHUNKPTR_ISNULL(chunkPtr))
+        if(chunkPtr == MQ_CHUNKPTR_NULL)
             return false;
         if(MQ_CHUNKPTR_ISBUFFER(chunkPtr)) {
-            mq_buffer_write8(MQ_CHUNKPTR_BUFFER(chunkPtr), addr, value);
+            mq_buffer_write8(MQ_CHUNKPTR_GETBUFFER(chunkPtr), addr, value);
             continue;
         }
 
-        mqChunk *chunk = MQ_CHUNKPTR_DETAILS(chunkPtr);
+        mqChunk *chunk = MQ_CHUNKPTR_GET(chunkPtr);
         mqPagePointer pagePtr = chunk->pages[addr >> 8];
         addr &= 0xfff;
 
-        if(MQ_PAGEPTR_ISNULL(pagePtr))
+        if(pagePtr == MQ_PAGEPTR_NULL)
             return false;
         if(MQ_PAGEPTR_ISBUFFER(pagePtr)) {
-            mq_buffer_write8(MQ_PAGEPTR_BUFFER(pagePtr), addr, value);
+            mq_buffer_write8(MQ_PAGEPTR_GETBUFFER(pagePtr), addr, value);
             continue;
         }
 
@@ -565,7 +558,7 @@ bool mq_memory_load(mqMemory *mem, u32 baseAddr, void const *data, int size)
 //=== Standard memory access functions =======================================//
 
 bool _mq_chunk_read_pure(
-    mqChunk const *chunk, u32 addr, int size, u32 *out, mqMMIOPage **mmpg)
+    mqChunk const *chunk, u32 addr, int size, u32 *out, mqPage **pg)
 {
     if(!chunk)
         return false;
@@ -574,7 +567,7 @@ bool _mq_chunk_read_pure(
     mqPagePointer pagePtr = chunk->pages[chunkOffset >> 12];
 
     if(MQ_LIKELY(MQ_PAGEPTR_ISBUFFER(pagePtr))) {
-        void *page = MQ_PAGEPTR_BUFFER(pagePtr);
+        void *page = MQ_PAGEPTR_GETBUFFER(pagePtr);
         if(size == 4)
             *out = mq_buffer_read32(page, chunkOffset & 0xfff);
         else if(size == 2)
@@ -584,8 +577,8 @@ bool _mq_chunk_read_pure(
         return true;
     }
 
-    if(mmpg && MQ_LIKELY(!MQ_PAGEPTR_ISNULL(pagePtr)))
-        *mmpg = MQ_PAGEPTR_MMIOPAGE(pagePtr);
+    if(pg)
+        *pg = MQ_PAGEPTR_GET(pagePtr);
 
     return false;
 }
@@ -593,14 +586,13 @@ bool _mq_chunk_read_pure(
 bool _mq_chunk_read(
     mqMachine *mach, mqChunk const *chunk, u32 addr, int size, u32 *out)
 {
-    mqMMIOPage *mmpg = NULL;
-    if(_mq_chunk_read_pure(chunk, addr, size, out, &mmpg))
+    mqPage *pg = NULL;
+    if(_mq_chunk_read_pure(chunk, addr, size, out, &pg))
         return true;
 
-    u32 pgAddr = addr & 0xfff;
-    int ioID;
-    if(mmpg && mmpg->length > (int)pgAddr && (ioID = mmpg->map[pgAddr])) {
-        mqMMIO *io = &mmpg->io[ioID - 1];
+    int ioID, pgAddr = addr & 0xfff;
+    if(pg && pg->length > pgAddr && (ioID = pg->map[pgAddr])) {
+        mqMMIO *io = &pg->io[ioID - 1];
 
         /* Check access size */
         if(size & io->flags) {
@@ -616,8 +608,8 @@ bool _mq_chunk_read(
             if(MQ_UNLIKELY(!io->read))
                 mq_log(MQ_LOG_ERROR, "NULL MMIO at %08x (r)", addr);
             else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
-                u32 (*f)(void *data) = io->read;
-                *out = f(io->data);
+                u32 (*f)(void *userdata) = io->read;
+                *out = f(io->userdata);
                 return true;
             }
             else {
@@ -628,10 +620,9 @@ bool _mq_chunk_read(
         }
     }
 
+    /* Let hooks handle special cases related to TLB/Cache areas */
     if(mq_callhook_memory_read(mach, mach->memory, addr, size, out))
         return true;
-
-    // TODO: Handle special cases related to TLB/Cache areas
 
     /* In add-in modes we have a 4-kB page mapped at NULL. This has the effect
        of masking enough programming errors (even in well-written programs)
@@ -668,7 +659,7 @@ static bool _mq_chunk_write(
     mqPagePointer pagePtr = chunk->pages[chunkOffset >> 12];
 
     if(MQ_LIKELY(MQ_PAGEPTR_ISBUFFER(pagePtr))) {
-        void *page = MQ_PAGEPTR_BUFFER(pagePtr);
+        void *page = MQ_PAGEPTR_GETBUFFER(pagePtr);
         if(size == 4)
             mq_buffer_write32(page, chunkOffset & 0xfff, value);
         else if(size == 2)
@@ -678,28 +669,25 @@ static bool _mq_chunk_write(
         return true;
     }
 
-    else if(MQ_LIKELY(MQ_PAGEPTR_ISMMIOPAGE2(pagePtr))) {
-        u32 pgAddr = addr & 0xfff;
-        int ioID;
-        mqMMIOPage *mmpg = MQ_PAGEPTR_MMIOPAGE(pagePtr);
-        if(mmpg->length > (int)pgAddr && (ioID = mmpg->map[pgAddr])) {
-            mqMMIO *io = &mmpg->io[ioID - 1];
+    mqPage *pg = MQ_PAGEPTR_GET(pagePtr);
+    int ioID, pgAddr = addr & 0xfff;
+    if(pg && pg->length > pgAddr && (ioID = pg->map[pgAddr])) {
+        mqMMIO *io = &pg->io[ioID - 1];
 
-            /* Check access size */
-            if(size & io->flags) {
-                if(MQ_UNLIKELY(!io->write))
-                    mq_log(MQ_LOG_WARNING, "Write to ro I/O at %08x (r)", addr);
-                else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
-                    void (*f)(void *write, u32 value) = io->write;
-                    f(io->data, value);
-                }
-                else {
-                    void (*f)(struct mqMMIO *io, u32 addr, u32 value, int size)
-                        = io->write;
-                    f(io, addr, value, size);
-                }
-                return true;
+        /* Check access size */
+        if(size & io->flags) {
+            if(MQ_UNLIKELY(!io->write))
+                mq_log(MQ_LOG_WARNING, "Write to ro I/O at %08x (r)", addr);
+            else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
+                void (*f)(void *userdata, u32 value) = io->write;
+                f(io->userdata, value);
             }
+            else {
+                void (*f)(struct mqMMIO *io, u32 addr, u32 value, int size)
+                    = io->write;
+                f(io, addr, value, size);
+            }
+            return true;
         }
     }
 
@@ -717,19 +705,19 @@ bool mq_memory_write_pure(mqMemory *mem, u32 addr, int size, u32 value)
     if(MQ_UNLIKELY(addr & (size - 1)))
         return false;
 
-    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    mqChunkPointer ptr = mem->chunks[addr >> 20];
     u32 chunkOff = addr & 0xfffff;
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
         if(size == 4)
-            mq_buffer_write32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+            mq_buffer_write32(MQ_CHUNKPTR_GETBUFFER(ptr), chunkOff, value);
         else if(size == 2)
-            mq_buffer_write16(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+            mq_buffer_write16(MQ_CHUNKPTR_GETBUFFER(ptr), chunkOff, value);
         else
-            mq_buffer_write8(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff, value);
+            mq_buffer_write8(MQ_CHUNKPTR_GETBUFFER(ptr), chunkOff, value);
         return true;
     }
 
-    return _mq_chunk_write(MQ_CHUNKPTR_DETAILS(chunkPtr), addr, size, value);
+    return _mq_chunk_write(MQ_CHUNKPTR_GET(ptr), addr, size, value);
 }
 
 bool mq_memory_write(
@@ -763,20 +751,19 @@ bool mq_memory_read_pure(mqMemory *mem, u32 addr, int size, u32 *out)
     if(MQ_UNLIKELY(addr & (size - 1)))
         return false;
 
-    mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
+    mqChunkPointer ptr = mem->chunks[addr >> 20];
     u32 chunkOff = addr & 0xfffff;
-    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr))) {
+    if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
         if(size == 4)
-            *out = mq_buffer_read32(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
+            *out = mq_buffer_read32(MQ_CHUNKPTR_GETBUFFER(ptr), chunkOff);
         else if(size == 2)
-            *out = mq_buffer_read16(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
+            *out = mq_buffer_read16(MQ_CHUNKPTR_GETBUFFER(ptr), chunkOff);
         else
-            *out = mq_buffer_read8(MQ_CHUNKPTR_BUFFER(chunkPtr), chunkOff);
+            *out = mq_buffer_read8(MQ_CHUNKPTR_GETBUFFER(ptr), chunkOff);
         return true;
     }
 
-    mqChunk *ch = MQ_CHUNKPTR_DETAILS(chunkPtr);
-    return _mq_chunk_read_pure(ch, addr, size, out, NULL);
+    return _mq_chunk_read_pure(MQ_CHUNKPTR_GET(ptr), addr, size, out, NULL);
 }
 
 void *mq_memory_access(mqMemory *mem, u32 addr)
@@ -784,15 +771,15 @@ void *mq_memory_access(mqMemory *mem, u32 addr)
     mqChunkPointer chunkPtr = mem->chunks[addr >> 20];
     u32 chunkOffset = addr & 0xfffff;
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(chunkPtr)))
-        return MQ_CHUNKPTR_BUFFER(chunkPtr) + chunkOffset;
+        return MQ_CHUNKPTR_GETBUFFER(chunkPtr) + chunkOffset;
 
-    mqChunk *ch = MQ_CHUNKPTR_DETAILS(chunkPtr);
+    mqChunk *ch = MQ_CHUNKPTR_GET(chunkPtr);
     if(!ch)
         return NULL;
 
     mqPagePointer pagePtr = ch->pages[chunkOffset >> 12];
     if(MQ_LIKELY(MQ_PAGEPTR_ISBUFFER(pagePtr)))
-        return MQ_PAGEPTR_BUFFER(pagePtr) + (chunkOffset & 0xfff);
+        return MQ_PAGEPTR_GETBUFFER(pagePtr) + (chunkOffset & 0xfff);
 
     return NULL;
 }
@@ -806,7 +793,7 @@ struct mqMemory_Stats mq_memory_stats(mqMemory const *mem)
         return s;
 
     for(uint i = 0; i < 0x1000; i++) {
-        if(MQ_CHUNKPTR_ISNULL(mem->chunks[i]))
+        if(mem->chunks[i] == MQ_CHUNKPTR_NULL)
             continue;
 
         s.totalChunks++;
@@ -815,7 +802,7 @@ struct mqMemory_Stats mq_memory_stats(mqMemory const *mem)
             continue;
         }
 
-        mqChunk *ch = MQ_CHUNKPTR_DETAILS(mem->chunks[i]);
+        mqChunk *ch = MQ_CHUNKPTR_GET(mem->chunks[i]);
         s.detailedChunks++;
 
         int pages = 0;

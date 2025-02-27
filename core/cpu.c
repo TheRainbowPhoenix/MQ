@@ -80,32 +80,23 @@ static void write_CPUOPM(mqCpu *cpu, u32 value)
 bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
 {
     // TODO: Area 7 addresses for MMIO?
-    mqChunk *ch = mq_memory_getOrCreateChunk(mem, 0xff000000);
-    if(!ch)
-        return false;
-    mqMMIOPage *mmpg = mq_chunk_getOrCreateMMIOPage(ch, 0xff000000, 0, 0);
-    if(!mmpg)
-        return false;
-
-    mqChunk *ch2 = mq_memory_getOrCreateChunk(mem, 0xff2f0000);
-    if(!ch2)
-        return false;
-    mqMMIOPage *mmpg2 = mq_chunk_getOrCreateMMIOPage(ch2, 0xff2f0000, 1, 1);
-    if(!mmpg)
+    mqPage *pgff000 = mq_memory_getPage(mem, 0xff000000);
+    mqPage *pgff2f0 = mq_memory_getPage(mem, 0xff2f0000);
+    if(!pgff000 || !pgff2f0)
         return false;
 
     bool b = true;
-    b &= mq_page_mapRegister32(mmpg, "TRA", 0xff000020,
+    b &= mq_page_mapRegister32(pgff000, "TRA", 0xff000020,
         NULL, write_TRA, &cpu->TRA, cpu);
-    b &= mq_page_mapRegister32(mmpg, "EXPEVT", 0xff000024,
+    b &= mq_page_mapRegister32(pgff000, "EXPEVT", 0xff000024,
         NULL, write_EXPEVT, &cpu->EXPEVT, cpu);
-    b &= mq_page_mapRegister32(mmpg, "INTEVT", 0xff000028,
+    b &= mq_page_mapRegister32(pgff000, "INTEVT", 0xff000028,
         NULL, write_INTEVT, &cpu->INTEVT, cpu);
-    b &= mq_page_mapRegister32(mmpg, "PVR", 0xff000030,
+    b &= mq_page_mapRegister32(pgff000, "PVR", 0xff000030,
         read_PVR, NULL, NULL, NULL);
-    b &= mq_page_mapRegister32(mmpg, "PRR", 0xff000044,
+    b &= mq_page_mapRegister32(pgff000, "PRR", 0xff000044,
         read_PRR, NULL, NULL, NULL);
-    b &= mq_page_mapRegister32(mmpg2, "CPUOPM", 0xff2f0000,
+    b &= mq_page_mapRegister32(pgff2f0, "CPUOPM", 0xff2f0000,
         NULL, write_CPUOPM, &cpu->CPUOPM, cpu);
     return b;
 }
@@ -163,6 +154,8 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
         mq_log(MQ_LOG_ERROR, "Double fault!");
         return false;
     }
+
+    // TODO: Check if interrupt priority is higher than IMASK
 
     // TODO: Break from sleep
 
