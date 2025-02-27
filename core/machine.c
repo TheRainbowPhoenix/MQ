@@ -10,6 +10,7 @@
 #include <mq/hooks.h>
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
+#include <mq/modules/cmod.h>
 #include <mq/modules/dma.h>
 #include <mq/modules/intc.h>
 #include <mq/modules/keysc.h>
@@ -126,6 +127,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_keysc_setup(mach);
 
         mq_dma_setup(mach);
+
+        mq_cmod_setup(mach);
 
         mq_casiowin_setup(mach, MQ_CASIOWIN_CG380);
     }
