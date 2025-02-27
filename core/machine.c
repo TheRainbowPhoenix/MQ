@@ -73,6 +73,16 @@ void mq_machine_destroy(mqMachine *mach)
     free(mach);
 }
 
+static void mq_machine_setupOnChipMemory(mqMachine *mach)
+{
+    /* ILRAM occupies 4 kB at 0xe5200000 and repeats for 2 MB */
+    void *ilram = mq_memory_allocBuffer(mach->memory, "ILRAM", 4 << 10);
+    mq_memory_createBlock(mach->memory, 0xe5200000, 4 << 10, ilram);
+    // TODO[machine]: ILRAM repeats for 2 MB
+
+    // XYRAM are 8kB each, repeat for 64kB and the block repeats for 4MB.
+}
+
 void mq_machine_initialize(mqMachine *mach, int initializeKind)
 {
     mq_machine_reset(mach);
@@ -96,6 +106,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
         mq_cpu_setup(&mach->cpu, mach->memory);
+
+        mq_machine_setupOnChipMemory(mach);
 
         /* Set the stack pointer to be P1 instead of MMU, as the OS does */
         mach->cpu.r[15] = layout_ram + (512 << 10);

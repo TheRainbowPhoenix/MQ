@@ -46,9 +46,6 @@
 #include <mq/machine.h>
 MQ_START_DEFS
 
-/* ILRAM is 16kB and repeats for 2MB.
-   XYRAM are 8kB each, repeat for 64kB and the entire block repeats for 4MB. */
-
 /* Pointer approach.
    High-level unit is 1M for entire 4G address space: 4096 pointers.
    Flag indicates if trivial or not -> trivial for ROM, RAM.
