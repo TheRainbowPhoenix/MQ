@@ -174,19 +174,19 @@ enum {
 struct mqMMIO {
     /* MQ_MMIO_* flags */
     int flags;
-    /* Read and write function pointers. The prototypes are
-       - u32 read(struct mqMMIO *io, u32 addr, int size)
-         void write(struct mqMMIO *io, u32 addr, u32 value, int size)
-         if MQ_MMIO_RELOC is clear (value can then be used for extra storage);
-       - u32 read(void *data)
-         void write(void *data, u32 value)
-         if MQ_MMIO_RELOC is set.
-       If MQ_MMIO_READU*, the read pointer is ignored and can be NULL. The
-       write pointer can always be NULL, which is treated as a read-only I/O
-       and write accesses are logged as warnings. */
-    void *read;
-    void *write;
-    /* Value pointer for MQ_MMIO_READ{U8,U16,u32} */
+    /* Read and write function pointers. If MQ_MMIO_READU*, the read pointer is
+       ignored and can be NULL. The write pointer can always be NULL, which is
+       treated as a read-only I/O and write accesses are logged as warnings. */
+    union {
+        u32 (*read)(struct mqMMIO *io, u32 addr, int size);
+        u32 (*read_reloc)(void *userdata); // if MQ_MMIO_RELOC
+    };
+    union {
+        void (*write)(struct mqMMIO *io, u32 addr, u32 value, int size);
+        void (*write_reloc)(void *userdata, u32 value); // if MQ_MMIO_RELOC
+    };
+    /* Value pointer for MQ_MMIO_READ{U8,U16,u32}. Can otherwise be used as
+       another userdata, but won't be be accessible if MQ_MMIO_RELOC is set. */
     void *value;
     /* User-provided data pointer passed as first argument to read/write */
     void *userdata;
@@ -268,9 +268,9 @@ int mq_page_addIO(mqPage *page, char const *name, int flags, void *read,
     void *write, void *value, void *userdata);
 
 /* Map an IO unit (previously added to the given page) to all addresses in the
-   interval [address;address+size). The high bits of addr are ignored.
-   TODO: This should be fine even with alignment constraints, but check. */
-bool mq_page_mapIO(mqPage *page, int ioID, u32 address, int size);
+   interval [address;address+size) that have the required alignment (0 being
+   universal). The high bits of addr are ignored. */
+bool mq_page_mapIO(mqPage *page, int ioID, u32 address, int size, int align);
 
 /* Add and map a peripheral register (common kind of IO). Registers are
    accessed from a single address with their size as the alignment. flags are

@@ -139,6 +139,7 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
     ImGui::PushFont(fontMono);
 
     char str[16];
+    int total = 0;
 
     for(int i = 0; i < pg->length; i++) {
         sprintf(str, "%08x", addr + i);
@@ -146,6 +147,7 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
             continue;
 
         mqMMIO *io = &pg->io[pg->map[i] - 1];
+        total++;
 
         ImGui::SetNextItemAllowOverlap();
         bool clicked = ImGui::Selectable(str, i == s.selectedIO);
@@ -160,7 +162,7 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
 
     ImGui::PopFont();
     ImGui::EndListBox();
-    ImGui::Text("Total: %d IOs", pg->ioCount);
+    ImGui::Text("Total: %d IOs", total);
 
     if(s.selectedIO >= 0) {
         mqMMIO *io = &pg->io[pg->map[s.selectedIO] - 1];

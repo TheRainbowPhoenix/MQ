@@ -73,7 +73,7 @@ bool mq_keysc_setup(mqMachine *mach)
     int ioID = mq_page_addIO(pg, "KIUDATA*", MQ_MMIO_SIZE_2, read_KIUDATA,
         NULL, NULL, mach);
     for(int i = 0; i < 6; i++)
-        ok &= mq_page_mapIO(pg, ioID, 0xa44b0000 + 2*i, 1);
+        ok &= mq_page_mapIO(pg, ioID, 0xa44b0000 + 2*i, 1, 2);
 
     // 0xa44b000c KIUCNTREG
     // 0xa44b000e KIAUTOFIXREG

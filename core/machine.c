@@ -11,6 +11,7 @@
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
 #include <mq/modules/dma.h>
+#include <mq/modules/intc.h>
 #include <mq/modules/keysc.h>
 #include <mq/modules/mmu.h>
 #include <stdlib.h>
@@ -119,6 +120,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_mmu_map(mach, 0x00300000, layout_addin,  0, 0x100000, 2);
         mq_mmu_map(mach, 0x08100000, layout_ram,   55,  0x10000, 8);
         mq_mmu_bind(mach);
+
+        mq_intc_setup(mach);
 
         mq_keysc_setup(mach);
 

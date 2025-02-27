@@ -27,6 +27,7 @@ set(LIB_SOURCES
 
   modules/dma.c
   modules/keysc.c
+  modules/intc.c
   modules/mmu.c
 
   system/casiowin.c

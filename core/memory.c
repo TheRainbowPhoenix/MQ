@@ -326,16 +326,20 @@ int mq_page_addIO(mqPage *pg, char const *name, int flags, void *read,
     return index + 1;
 }
 
-bool mq_page_mapIO(mqPage *pg, int ioID, u32 address, int size)
+bool mq_page_mapIO(mqPage *pg, int ioID, u32 address, int size, int align)
 {
+    align -= (align != 0);
+
     address &= 0xfff;
     if(address + size > 0x1000)
         size = 0x1000 - address;
     if((uint)ioID > 0xff || size < 0 || !mq_page_allocMap(pg, address + size))
         return false;
 
-    for(int i = 0; i < size; i++)
-        pg->map[address + i] = ioID;
+    for(int i = 0; i < size; i++) {
+        if(((address + i) & align) == 0)
+            pg->map[address + i] = ioID;
+    }
     return true;
 }
 
@@ -346,7 +350,7 @@ bool mq_page_mapRegister8(mqPage *pg, char const *name, u32 addr,
     if(!read)
         flags |= MQ_MMIO_READU8;
     int ioID = mq_page_addIO(pg, name, flags, read, write, value, data);
-    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1, 1);
 }
 
 bool mq_page_mapRegister16(mqPage *pg, char const *name, u32 addr,
@@ -356,7 +360,7 @@ bool mq_page_mapRegister16(mqPage *pg, char const *name, u32 addr,
     if(!read)
         flags |= MQ_MMIO_READU16;
     int ioID = mq_page_addIO(pg, name, flags, read, write, value, data);
-    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1, 1);
 }
 
 bool mq_page_mapRegister32(mqPage *pg, char const *name, u32 addr,
@@ -366,7 +370,7 @@ bool mq_page_mapRegister32(mqPage *pg, char const *name, u32 addr,
     if(!read)
         flags |= MQ_MMIO_READU32;
     int ioID = mq_page_addIO(pg, name, flags, read, write, value, data);
-    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, 1, 1);
 }
 
 /* Helper function for reading string I/Os. */
@@ -408,7 +412,7 @@ bool mq_page_mapString(
 
     int ioID = mq_page_addIO(pg, name, MQ_MMIO_UNSIZED, readStringIO, NULL,
         str, (void *)data);
-    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, size);
+    return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, size, 1);
 }
 
 //=== TODO: Unclassified memory functions ====================================//
@@ -597,26 +601,27 @@ bool _mq_chunk_read(
         /* Check access size */
         if(size & io->flags) {
             /* Handle default reads; vaguely in frequency order */
-            if(io->flags & MQ_MMIO_READU32)
-                return *(u32 *)io->value;
-            if(io->flags & MQ_MMIO_READU16)
-                return *(u16 *)io->value;
-            if(io->flags & MQ_MMIO_READU8)
-                return *(u8 *)io->value;
+            if(io->flags & MQ_MMIO_READU32) {
+                *out = *(u32 *)io->value;
+                return true;
+            }
+            if(io->flags & MQ_MMIO_READU16) {
+                *out = *(u16 *)io->value;
+                return true;
+            }
+            if(io->flags & MQ_MMIO_READU8) {
+                *out = *(u8 *)io->value;
+                return true;
+            }
 
             /* Use the generic functions */
             if(MQ_UNLIKELY(!io->read))
                 mq_log(MQ_LOG_ERROR, "NULL MMIO at %08x (r)", addr);
-            else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
-                u32 (*f)(void *userdata) = io->read;
-                *out = f(io->userdata);
-                return true;
-            }
-            else {
-                u32 (*f)(struct mqMMIO *io, u32 addr, int size) = io->read;
-                *out = f(io, addr, size);
-                return true;
-            }
+            else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC))
+                *out = io->read_reloc(io->userdata);
+            else
+                *out = io->read(io, addr, size);
+            return true;
         }
     }
 
@@ -678,15 +683,10 @@ static bool _mq_chunk_write(
         if(size & io->flags) {
             if(MQ_UNLIKELY(!io->write))
                 mq_log(MQ_LOG_WARNING, "Write to ro I/O at %08x (r)", addr);
-            else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC)) {
-                void (*f)(void *userdata, u32 value) = io->write;
-                f(io->userdata, value);
-            }
-            else {
-                void (*f)(struct mqMMIO *io, u32 addr, u32 value, int size)
-                    = io->write;
-                f(io, addr, value, size);
-            }
+            else if(MQ_LIKELY(io->flags & MQ_MMIO_RELOC))
+                io->write_reloc(io->userdata, value);
+            else
+                io->write(io, addr, value, size);
             return true;
         }
     }
