@@ -10,9 +10,6 @@
 #include <mq/mq.h>
 #include <stdlib.h>
 
-// TODO: INTC should only send interrupts if higher level than IMASK
-// TODO: INTC should only send interrupts if higher level than USERIMASK
-
 static int moduleID = -1;
 static u16 const IPR_masks[] = {
     0xfff0, 0xfff0, 0x000f, 0x0f00, 0xf0f0, 0xffff,
@@ -21,6 +18,82 @@ static u16 const IPR_masks[] = {
 static u16 const IMR_masks[] = {
     0x07, 0x0f, 0x07, 0xfc, 0x79, 0xf7, 0x1b, 0xff,
     0x07, 0x12, 0x37, 0x01, 0x38,
+};
+
+struct mqINTC_InterruptData {
+    /* IPR register number, 12 for INTPRI00, 30/31 for fixed priority 15/16 */
+    u8 IPR;
+    /* Bit location of the 4-bit priority value in the IPR register */
+    u8 IPRpos;
+    /* IMR register number, 13 for INTMSK00, 14 for ICR0, 15 for none */
+    u8 IMR;
+    /* Byte value of the mask bit in the IMR register */
+    u16 IMRmask;
+    /* Event code */
+    u16 INTEVT;
+};
+
+struct mqINTC_InterruptData interrupts[MQ_INT_NUM] = {
+    { 31 /* = 16 */, 0, 14 /* ICR0 */, 0x4000, 0x1c0 },  // MQ_INT_NMI
+    { 30 /* = 15 */, 0, 15 /* none */,   0x00, 0x5e0 },  // MQ_INT_41
+    { 12 /* INTPRI00 */, 28, 13 /* INTMSK00 */, 0x80, 0x600 },  // MQ_INT_IRQ0
+    { 12 /* INTPRI00 */, 24, 13 /* INTMSK00 */, 0x40, 0x620 },  // MQ_INT_IRQ1
+    { 12 /* INTPRI00 */, 20, 13 /* INTMSK00 */, 0x20, 0x640 },  // MQ_INT_IRQ2
+    { 12 /* INTPRI00 */, 16, 13 /* INTMSK00 */, 0x10, 0x660 },  // MQ_INT_IRQ3
+    {  1 /* IPRB */,  4,  3, 0x10, 0x700 },  // MQ_INT_5a
+    {  1 /* IPRB */,  4,  3, 0x20, 0x720 },  // MQ_INT_5b
+    {  1 /* IPRB */,  4,  3, 0x40, 0x740 },  // MQ_INT_5c
+    {  1 /* IPRB */,  4,  3, 0x80, 0x760 },  // MQ_INT_5d
+    {  4 /* IPRE */, 12,  1, 0x01, 0x800 },  // MQ_INT_DMA_DEI0
+    {  4 /* IPRE */, 12,  1, 0x02, 0x820 },  // MQ_INT_DMA_DEI1
+    {  4 /* IPRE */, 12,  1, 0x04, 0x840 },  // MQ_INT_DMA_DEI2
+    {  4 /* IPRE */, 12,  1, 0x08, 0x860 },  // MQ_INT_DMA_DEI3
+    {  4 /* IPRE */,  4,  2, 0x01, 0x900 },  // MQ_INT_Cmod_TUNI3
+    {  9 /* IPRJ */, 12,  6, 0x08, 0x9e0 },  // MQ_INT_Cmod_TUNI0
+    {  5 /* IPRF */,  4,  9, 0x02, 0xa20 },  // MQ_INT_USB_USI
+    { 10 /* IPRK */, 12, 10, 0x04, 0xa80 },  // MQ_INT_RTC_ATI
+    { 10 /* IPRK */, 12, 10, 0x02, 0xaa0 },  // MQ_INT_RTC_PRI
+    { 10 /* IPRK */, 12, 10, 0x01, 0xac0 },  // MQ_INT_RTC_CUI
+    { 10 /* IPRK */,  8, 10, 0x10, 0xb00 },  // MQ_INT_SDC_7a
+    { 10 /* IPRK */,  8, 10, 0x20, 0xb20 },  // MQ_INT_SDC_7b
+    {  5 /* IPRF */,  8,  5, 0x10, 0xb80 },  // MQ_INT_DMA_DEI4
+    {  5 /* IPRF */,  8,  5, 0x20, 0xba0 },  // MQ_INT_DMA_DEI5
+    {  5 /* IPRF */,  8,  5, 0x40, 0xbc0 },  // MQ_INT_DMA_DADERR
+    {  5 /* IPRF */, 12,  5, 0x80, 0xbe0 },  // MQ_INT_KEYSC
+    {  6 /* IPRG */, 12,  5, 0x01, 0xc00 },  // MQ_INT_82
+    {  6 /* IPRG */,  8,  5, 0x02, 0xc20 },  // MQ_INT_Cmod_TUNI1
+    {  6 /* IPRG */,  4,  5, 0x04, 0xc40 },  // MQ_INT_Cmod_TUNI2
+    {  7 /* IPRH */, 12,  6, 0x01, 0xc80 },  // MQ_INT_86
+    {  7 /* IPRH */,  8,  6, 0x02, 0xca0 },  // MQ_INT_87
+    {  8 /* IPRI */, 12,  6, 0x10, 0xd00 },  // MQ_INT_Cmod_TUNI4
+    {  7 /* IPRH */,  4,  7, 0x04, 0xd80 },  // MQ_INT_8e
+    {  7 /* IPRH */,  4,  7, 0x08, 0xda0 },  // MQ_INT_FLCTL_TE
+    {  7 /* IPRH */,  4,  7, 0x01, 0xdc0 },  // MQ_INT_90
+    {  7 /* IPRH */,  4,  7, 0x02, 0xde0 },  // MQ_INT_91
+    {  7 /* IPRH */,  0,  7, 0x10, 0xe00 },  // MQ_INT_I2C_AL
+    {  7 /* IPRH */,  0,  7, 0x20, 0xe20 },  // MQ_INT_I2C_NACK
+    {  7 /* IPRH */,  0,  7, 0x40, 0xe40 },  // MQ_INT_I2C_WAIT
+    {  7 /* IPRH */,  0,  7, 0x80, 0xe60 },  // MQ_INT_I2C_TE
+    {  5 /* IPRF */,  0,  9, 0x10, 0xf00 },  // MQ_INT_CMT
+    {  8 /* IPRI */,  4, 11, 0x01, 0xf20 },  // MQ_INT_ECC_ECCSR
+    {  1 /* IPRB */,  8,  4, 0x01, 0xf40 },  // MQ_INT_BSC
+    {  9 /* IPRJ */,  4,  8, 0x01, 0xf80 },  // MQ_INT_FSI
+    { 11 /* IPRL */, 12,  8, 0x02, 0xfa0 },  // MQ_INT_Cmod_TUNI5
+    { 11 /* IPRL */,  8,  8, 0x04, 0xfc0 },  // MQ_INT_a0
+    {  0 /* IPRA */, 12,  4, 0x10, 0x400 },  // MQ_INT_TMU_TUNI2
+    {  0 /* IPRA */,  8,  4, 0x20, 0x420 },  // MQ_INT_TMU_TUNI1
+    {  0 /* IPRA */,  4,  4, 0x40, 0x440 },  // MQ_INT_TMU_TUNI0
+    {  9 /* IPRJ */,  0,  0, 0x02, 0x4e0 },  // MQ_INT_c7
+    {  9 /* IPRJ */,  0,  0, 0x04, 0x500 },  // MQ_INT_c8
+    {  9 /* IPRJ */,  0,  0, 0x01, 0x520 },  // MQ_INT_c9
+    {  1 /* IPRB */, 12,  4, 0x08, 0x560 },  // MQ_INT_ADC_CE
+    {  3 /* IPRD */,  8, 12, 0x08, 0x580 },  // MQ_INT_cc
+    {  3 /* IPRD */,  8, 12, 0x10, 0x5a0 },  // MQ_INT_cd
+    {  3 /* IPRD */,  8, 12, 0x20, 0x5c0 },  // MQ_INT_ce
+    {  2 /* IPRC */,  0,  3, 0x04, 0xcc0 },  // MQ_INT_DSP0
+    {  2 /* IPRC */,  0,  3, 0x08, 0xce0 },  // MQ_INT_DSP1
+    {  9 /* IPRJ */,  8,  2, 0x02, 0xd40 },  // MQ_INT_d4
+    {  9 /* IPRJ */,  8,  2, 0x04, 0xd60 },  // MQ_INT_d5
 };
 
 static void inithook(void)
@@ -34,34 +107,117 @@ mqINTC *mq_intc_get(mqMachine *mach)
     return mach->modules ? mach->modules[moduleID] : NULL;
 }
 
-static u32 read_IPRn(struct mqMMIO *io, u32 addr, int size)
+static int interruptPriority(mqINTC *INTC, mqInt num)
 {
-    mqINTC *INTC = io->userdata;
+    int IPRnum = interrupts[num].IPR;
+    int IPRpos = interrupts[num].IPRpos;
+
+    if(MQ_LIKELY(IPRnum < 12))
+        return (INTC->IPR[IPRnum] >> IPRpos) & 0xf;
+    if(IPRnum == 12)
+        return (INTC->INTPRI00 >> IPRpos) & 0xf;
+    if(IPRnum >= 16)
+        return IPRnum - 16;
+    mq_log(MQ_LOG_ERROR, "invalid interrupt setting (%d): IPR=%d/%d",
+        num, IPRnum, IPRpos);
+    return 0;
+}
+
+static bool isInterruptMasked(mqINTC *INTC, mqInt num)
+{
+    int IMRnum = interrupts[num].IMR;
+    u32 IMRmask = interrupts[num].IMRmask;
+
+    if(MQ_LIKELY(IMRnum < 13))
+        return (INTC->IMR[IMRnum] & IMRmask) != 0;
+    if(IMRnum == 13)
+        return (INTC->INTMSK00 & IMRmask) != 0;
+    if(IMRnum == 14)
+        return (INTC->ICR0 & IMRmask) != 0;
+    if(IMRnum != 15) {
+        mq_log(MQ_LOG_ERROR, "invalid interrupt setting (%d): IMR=%d/%x",
+            num, IMRnum, IMRmask);
+    }
+    return false;
+}
+
+static void notifyCPU(mqMachine *mach)
+{
+    mqINTC *INTC = mach->modules[moduleID];
+    if(!INTC)
+        return;
+
+    int interrupt = INTC->nextInterrupt;
+    if(interrupt < 0) {
+        mq_cpu_setIncomingInterrupt(&mach->cpu, 0, 0);
+        return;
+    }
+
+    u32 INTEVT = interrupts[interrupt].INTEVT;
+    int priority = interruptPriority(INTC, interrupt);
+    mq_cpu_setIncomingInterrupt(&mach->cpu, INTEVT, priority);
+}
+
+void mq_intc_updateLogic(mqMachine *mach)
+{
+    mqINTC *INTC = mach->modules[moduleID];
+    if(!INTC)
+        return;
+
+    int USERIMASK = (INTC->USERIMASK >> 4) & 0xf;
+    mqInt highestInterrupt = -1;
+    int highestPriority = 0;
+
+    for(mqInt num = 0; num < MQ_INT_NUM; num++) {
+        if(!INTC->interruptStatus[num] || isInterruptMasked(INTC, num))
+            continue;
+
+        int prio = interruptPriority(INTC, num);
+        if(prio > USERIMASK && prio > highestPriority) {
+            highestInterrupt = num;
+            highestPriority = prio;
+        }
+    }
+
+    INTC->nextInterrupt = highestInterrupt;
+    INTC->nextInterruptPriority = highestPriority;
+    notifyCPU(mach);
+}
+
+static u32 read_IPRn(mqMMIO *io, u32 addr, int size)
+{
+    mqMachine *mach = io->userdata;
+    mqINTC *INTC = mach->modules[moduleID];
     (void)size;
     return INTC->IPR[(addr & 0xfff) >> 2];
 }
 
-static void write_IPRn(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_IPRn(mqMMIO *io, u32 addr, u32 value, int size)
 {
-    mqINTC *INTC = io->userdata;
+    mqMachine *mach = io->userdata;
+    mqINTC *INTC = mach->modules[moduleID];
     (void)size;
     int n = (addr & 0xfff) >> 2;
     INTC->IPR[n] = value & IPR_masks[n];
+    mq_intc_updateLogic(mach);
 }
 
-static u32 read_IMRn(struct mqMMIO *io, u32 addr, int size)
+static u32 read_IMRn(mqMMIO *io, u32 addr, int size)
 {
-    mqINTC *INTC = io->userdata;
+    mqMachine *mach = io->userdata;
+    mqINTC *INTC = mach->modules[moduleID];
     (void)size;
     return INTC->IMR[((addr & 0xfff) - 0x80) >> 4];
 }
 
-static void write_IMRn(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_IMRn(mqMMIO *io, u32 addr, u32 value, int size)
 {
-    mqINTC *INTC = io->userdata;
+    mqMachine *mach = io->userdata;
+    mqINTC *INTC = mach->modules[moduleID];
     (void)size;
     int n = ((addr & 0xfff) - 0x80) >> 4;
     INTC->IMR[n] |= (value & IMR_masks[n]);
+    mq_intc_updateLogic(mach);
 }
 
 static u32 read_IMCRn(void *data)
@@ -73,10 +229,12 @@ static u32 read_IMCRn(void *data)
 
 static void write_IMCRn(struct mqMMIO *io, u32 addr, u32 value, int size)
 {
-    mqINTC *INTC = io->userdata;
+    mqMachine *mach = io->userdata;
+    mqINTC *INTC = mach->modules[moduleID];
     (void)size;
     int n = ((addr & 0xfff) - 0xc0) >> 4;
     INTC->IMR[n] &= (value & IMR_masks[n]);
+    mq_intc_updateLogic(mach);
 }
 
 bool mq_intc_setup(mqMachine *mach)
@@ -96,20 +254,21 @@ bool mq_intc_setup(mqMachine *mach)
 
     /* Initial state at reset */
     INTC->ICR0 = 0x00c0;
+    INTC->nextInterrupt = -1;
 
     bool ok = true;
     int ioID;
 
     ioID = mq_page_addIO(
-        pg408, "IPRn", MQ_MMIO_SIZE_2, read_IPRn, write_IPRn, NULL, INTC);
+        pg408, "IPRn", MQ_MMIO_SIZE_2, read_IPRn, write_IPRn, NULL, mach);
     ok &= mq_page_mapIO(pg408, ioID, 0xa4080000, 0x30, 4);
 
     ioID = mq_page_addIO(
-        pg408, "IMRn", MQ_MMIO_SIZE_1, read_IMRn, write_IMRn, NULL, INTC);
+        pg408, "IMRn", MQ_MMIO_SIZE_1, read_IMRn, write_IMRn, NULL, mach);
     ok &= mq_page_mapIO(pg408, ioID, 0xa4080080, 0x34, 4);
 
     ioID = mq_page_addIO(
-        pg408, "IMCRn", MQ_MMIO_SIZE_1, read_IMCRn, write_IMCRn, NULL, INTC);
+        pg408, "IMCRn", MQ_MMIO_SIZE_1, read_IMCRn, write_IMCRn, NULL, mach);
     ok &= mq_page_mapIO(pg408, ioID, 0xa40800c0, 0x34, 4);
 
     // TODO: Plenty of INTC registers missing (mainly INTEVT)
@@ -145,3 +304,18 @@ static void mq_intc_cleanup(mqMachine *mach)
         free(INTC);
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_intc_cleanup)
+
+void mq_intc_setInterruptStatus(mqMachine *mach, mqInt interrupt, bool raised)
+{
+    mqINTC *INTC = mach->modules[moduleID];
+    if(!INTC || (uint)interrupt >= MQ_INT_NUM)
+        return;
+    if(INTC->interruptStatus[interrupt] == (int)raised)
+        return;
+
+    INTC->interruptStatus[interrupt] = raised;
+    // INTC->numRaisedInterrupts += raised - !raised;
+
+    // TODO[intc]: Smarter interrupt update procedure?
+    mq_intc_updateLogic(mach);
+}

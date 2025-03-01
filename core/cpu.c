@@ -149,17 +149,22 @@ static int highestPriorityException(u32 excMask)
 
 static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
 {
-    // TODO: Does SR.BL=1 double fault or simply wait to raise the exception?
+    /* SR.BL double-faults if an exception occurs, but simply waits in the case
+       of interrupts. However interrupts are already masked by the logic in
+       updateIncomingInterrupt() if SR.BL=1, so we don't worry about it.
+       TODO: Double fault logic when the exception is UBC? */
     if(cpu->spRegs[SH_SR] & 0x10000000) {
+        if(exc_isInterrupt(exc))
+            mq_log(MQ_LOG_ERROR, "Handling interrupt while SR.BL=1?!");
         mq_log(MQ_LOG_ERROR, "Double fault!");
         return false;
     }
 
-    // TODO: Check if interrupt priority is higher than IMASK
-
     // TODO: Break from sleep
 
     mq_log(MQ_LOG_DEBUG, "Handling exception %s", mq_cpu_exceptionName(exc));
+    if(exc_isInterrupt(exc))
+        mq_log(MQ_LOG_DEBUG, "INTEVT = 0x%03x", cpu->INTEVT);
 
     cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
@@ -169,9 +174,11 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
     mq_cpu_setSR(cpu, cpu->spRegs[SH_SR] | 0x70000000);
 
     if(exc_isInterrupt(exc)) {
-        // TODO: Set INTEVT. Requires INTC providing the interrupt code.
+        /* INTEVT and INTPRIO have been set before raising the interrupt. */
         if(cpu->CPUOPM & 0x00000008) {
-            // TODO: Set IMASK to the interrupt's level
+            /* Set IMASK to the interrupt's priority level */
+            u32 SR = cpu->spRegs[SH_SR];
+            mq_cpu_setSR(cpu, (SR & 0xffffff0f) + (cpu->INTPRIO << 4));
         }
     }
     else {
@@ -214,6 +221,24 @@ bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value)
 {
     mq_cpu_raiseException(cpu, exc, value);
     return false;
+}
+
+static void updateIncomingInterrupt(mqCpu *cpu)
+{
+    u32 SR = cpu->spRegs[SH_SR];
+    u32 BL = (SR >> 28) & 1;
+    int IMASK = (SR >> 4) & 0xf;
+
+    if(BL || !cpu->nextInterruptINTEVT || cpu->nextInterruptPriority <= IMASK) {
+        cpu->excMask &= ~(1 << SH_EXC_INTERRUPT);
+    }
+    else {
+        mq_log(MQ_LOG_DEBUG, "Interrupt raised! 0x%03x (prio=%d)",
+            cpu->nextInterruptINTEVT, cpu->nextInterruptPriority);
+        cpu->excMask |= (1 << SH_EXC_INTERRUPT);
+        cpu->INTEVT = cpu->nextInterruptINTEVT;
+        cpu->INTPRIO = cpu->nextInterruptPriority;
+    }
 }
 
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
@@ -281,7 +306,20 @@ void mq_cpu_setSR(mqCpu *cpu, u32 SR)
         }
     }
 
+    /* Update the incoming interrupt logic if we change BL or IMASK */
+    bool updateInterrupt = ((SR ^ cpu->spRegs[SH_SR]) & 0x100000f0);
+
     cpu->spRegs[SH_SR] = SR;
+
+    if(updateInterrupt)
+        updateIncomingInterrupt(cpu);
+}
+
+void mq_cpu_setIncomingInterrupt(mqCpu *cpu, u32 INTEVT, int priority)
+{
+    cpu->nextInterruptINTEVT = INTEVT;
+    cpu->nextInterruptPriority = priority;
+    updateIncomingInterrupt(cpu);
 }
 
 char const *mq_cpu_specialRegisterName(int spReg)

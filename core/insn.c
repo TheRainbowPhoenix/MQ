@@ -741,6 +741,15 @@ MQ_INLINE void rts(mqMachine *mach, mqCpu *cpu) {
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     mq_cpu_setDelaySlot(cpu, cpu->spRegs[SH_PR]);
 }
+MQ_INLINE void rte(mqMachine *mach, mqCpu *cpu) {
+    /* rte */
+    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
+        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
+    // TODO[rte]: Fetch the rte slot instruction with non-restored SR
+    // (because it's generally gonna need to be a kernel mode fetch)
+    mq_cpu_setSR(cpu, cpu->spRegs[SH_SSR]);
+    mq_cpu_setDelaySlot(cpu, cpu->spRegs[SH_SPC]);
+}
 
 MQ_INLINE void clrt(mqMachine *mach, mqCpu *cpu) {
     /* clrt */
@@ -793,7 +802,7 @@ MQ_INLINE void pref(mqMachine *mach, mqCpu *cpu, int n) {
     /* pref @rn */
     static bool done = false;
     if(!done)
-        mq_log(MQ_LOG_WARNING, "pref instruction used and ignored");
+        mq_log(MQ_LOG_DEBUG, "pref instruction used and ignored");
     done = true;
     cpu->pc += 2;
 }
@@ -801,7 +810,7 @@ MQ_INLINE void ocbi(mqMachine *mach, mqCpu *cpu, int n) {
     /* ocbi @rn */
     static bool done = false;
     if(!done)
-        mq_log(MQ_LOG_WARNING, "ocbi instruction used and ignored");
+        mq_log(MQ_LOG_DEBUG, "ocbi instruction used and ignored");
     done = true;
     cpu->pc += 2;
 }
@@ -809,7 +818,7 @@ MQ_INLINE void ocbp(mqMachine *mach, mqCpu *cpu, int n) {
     /* ocbp @rn */
     static bool done = false;
     if(!done)
-        mq_log(MQ_LOG_WARNING, "ocbp instruction used and ignored");
+        mq_log(MQ_LOG_DEBUG, "ocbp instruction used and ignored");
     done = true;
     cpu->pc += 2;
 }
@@ -817,7 +826,7 @@ MQ_INLINE void ocbwb(mqMachine *mach, mqCpu *cpu, int n) {
     /* ocbwp @rn */
     static bool done = false;
     if(!done)
-        mq_log(MQ_LOG_WARNING, "ocbwb instruction used and ignored");
+        mq_log(MQ_LOG_DEBUG, "ocbwb instruction used and ignored");
     done = true;
     cpu->pc += 2;
 }
@@ -826,7 +835,7 @@ MQ_INLINE void prefi(mqMachine *mach, mqCpu *cpu, int n) {
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     static bool done = false;
     if(!done)
-        mq_log(MQ_LOG_WARNING, "prefi instruction used and ignored");
+        mq_log(MQ_LOG_DEBUG, "prefi instruction used and ignored");
     done = true;
     cpu->pc += 2;
 }
@@ -836,7 +845,7 @@ MQ_INLINE void icbi(mqMachine *mach, mqCpu *cpu, int n) {
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     static bool done = false;
     if(!done)
-        mq_log(MQ_LOG_WARNING, "icbi instruction used and ignored");
+        mq_log(MQ_LOG_DEBUG, "icbi instruction used and ignored");
     done = true;
     cpu->pc += 2;
 }
@@ -865,12 +874,6 @@ MQ_INLINE void ldtlb(mqMachine *mach, mqCpu *cpu) {
 }
 MQ_INLINE void sleep(mqMachine *mach, mqCpu *cpu) {
     fprintf(stderr, "error: not implemented: sleep\n");
-    mach->stuck = true;
-}
-MQ_INLINE void rte(mqMachine *mach, mqCpu *cpu) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-    fprintf(stderr, "error: not implemented: rte\n");
     mach->stuck = true;
 }
 MQ_INLINE void macl(mqMachine *mach, mqCpu *cpu, int n, int m) {

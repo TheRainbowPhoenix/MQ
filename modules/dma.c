@@ -5,6 +5,7 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/modules/dma.h>
+#include <mq/modules/intc.h>
 #include <mq/memory.h>
 #include <mq/hooks.h>
 #include <mq/mq.h>
@@ -77,6 +78,27 @@ static void copyData(mqMachine *mach, u32 SAR, u32 DAR, int size)
     }
 }
 
+static void notifyINTC(mqMachine *mach, mqDMA_Channel *ch)
+{
+    static mqInt const channelInterruptCodes[] = {
+        MQ_INT_DMA_DEI0, MQ_INT_DMA_DEI1, MQ_INT_DMA_DEI2,
+        MQ_INT_DMA_DEI3, MQ_INT_DMA_DEI4, MQ_INT_DMA_DEI5,
+    };
+    mqInt channelInterruptCode = channelInterruptCodes[ch->index];
+
+    u32 HE = (ch->CHCR >> 19) & 1;
+    u32 HIE = (ch->CHCR >> 18) & 1;
+    HE &= HIE;
+
+    u32 TE = (ch->CHCR >> 1) & 1;
+    u32 IE = ch->CHCR & 1;
+    TE &= IE;
+
+    mq_log(MQ_LOG_DEBUG, "DMA Channel %d: interrupt is HE=%d TE=%d",
+        ch->index, HE, TE);
+    mq_intc_setInterruptStatus(mach, channelInterruptCode, (HE | TE) != 0);
+}
+
 static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
 {
     if(cycles > ch->TCR)
@@ -139,7 +161,8 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
     if(ch->TCR <= ch->startTCR >> 1) {
         ch->CHCR |= (1 << 19);
         if(ch->CHCR & (1 << 18)) { // HIE
-            // TODO[dma]: Emit Half-End Interrupt
+            /* Emit Half-End interrupt */
+            notifyINTC(mach, ch);
             mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Half-End", ch->index);
         }
     }
@@ -148,7 +171,8 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
     if(ch->TCR == 0) {
         ch->CHCR |= (1 << 1);
         if(ch->CHCR & (1 << 2)) { // IE
-            // TODO[dma]: Emit Transfer Ended Interrupt
+            /* Emit Transfer Ended interrupt */
+            notifyINTC(mach, ch);
             mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Transfer Ended", ch->index);
         }
     }
@@ -222,6 +246,7 @@ static void write_CHCR(struct mqMMIO *io, u32 addr, u32 value, int size)
     (void)addr, (void)size;
 
     u32 new_CHCR = (ch->CHCR & value & 0x00080002) | (value & 0x4fe7fffd);
+    bool interruptFlagsChanged = ((new_CHCR ^ ch->CHCR) & 0x00080002) != 0;
 
     /* Record TCR when DE is set to 1 to match the half-end interrupt. */
     if((ch->CHCR & 1) == 0 && (new_CHCR & 1) == 1)
@@ -229,7 +254,9 @@ static void write_CHCR(struct mqMMIO *io, u32 addr, u32 value, int size)
 
     ch->CHCR = new_CHCR;
     updateProcess(mach);
-    // TODO[dma]: After writing to CHCR reconsider whether to send an interrupt
+
+    if(interruptFlagsChanged)
+        notifyINTC(mach, ch);
 }
 
 static void write_DMAOR(mqMachine *mach, u32 value)

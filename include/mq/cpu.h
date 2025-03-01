@@ -102,8 +102,18 @@ struct mqCpu
     u32 excMask;
     /* Exception handling registers */
     u32 TRA, EXPEVT, INTEVT;
+    /* Extra register storing the priority of the interrupt set in INTEVT */
+    u32 INTPRIO;
     /* CPU Operation Mode register */
     u32 CPUOPM;
+
+    /* Information originating from the interrupt control (INTC) about what
+       interrupt should be accepted next. Setting these doesn't automatically
+       lead to an interrupt being accepted because the CPU then applies SR.BL
+       and SR.IMASK on top of it. The data sent here by the INTC is already
+       filtered thorugh USERIMASK though. */
+    u32 nextInterruptINTEVT;
+    int nextInterruptPriority;
 
     /* Syscall emulation address. If this address is hit a syscall will be
        emulated. This is set to 0 when syscall emulation is disabled */
@@ -139,6 +149,10 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value);
 /* Raise an exception and return false. This is used to reduce code size by
    making exception paths terminal calls, notably in memory access code. */
 bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value);
+
+/* Set the next interrput to be accepted. This function is normally called only
+   by the INTC; for sending out interrupts, use the INTC module. */
+void mq_cpu_setIncomingInterrupt(mqCpu *cpu, u32 INTEVT, int priority);
 
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
