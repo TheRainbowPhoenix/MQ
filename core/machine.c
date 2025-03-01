@@ -125,9 +125,11 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
         void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", VRAMsize);
         mq_memory_createBlock(mach->memory, 0x8c000000, VRAMsize, vram);
+        mq_memory_createBlock(mach->memory, 0xac000000, VRAMsize, vram);
         /* OS stack */
         void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
         mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);
+        mq_memory_createBlock(mach->memory, 0xac0f0000, 512 << 10, ostk);
 
         // TODO[machine]: Reasonable heap address on fx-CG?!
         mach->system.heapAddress = layout_heap;
