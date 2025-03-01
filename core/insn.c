@@ -615,8 +615,10 @@ MQ_INLINE void ldcl(mqMachine *mach, mqCpu *cpu, int m, int c) {
         if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
             return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
         u32 SR;
-        if(mq_memory_read32(mach, mach->memory, cpu->r[m], &SR))
+        if(mq_memory_read32(mach, mach->memory, cpu->r[m], &SR)) {
             mq_cpu_setSR(cpu, SR);
+            cpu->r[m] += 4;
+        }
         cpu->pc += 2;
         return;
     }
