@@ -115,6 +115,9 @@ struct mqCpu
     u32 nextInterruptINTEVT;
     int nextInterruptPriority;
 
+    /* Whether we are currently sleeping. */
+    bool sleeping;
+
     /* Syscall emulation address. If this address is hit a syscall will be
        emulated. This is set to 0 when syscall emulation is disabled */
     u32 syscallHandler;
@@ -157,6 +160,9 @@ void mq_cpu_setIncomingInterrupt(mqCpu *cpu, u32 INTEVT, int priority);
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
 void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode);
+
+/* Set the CPU to sleep. It will wake up at the next interrupt. */
+void mq_cpu_sleep(mqCpu *cpu);
 
 /* Set/get the value of the T bit; the value provided must be 0 or 1. */
 MQ_INLINE void mq_cpu_setT(mqCpu *cpu, int T)

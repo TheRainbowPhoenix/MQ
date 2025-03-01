@@ -160,7 +160,11 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
         return false;
     }
 
-    // TODO: Break from sleep
+    /* Break from sleep */
+    if(cpu->sleeping) {
+        mq_log(MQ_LOG_DEBUG, "Waking up from sleep.");
+        cpu->sleeping = false;
+    }
 
     mq_log(MQ_LOG_DEBUG, "Handling exception %s", mq_cpu_exceptionName(exc));
     if(exc_isInterrupt(exc))
@@ -245,6 +249,9 @@ void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
 {
     u32 previousPC = cpu->pc;
 
+    if(MQ_UNLIKELY(cpu->sleeping))
+        goto endCycle;
+
     // printf("Cycle: pc=%08x\n", cpu->pc);
 
     /* Fetch the next instruction. */
@@ -290,6 +297,12 @@ endCycle:
         if(!handleException(cpu, exc, previousPC))
             mach->stuck = true;
     }
+}
+
+void mq_cpu_sleep(mqCpu *cpu)
+{
+    mq_log(MQ_LOG_DEBUG, "Sleeping...");
+    cpu->sleeping = true;
 }
 
 void mq_cpu_setSR(mqCpu *cpu, u32 SR)

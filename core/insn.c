@@ -856,6 +856,11 @@ MQ_INLINE void synco(mqMachine *mach, mqCpu *cpu) {
     cpu->pc += 2;
 }
 
+MQ_INLINE void sleep(mqMachine *mach, mqCpu *cpu) {
+    mq_cpu_sleep(cpu);
+    cpu->pc += 2;
+}
+
 //===//
 
 MQ_INLINE void movlil(mqMachine *mach, mqCpu *cpu, int m) {
@@ -872,10 +877,6 @@ MQ_INLINE void movcal(mqMachine *mach, mqCpu *cpu, int n) {
 }
 MQ_INLINE void ldtlb(mqMachine *mach, mqCpu *cpu) {
     fprintf(stderr, "error: not implemented: ldtlb\n");
-    mach->stuck = true;
-}
-MQ_INLINE void sleep(mqMachine *mach, mqCpu *cpu) {
-    fprintf(stderr, "error: not implemented: sleep\n");
     mach->stuck = true;
 }
 MQ_INLINE void macl(mqMachine *mach, mqCpu *cpu, int n, int m) {

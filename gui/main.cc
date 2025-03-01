@@ -373,6 +373,8 @@ ImGui::End();
             ImGuiWindowFlags_HorizontalScrollbar)) {
         ImGui::PushFont(fontMono);
 
+        ImGui::Text("Sleeping: %d", (int)mach->cpu.sleeping);
+
         ImGui::BeginGroup();
         for(int i = 0; i < 16; i++)
             ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", mach->cpu.r[i]);
