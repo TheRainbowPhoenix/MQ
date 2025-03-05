@@ -384,3 +384,12 @@ char const *mq_cpu_exceptionName(int exc)
 
     return ((uint)exc < SH_NUM_EXCEPTIONS) ? exc_names[exc] : NULL;
 }
+
+int mq_cpu_exceptionForEventCode(int EXPEVT)
+{
+    for(int i = 0; i < SH_NUM_EXCEPTIONS; i++) {
+        if(EXPEVT == exc_CodeTable[i])
+            return i;
+    }
+    return -1;
+}

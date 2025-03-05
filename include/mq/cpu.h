@@ -219,5 +219,8 @@ char const *mq_cpu_specialRegisterName(int spReg);
 /* Enumeration name of an exception number. */
 char const *mq_cpu_exceptionName(int exc);
 
+/* Exception ID for a given event code (or -1). */
+int mq_cpu_exceptionForEventCode(int EXPEVT);
+
 MQ_END_DEFS
 #endif /* MQ_CPU_H */

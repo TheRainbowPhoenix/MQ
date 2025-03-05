@@ -38,6 +38,7 @@ struct DelayedInput {
     bool mq_mmu_unbind = false;
     bool mq_mmu_bind = false;
 
+    /* (unused) */
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
 };
@@ -216,13 +217,7 @@ static void render(void)
             ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
                 (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
 
-        ImGui::Checkbox("Show demo window", &show_demo_window);
-
-        if(ImGui::Button("128x64 mono"))
-            input.ui_pattern_mono = true;
-        ImGui::SameLine();
-        if(ImGui::Button("396x224 16-bit"))
-            input.ui_pattern_rgb = true;
+        ImGui::Checkbox2("Show demo window", &show_demo_window);
 
         if(ImGui::Button("Reset add-in FX"))
             input.mq_initialize_addin_fx = true;
@@ -274,106 +269,21 @@ static void render(void)
     }
     ImGui::End();
 
-    if(ImGui::Begin("Console", nullptr)) {
+    if(ImGui::Begin("Messages", nullptr)) {
         static RichText::View view = {
             .font = fontMono,
             .scroll = 0,
         };
-        ImGui::Text("WIP...");
-        if(ImGui::Button("New line (x10)")) {
-            static int i = 0;
-            for(int j = 0; j < 10; j++) {
-                char str[64];
-                sprintf(str, "a pretty long message that will wrap #%d", ++i);
-                RichText::Line *l = RichText::Line::make(str);
-                ConsoleText.addLine(l);
-            }
-        }
+        if(ImGui::Button("Clear"))
+            ConsoleText.clear();
         ImGui::AddRichTextFrame(ConsoleText, view);
     }
     ImGui::End();
 
-#if 0
-if(ImGui::Begin("Text Test"))
-{
-struct Segment {
-    Segment(char const *text, ImU32 col=0, bool underline=false):
-        textStart(text),
-        textEnd(text + strlen(text)),
-        color(col),
-        underline(underline) {}
-
-    char const *textStart;
-    char const *textEnd;
-    ImU32 color;
-    bool underline;
-};
-
-Segment segs[] = {
-    Segment("this is a really super duper long segment that should wrap all on its own "),
-    Segment("http://google.com", IM_COL32(127,127,255,255), true),
-    Segment(" Short text "),
-    Segment("http://github.com", IM_COL32(127,127,255,255), true)
-};
-
-ImGui::TextColored(ImColor(0, 255, 0, 255), "Half-manual wrapping");
-
-const float wrapWidth = ImGui::GetContentRegionAvail().x;
-for(int i = 0; i < IM_ARRAYSIZE(segs); ++i)
-{
-    char const *textStart = segs[i].textStart;
-    char const *textEnd = segs[i].textEnd ? segs[i].textEnd : textStart + strlen(textStart);
-
-    ImFont *Font = ImGui::GetFont();
-
-    do {
-        float widthRemaining = ImGui::CalcWrapWidthForPos(ImGui::GetCursorScreenPos(), 0.0f);
-        char const *drawEnd = Font->CalcWordWrapPositionA(1.0f, textStart, textEnd, widthRemaining);
-        if(drawEnd == textStart) {
-            ImGui::NewLine();
-            drawEnd = Font->CalcWordWrapPositionA(1.0f, textStart, textEnd, wrapWidth);
-        }
-
-        if(segs[i].color)
-            ImGui::PushStyleColor(ImGuiCol_Text, segs[i].color);
-        ImGui::TextUnformatted(textStart, drawEnd == textStart ? nullptr : drawEnd);
-        if(segs[i].color)
-            ImGui::PopStyleColor();
-
-        if(segs[i].underline) {
-            ImVec2 lineEnd = ImGui::GetItemRectMax();
-            ImVec2 lineStart = lineEnd;
-            lineStart.x = ImGui::GetItemRectMin().x;
-            ImGui::GetWindowDrawList()->AddLine(lineStart, lineEnd, segs[i].color);
-
-            if(ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
-                ImGui::SetMouseCursor(ImGuiMouseCursor_TextInput);
-        }
-
-        if(drawEnd == textStart || drawEnd == textEnd) {
-            ImGui::SameLine(0.0f, 0.0f);
-            break;
-        }
-
-        textStart = drawEnd;
-
-        /* Skip spaces around line wrapping spot */
-        while(textStart < textEnd) {
-            if(ImCharIsBlankA(*textStart)) { textStart++; }
-            else if(*textStart == '\n') { textStart++; break; }
-            else break;
-        }
-    } while (true);
-}
-}
-ImGui::End();
-#endif
-
     if(ImGui::Begin("CPU", nullptr,
             ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::PushFont(fontMono);
-
         ImGui::Text("Sleeping: %d", (int)mach->cpu.sleeping);
+        ImGui::PushFont(fontMono);
 
         ImGui::BeginGroup();
         for(int i = 0; i < 16; i++)
@@ -383,11 +293,17 @@ ImGui::End();
         ImGui::SameLine(0, 40);
         ImGui::BeginGroup();
         ImGui::Text("pc:    %08x", mach->cpu.pc);
-        ImGui::Text("sr:    %08x", mach->cpu.spRegs[SH_SR]);
         ImGui::Text("gbr:   %08x", mach->cpu.spRegs[SH_GBR]);
         ImGui::Text("mach:  %08x", mach->cpu.spRegs[SH_MACH]);
         ImGui::Text("macl:  %08x", mach->cpu.spRegs[SH_MACL]);
         ImGui::Text("pr:    %08x", mach->cpu.spRegs[SH_PR]);
+
+        u32 SR = mach->cpu.spRegs[SH_SR];
+        ImGui::Text("sr:    %08x", mach->cpu.spRegs[SH_SR]);
+        ImGui::Text(" MD=%d RB=%d BL=%d",
+            (SR >> 30) & 1, (SR >> 29 & 1), (SR >> 28) & 1);
+        ImGui::Text(" IMASK=%d",
+            (SR >> 4) & 0xf);
         ImGui::EndGroup();
 
         ImGui::SameLine(0, 40);
@@ -425,6 +341,8 @@ ImGui::End();
         ImGui::PopFont();
     }
     ImGui::End();
+
+    AddInterruptsWindow(mach);
 
     static ImGui::HexViewer HV = {
         .AddressBits = 32,
@@ -497,8 +415,9 @@ ImGui::End();
         ImGui::DockBuilderDockWindow("Display", dock);
         ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
-        ImGui::DockBuilderDockWindow("Console", dock_left_top_right);
+        ImGui::DockBuilderDockWindow("Messages", dock_left_top_right);
         ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
+        ImGui::DockBuilderDockWindow("Interrupts", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Memory", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
         ImGui::DockBuilderDockWindow("MMU", dock_left_bottom);
@@ -675,7 +594,7 @@ int main(void)
 {
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
 
-    ConsoleText.alloc(1024, 30);
+    ConsoleText.alloc(65536, 256);
     mq_log_handler(handle_log);
     mq_init();
 

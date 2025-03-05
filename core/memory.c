@@ -807,7 +807,7 @@ struct mqMemory_Stats mq_memory_stats(mqMemory const *mem)
 
         int pages = 0;
         for(int j = 0; j < 256; j++)
-            pages += (ch->pages[j] != MQ_PAGEPTR_NULL);
+            pages += MQ_PAGEPTR_ISBUFFER(ch->pages[j]);
 
         s.bufferPages += pages;
         s.pureMMIOChunks += (pages == 0);

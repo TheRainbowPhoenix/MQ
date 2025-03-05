@@ -27,6 +27,22 @@ void TextLR(char const *left, char const *fmt, ...);
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
 
+/* Text but with the mono font. */
+template<typename... Args>
+void TextMono(Args... args) {
+   ImGui::PushFont(fontMono);
+   ImGui::Text(std::forward<Args>(args)...);
+   ImGui::PopFont();
+}
+
+/* Checkbox with smaller frame padding. */
+template<typename... Args>
+void Checkbox2(Args... args) {
+   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 1));
+   ImGui::Checkbox(std::forward<Args>(args)...);
+   ImGui::PopStyleVar();
+}
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &style);
@@ -211,6 +227,8 @@ struct Buffer {
        This function does not free pre-existing data in `buf`. */
     bool alloc(int capacity, int backlogSize);
 
+    /* Remove all the lines while keeping resources allocated. */
+    void clear();
     /* Free resources and reset the state. */
     void reset();
 
@@ -286,6 +304,9 @@ struct Text {
 
     /* Compute a view of the console for rendering and scrolling. */
     void computeView(View const &view);
+
+    /* Clear the text storage. */
+    void clear();
 
     // TODO: Text selection & editing features
 

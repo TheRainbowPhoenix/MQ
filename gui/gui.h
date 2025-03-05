@@ -130,4 +130,9 @@ struct MMUWindowAction {
 MMUWindowAction AddMMUWindow(mqMachine *mach);
 MMUWindowAction AddMMUWindowContents(mqMachine *mach);
 
+//=== Interrupts window ======================================================//
+
+void AddInterruptsWindow(mqMachine *mach);
+void AddInterruptsWindowContents(mqMachine *mach);
+
 #endif /* MQ_UI_GUI_H */

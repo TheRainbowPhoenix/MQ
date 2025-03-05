@@ -2,6 +2,7 @@
 #include "imgui-util.h"
 #include <stdio.h>
 #include <mq/modules/mmu.h>
+#include <mq/modules/intc.h>
 
 static void AddChunkList(
     mqMachine *mach, MemoryWindowState &s, MemoryWindowAction &a)
@@ -132,7 +133,7 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
     avl.x -= 4;
     avl.y -= ImGui::GetTextLineHeightWithSpacing();
     // TODO: More clearly split list and IO details
-    avl.y /= 2;
+    avl.y = (avl.y * 2) / 3;
     if(!ImGui::BeginListBox("##memory-ios", avl))
         return;
 
@@ -281,7 +282,8 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
         a.type = MMUWindowAction::Type::MMUWA_UNBIND;
 
     if(ImGui::BeginTable("UTLB", 13,
-            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter)) {
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
+            ImGuiTableFlags_ScrollY)) {
         ImGui::TableSetupColumn("id", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("VPN", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("D", ImGuiTableColumnFlags_WidthFixed, 10);
@@ -295,7 +297,9 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
         ImGui::TableSetupColumn("D", ImGuiTableColumnFlags_WidthFixed, 10);
         ImGui::TableSetupColumn("SH", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("WT", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::PushFont(fontMono);
         ImGui::TableHeadersRow();
+        ImGui::PopFont();
 
         char const *SZ_str[4] = { "1 kB", "4 kB", "64 kB", "1 MB" };
         char const *PR_str[4] = { "K:r", "K:rw", "U:r", "U:rw" };
@@ -372,4 +376,168 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
     }
 
     return a;
+}
+
+void AddInterruptsWindow(mqMachine *mach)
+{
+    if(ImGui::Begin("Interrupts"))
+        AddInterruptsWindowContents(mach);
+    ImGui::End();
+}
+
+void AddInterruptsWindowContents(mqMachine *mach)
+{
+    mqCpu *cpu = &mach->cpu;
+    int IMASK = (cpu->spRegs[SH_SR] >> 4) & 0xf;
+    int INTMU = (cpu->CPUOPM >> 3) & 1;
+
+    mqINTC *INTC = mq_intc_get(mach);
+    mqMMU *MMU = mq_mmu_get(mach);
+
+    char const *INTEVT_name = "";
+    if(cpu->INTEVT) {
+        mqInt intID = mq_intc_interruptForEventCode(cpu->INTEVT);
+        INTEVT_name = mq_intc_interruptName(intID);
+    }
+    char const *EXPEVT_name = "";
+    if(cpu->EXPEVT) {
+        int excID = mq_cpu_exceptionForEventCode(cpu->EXPEVT);
+        EXPEVT_name = mq_cpu_exceptionName(excID);
+    }
+
+    ImGui::TextMono("IMASK:");
+    ImGui::SameLine(0, 0);
+    ImGui::Text(" %d (%s)", IMASK,
+        INTMU ? "updated when accepting interrupts"
+              : "unchanged when accepting interrupts");
+    ImGui::TextMono("EXPEVT: 0x%03x", cpu->EXPEVT);
+    ImGui::SameLine(0, 0);
+    ImGui::Text(" %s", EXPEVT_name);
+    ImGui::SameLine();
+    ImGui::TextMono("TRA: %08x", cpu->TRA);
+    if(MMU) {
+        ImGui::SameLine();
+        ImGui::TextMono("TEA: %08x", MMU->TEA);
+    }
+    ImGui::TextMono("INTEVT: 0x%03x", cpu->INTEVT);
+    ImGui::SameLine(0, 0);
+    ImGui::Text(" %s (%d)", INTEVT_name, cpu->INTPRIO);
+
+    static bool showRaw = false;
+    static bool hideMasked = false;
+    ImGui::Checkbox2("Show raw", &showRaw);
+    ImGui::SameLine();
+    ImGui::Checkbox2("Hide masked/disabled", &hideMasked);
+
+    if(showRaw) {
+        ImGui::PushFont(fontMono);
+        ImGui::Text("IMR");
+        for(int i = 0; INTC && i < 13; i++) {
+            ImGui::SameLine(0, 0);
+            ImGui::Text(" %02x", INTC->IMR[i]);
+        }
+        ImGui::Text("IPR");
+        for(int i = 0; INTC && i < 12; i++) {
+            ImGui::SameLine(0, 0);
+            ImGui::Text(" %04x", INTC->IPR[i]);
+        }
+        ImGui::PopFont();
+    }
+
+    ImVec2 size = ImGui::GetContentRegionAvail();
+    ImVec2 halfSize(size.x / 2 - 5, size.y);
+
+    if(ImGui::BeginTable("Interrupts", 4,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
+            ImGuiTableFlags_ScrollY,
+            halfSize)) {
+        ImGui::TableSetupColumn("Code", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Prio.", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableHeadersRow();
+
+        for(int i = 0; i < MQ_INT_NUM; i++) {
+            mqINTC_InterruptInfo const *info = mq_intc_interruptInfo((mqInt)i);
+            bool masked =
+                INTC ? mq_intc_isInterruptMasked(INTC, (mqInt)i) : false;
+            bool raised = INTC ? INTC->interruptStatus[i] : false;
+            int priority = INTC ? mq_intc_interruptPriority(INTC, (mqInt)i) : 0;
+
+            if(hideMasked && (masked || !priority))
+                continue;
+
+            auto color = ImGui::GetStyle().Colors[ImGuiCol_Text];
+            char const *status = "-";
+            if(masked) {
+                color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+                status = "Masked";
+            }
+            else if(priority == 0) {
+                color = ImGui::GetStyle().Colors[ImGuiCol_TextDisabled];
+                status = "Disabled";
+            }
+            else if(raised) {
+                color = ImGui::GetStyle().Colors[ImGuiCol_PlotLinesHovered];
+                status = "Raised";
+            }
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableNextColumn();
+            ImGui::TextMono("0x%03x", info->INTEVT);
+
+            char const *name = mq_intc_interruptName((mqInt)i);
+            ImGui::TableNextColumn();
+            ImGui::Text(name ? name : "(null)");
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", priority);
+
+            ImGui::TableNextColumn();
+            ImGui::Text(status);
+
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::EndTable();
+    }
+    ImGui::SameLine();
+    if(ImGui::BeginTable("Exceptions", 3,
+            ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
+            ImGuiTableFlags_ScrollY,
+            halfSize)) {
+        ImGui::TableSetupColumn("Code", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableHeadersRow();
+
+        for(int i = 0; i < SH_NUM_EXCEPTIONS; i++) {
+            bool raised = (cpu->excMask & (1 << i)) != 0;
+
+            auto color = ImGui::GetStyle().Colors[ImGuiCol_Text];
+            if(raised)
+                color = ImGui::GetStyle().Colors[ImGuiCol_PlotLinesHovered];
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+
+            ImGui::TableNextRow();
+
+            ImGui::TableNextColumn();
+            ImGui::PushFont(fontMono);
+            ImGui::Text("0x000");
+            ImGui::PopFont();
+
+            char const *name = mq_cpu_exceptionName(i);
+            ImGui::TableNextColumn();
+            ImGui::Text(name ? name : "(null)");
+
+            ImGui::TableNextColumn();
+            ImGui::Text(raised ? "raised" : "-");
+
+            ImGui::PopStyleColor();
+        }
+
+        ImGui::EndTable();
+    }
 }

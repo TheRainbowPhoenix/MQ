@@ -294,7 +294,8 @@ Line *Line::make(char const *str, int size)
 void Line::updateRenderLines(View const &view)
 {
     // TODO: Don't assume one column per byte (at least basic UTF-8)
-    this->renderLines = (this->size + view.columns - 1) / view.columns;
+    uint columns = std::max(view.columns, 1u);
+    this->renderLines = (this->size + columns - 1) / columns;
     if(this->renderLines <= 0)
         this->renderLines = 1;
 }
@@ -336,6 +337,11 @@ bool Buffer::alloc(int capacity, int backlogSize)
 Buffer::~Buffer()
 {
     reset();
+}
+
+void Buffer::clear()
+{
+    recycleOldestLines(this->size);
 }
 
 void Buffer::reset()
@@ -477,6 +483,13 @@ void Text::computeView(View const &view)
     this->lines.updateRender(view, lazy);
 }
 
+void Text::clear()
+{
+    this->lines.clear();
+    this->renderLines = 0;
+    this->renderNeeded = true;
+}
+
 ScrollPos Text::clampScrollPos(ScrollPos pos)
 {
     /* No scrolling case */
@@ -498,9 +511,10 @@ static float RenderLine(float x, float y, RichText::Line *L,
     char const *endline = p + L->size;
     int line_offset = 0;
     int line_number = 0;
+    uint columns = std::max(view.columns, 1u);
 
     while(p < endline) {
-        char const *endscreen = p + std::min(view.columns, (uint)strlen(p));
+        char const *endscreen = p + std::min(columns, (uint)strlen(p));
         // char const *endscreen = view.font->CalcWordWrapPositionA(1.0f,
         // textStart, textEnd, widthRemaining);
         int len = endscreen - p;

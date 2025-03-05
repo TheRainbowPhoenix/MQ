@@ -20,20 +20,7 @@ static u16 const IMR_masks[] = {
     0x07, 0x12, 0x37, 0x01, 0x38,
 };
 
-struct mqINTC_InterruptData {
-    /* IPR register number, 12 for INTPRI00, 30/31 for fixed priority 15/16 */
-    u8 IPR;
-    /* Bit location of the 4-bit priority value in the IPR register */
-    u8 IPRpos;
-    /* IMR register number, 13 for INTMSK00, 14 for ICR0, 15 for none */
-    u8 IMR;
-    /* Byte value of the mask bit in the IMR register */
-    u16 IMRmask;
-    /* Event code */
-    u16 INTEVT;
-};
-
-struct mqINTC_InterruptData interrupts[MQ_INT_NUM] = {
+mqINTC_InterruptInfo interrupts[MQ_INT_NUM] = {
     { 31 /* = 16 */, 0, 14 /* ICR0 */, 0x4000, 0x1c0 },  // MQ_INT_NMI
     { 30 /* = 15 */, 0, 15 /* none */,   0x00, 0x5e0 },  // MQ_INT_41
     { 12 /* INTPRI00 */, 28, 13 /* INTMSK00 */, 0x80, 0x600 },  // MQ_INT_IRQ0
@@ -107,7 +94,7 @@ mqINTC *mq_intc_get(mqMachine *mach)
     return mach->modules ? mach->modules[moduleID] : NULL;
 }
 
-static int interruptPriority(mqINTC *INTC, mqInt num)
+int mq_intc_interruptPriority(mqINTC *INTC, mqInt num)
 {
     int IPRnum = interrupts[num].IPR;
     int IPRpos = interrupts[num].IPRpos;
@@ -123,7 +110,7 @@ static int interruptPriority(mqINTC *INTC, mqInt num)
     return 0;
 }
 
-static bool isInterruptMasked(mqINTC *INTC, mqInt num)
+bool mq_intc_isInterruptMasked(mqINTC *INTC, mqInt num)
 {
     int IMRnum = interrupts[num].IMR;
     u32 IMRmask = interrupts[num].IMRmask;
@@ -154,7 +141,7 @@ static void notifyCPU(mqMachine *mach)
     }
 
     u32 INTEVT = interrupts[interrupt].INTEVT;
-    int priority = interruptPriority(INTC, interrupt);
+    int priority = mq_intc_interruptPriority(INTC, interrupt);
     mq_cpu_setIncomingInterrupt(&mach->cpu, INTEVT, priority);
 }
 
@@ -169,10 +156,10 @@ void mq_intc_updateLogic(mqMachine *mach)
     int highestPriority = 0;
 
     for(mqInt num = 0; num < MQ_INT_NUM; num++) {
-        if(!INTC->interruptStatus[num] || isInterruptMasked(INTC, num))
+        if(!INTC->interruptStatus[num] || mq_intc_isInterruptMasked(INTC, num))
             continue;
 
-        int prio = interruptPriority(INTC, num);
+        int prio = mq_intc_interruptPriority(INTC, num);
         if(prio > USERIMASK && prio > highestPriority) {
             highestInterrupt = num;
             highestPriority = prio;
@@ -318,4 +305,87 @@ void mq_intc_setInterruptStatus(mqMachine *mach, mqInt interrupt, bool raised)
 
     // TODO[intc]: Smarter interrupt update procedure?
     mq_intc_updateLogic(mach);
+}
+
+char const *mq_intc_interruptName(mqInt interrupt)
+{
+    char const *int_names[MQ_INT_NUM] = {
+        "NMI",
+        "int_41",
+        "IRQ0",
+        "IRQ1",
+        "IRQ2",
+        "IRQ3",
+        "int_5a",
+        "int_5b",
+        "int_5c",
+        "int_5d",
+        "DMA Channel 0",
+        "DMA Channel 1",
+        "DMA Channel 2",
+        "DMA Channel 3",
+        "ETMU3 Underflow",
+        "ETMU0 Underflow",
+        "USB USI",
+        "RTC Alarm",
+        "RTC Periodic",
+        "RTC Carry",
+        "sdc7a",
+        "sdc7b",
+        "DMA Channel 4",
+        "DMA Channel 5",
+        "DMA Address Error",
+        "KEYSC",
+        "int_82",
+        "ETMU1 Underflow",
+        "ETMU2 Underflow",
+        "int_86",
+        "int_87",
+        "ETMU4 Underflow",
+        "int_8e",
+        "FLCTL Transfer End",
+        "int_90",
+        "int_91",
+        "I2C Arbitration Lost",
+        "I2C NACK",
+        "I2C Wait",
+        "I2C Transmit Enable",
+        "CMT Compare Match",
+        "ECC ECCSR",
+        "BSC",
+        "FSI",
+        "ETMU5 Underflow",
+        "int_a0",
+        "TMU2 Underflow",
+        "TMU1 Underflow",
+        "TMU0 Underflow",
+        "int_c7",
+        "int_c8",
+        "int_c9",
+        "ADC Conversion End",
+        "int_cc",
+        "int_cd",
+        "int_ce",
+        "DSP0",
+        "DSP1",
+        "int_d4",
+        "int_d5",
+    };
+
+    return ((uint)interrupt < MQ_INT_NUM) ? int_names[interrupt] : NULL;
+}
+
+mqInt mq_intc_interruptForEventCode(u32 INTEVT)
+{
+    for(int i = 0; i < MQ_INT_NUM; i++) {
+        if(interrupts[i].INTEVT == INTEVT)
+            return (mqInt)i;
+    }
+    return (mqInt)-1;
+}
+
+mqINTC_InterruptInfo const *mq_intc_interruptInfo(mqInt interrupt)
+{
+    static mqINTC_InterruptInfo zeroInfo = { 0 };
+    return (uint)interrupt < MQ_INT_NUM ? &interrupts[interrupt] : &zeroInfo;
 }

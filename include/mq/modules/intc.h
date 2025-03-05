@@ -108,8 +108,22 @@ struct mqINTC {
     int nextInterruptPriority;
 };
 
+struct mqINTC_InterruptInfo {
+    /* IPR register number, 12 for INTPRI00, 30/31 for fixed priority 15/16 */
+    u8 IPR;
+    /* Bit location of the 4-bit priority value in the IPR register */
+    u8 IPRpos;
+    /* IMR register number, 13 for INTMSK00, 14 for ICR0, 15 for none */
+    u8 IMR;
+    /* Byte value of the mask bit in the IMR register */
+    u16 IMRmask;
+    /* Event code */
+    u16 INTEVT;
+};
+
 typedef enum mqInt mqInt;
 typedef struct mqINTC mqINTC;
+typedef struct mqINTC_InterruptInfo mqINTC_InterruptInfo;
 
 /* Setup the INTC module for a given machine. */
 bool mq_intc_setup(mqMachine *mach);
@@ -120,6 +134,10 @@ mqINTC *mq_intc_get(mqMachine *mach);
 /* Set an interrupt's raised status. */
 void mq_intc_setInterruptStatus(mqMachine *mach, mqInt interrupt, bool raised);
 
+/* Check an interrupt's current priority and mask. */
+int mq_intc_interruptPriority(mqINTC *INTC, mqInt interrupt);
+bool mq_intc_isInterruptMasked(mqINTC *INTC, mqInt interrupt);
+
 /* Determine what the next interrut and its priority will be. Should not need
    to be called from the outside. */
 void mq_intc_updateLogic(mqMachine *mach);
@@ -127,6 +145,17 @@ void mq_intc_updateLogic(mqMachine *mach);
 /* Propagate changs to SR.BL, SR.IMASK and USERIMASK to the interrupt signal.
    Should be called whenever these change. */
 void mq_intc_updateBlockLogic(mqMachine *mach);
+
+//=== Misc. information ======================================================//
+
+/* Enumeration name of an interrupt number. */
+char const *mq_intc_interruptName(mqInt interrupt);
+
+/* Get interrupt number by event code (-1 if none matches). */
+mqInt mq_intc_interruptForEventCode(u32 INTEVT);
+
+/* Get the static data for an interrupt. All 0 for invalid interrupts. */
+mqINTC_InterruptInfo const *mq_intc_interruptInfo(mqInt interrupt);
 
 MQ_END_DEFS
 #endif /* MQ_MODULES_INTC_H */
