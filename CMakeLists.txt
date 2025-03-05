@@ -30,6 +30,7 @@ set(LIB_SOURCES
   modules/keysc.c
   modules/intc.c
   modules/mmu.c
+  modules/r61524.c
 
   system/casiowin.c
   system/heap.c)

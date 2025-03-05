@@ -94,7 +94,7 @@ static void notifyINTC(mqMachine *mach, mqDMA_Channel *ch)
     u32 IE = ch->CHCR & 1;
     TE &= IE;
 
-    mq_log(MQ_LOG_DEBUG, "DMA Channel %d: interrupt is HE=%d TE=%d",
+    mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Interrupt status is HE=%d TE=%d",
         ch->index, HE, TE);
     mq_intc_setInterruptStatus(mach, channelInterruptCode, (HE | TE) != 0);
 }
@@ -105,7 +105,7 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
         cycles = ch->TCR;
 
     u32 RPT = (ch->CHCR >> 25) & 0x7;
-    u32 TS = (((ch->CHCR >> 21) & 0x3) << 2) + ((ch->CHCR >> 3) & 0x3);
+    u32 TS = (((ch->CHCR >> 20) & 0x3) << 2) + ((ch->CHCR >> 3) & 0x3);
     u32 DM = (ch->CHCR >> 14) & 0x3;
     u32 SM = (ch->CHCR >> 12) & 0x3;
 
@@ -114,6 +114,9 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
     };
     int transferSize = transferSizes[TS];
     int transferDivisions = (TS == 11 || TS == 12) ? 2 : 1;
+
+    // mq_log(MQ_LOG_DEBUG, "DMA Channel %d: running for %u cycles (TS=%dx%d)",
+    //     ch->index, cycles, transferSize, transferDivisions);
 
     // TODO[dma]: Handle repeat mode (CHCR.RPT)
     if(RPT != 0) {
@@ -138,22 +141,24 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
         return;
     }
 
-    u32 SAR = ch->SAR;
-    u32 DAR = ch->DAR;
-
+    // mq_log(MQ_LOG_DEBUG, "DMA: writing %08x -> %08x (%d) | CHCR%d=%08x",
+    //     SAR, DAR, transferSize, ch->index, ch->CHCR);
     for(uint i = 0; i < cycles; i++) {
+        u32 SAR = ch->SAR;
+        u32 DAR = ch->DAR;
+
         /* This does a single iteration, except 2 when TS=11 or TS=12 */
         for(int j = 0; j < transferDivisions; j++) {
             copyData(mach, SAR, DAR, transferSize);
             SAR += (SM <= 1) ? transferSize : (SM == 2) ? -transferSize : 0;
             DAR += (DM <= 1) ? transferSize : (DM == 2) ? -transferSize : 0;
         }
-    }
 
-    if(SM != 0)
-        ch->SAR = SAR;
-    if(DM != 0)
-        ch->DAR = DAR;
+        if(SM != 0)
+            ch->SAR = SAR;
+        if(DM != 0)
+            ch->DAR = DAR;
+    }
 
     ch->TCR -= cycles;
 
@@ -169,12 +174,11 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
 
     /* Transfer Ended flag */
     if(ch->TCR == 0) {
+        mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Transfer Ended", ch->index);
         ch->CHCR |= (1 << 1);
-        if(ch->CHCR & (1 << 2)) { // IE
-            /* Emit Transfer Ended interrupt */
+        /* Emit Transfer Ended interrupt */
+        if(ch->CHCR & (1 << 2)) // IE
             notifyINTC(mach, ch);
-            mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Transfer Ended", ch->index);
-        }
     }
 }
 
@@ -245,7 +249,7 @@ static void write_CHCR(struct mqMMIO *io, u32 addr, u32 value, int size)
     mqDMA_Channel *ch = &DMA->channels[(intptr_t)io->value];
     (void)addr, (void)size;
 
-    u32 new_CHCR = (ch->CHCR & value & 0x00080002) | (value & 0x4fe7fffd);
+    u32 new_CHCR = (ch->CHCR & value & 0x00080002) | (value & 0x4fb7fffd);
     bool interruptFlagsChanged = ((new_CHCR ^ ch->CHCR) & 0x00080002) != 0;
 
     /* Record TCR when DE is set to 1 to match the half-end interrupt. */

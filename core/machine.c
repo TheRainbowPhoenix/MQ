@@ -15,6 +15,7 @@
 #include <mq/modules/intc.h>
 #include <mq/modules/keysc.h>
 #include <mq/modules/mmu.h>
+#include <mq/modules/r61524.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -154,6 +155,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_dma_setup(mach);
 
         mq_cmod_setup(mach);
+
+        mq_r61524_setup(mach);
 
         mq_casiowin_setup(mach, MQ_CASIOWIN_CG380);
     }
