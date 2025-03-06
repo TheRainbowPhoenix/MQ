@@ -16,6 +16,7 @@
 #define MQ_MODULES_CMOD_H
 
 #include <mq/machine.h>
+#include <mq/interfaces/timer.h>
 MQ_START_DEFS
 
 struct mqCmod_RTCTimer {
@@ -40,6 +41,7 @@ struct mqCmod {
     u32 FASDR;      // BCD Calculation Result Register
 
     struct mqCmod_RTCTimer timers[6];
+    mqTimer internalTimers[6];
 };
 
 typedef struct mqCmod mqCmod;

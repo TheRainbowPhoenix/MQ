@@ -24,6 +24,7 @@ set(LIB_SOURCES
 
   interfaces/display.c
   interfaces/keyboard.c
+  interfaces/timer.c
 
   modules/cmod.c
   modules/dma.c

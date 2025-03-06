@@ -201,15 +201,21 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(!mach->initialized)
         return 0;
 
-    for(int i = 0; i < cycles; i++) {
+    int i = 0;
+    mq_timer_unfreeze();
+
+    while(i < cycles) {
         if(MQ_UNLIKELY(mach->stuck))
-            return i;
+            break;
         mq_cpu_cycle(mach, &mach->cpu);
 
         if(--mach->processTimer == 0)
             mq_machine_runProcesses(mach, mach->processFrequency);
+        i++;
     }
-    return cycles;
+
+    mq_timer_freeze();
+    return i;
 }
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
