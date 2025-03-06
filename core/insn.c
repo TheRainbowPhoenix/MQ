@@ -399,9 +399,9 @@ MQ_INLINE void div1(mqMachine *mach, mqCpu *cpu, int n, int m) {
     int M = mq_cpu_getM(cpu);
     int old_q = Q;
 
-    u32 rn = cpu->r[n];
-    Q = (i32)rn < 0;
+    Q = (i32)(cpu->r[n]) < 0;
     cpu->r[n] = (cpu->r[n] << 1) | T;
+    u32 rn = cpu->r[n];
 
     if(!old_q) {
         if(!M) {
