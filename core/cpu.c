@@ -161,14 +161,13 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
     }
 
     /* Break from sleep */
-    if(cpu->sleeping) {
-        mq_log(MQ_LOG_DEBUG, "Waking up from sleep.");
-        cpu->sleeping = false;
-    }
+    cpu->sleeping = false;
 
-    mq_log(MQ_LOG_DEBUG, "Handling exception %s", mq_cpu_exceptionName(exc));
     if(exc_isInterrupt(exc))
-        mq_log(MQ_LOG_DEBUG, "INTEVT = 0x%03x", cpu->INTEVT);
+        mq_log(MQ_LOG_DEBUG, "Handling interrupt 0x%03x", cpu->INTEVT);
+    else
+        mq_log(MQ_LOG_DEBUG, "Handling exception %s",
+            mq_cpu_exceptionName(exc));
 
     cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
@@ -237,8 +236,8 @@ static void updateIncomingInterrupt(mqCpu *cpu)
         cpu->excMask &= ~(1 << SH_EXC_INTERRUPT);
     }
     else {
-        mq_log(MQ_LOG_DEBUG, "Interrupt raised! 0x%03x (prio=%d)",
-            cpu->nextInterruptINTEVT, cpu->nextInterruptPriority);
+        // mq_log(MQ_LOG_DEBUG, "Interrupt raised! 0x%03x (prio=%d)",
+        //     cpu->nextInterruptINTEVT, cpu->nextInterruptPriority);
         cpu->excMask |= (1 << SH_EXC_INTERRUPT);
         cpu->INTEVT = cpu->nextInterruptINTEVT;
         cpu->INTPRIO = cpu->nextInterruptPriority;
@@ -301,7 +300,6 @@ endCycle:
 
 void mq_cpu_sleep(mqCpu *cpu)
 {
-    mq_log(MQ_LOG_DEBUG, "Sleeping...");
     cpu->sleeping = true;
 }
 

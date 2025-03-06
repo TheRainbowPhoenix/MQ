@@ -5,6 +5,7 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/modules/cmod.h>
+#include <mq/modules/intc.h>
 #include <mq/memory.h>
 #include <mq/hooks.h>
 #include <mq/mq.h>
@@ -36,6 +37,24 @@ static bool isAnyTimerRunning(mqCmod *Cmod)
     return false;
 }
 
+static void notifyINTC(mqMachine *mach, int n)
+{
+    static mqInt const timerInterruptCodes[] = {
+        MQ_INT_Cmod_TUNI0, MQ_INT_Cmod_TUNI1, MQ_INT_Cmod_TUNI2,
+        MQ_INT_Cmod_TUNI3, MQ_INT_Cmod_TUNI4, MQ_INT_Cmod_TUNI5,
+    };
+    mqInt timerInterruptCode = timerInterruptCodes[n];
+
+    mqCmod *Cmod = mach->modules[moduleID];
+    mqCmod_RTCTimer *RT = &Cmod->timers[n];
+
+    u32 UNF = (RT->RTCR >> 1) & 1;
+    u32 UNIE = RT->RTCR & 1;
+    UNF &= UNIE;
+
+    mq_intc_setInterruptStatus(mach, timerInterruptCode, UNF);
+}
+
 static void mq_cmod_process(mqMachine *mach, int cyclesElapsed)
 {
     mqCmod *Cmod = mach->modules[moduleID];
@@ -59,15 +78,21 @@ static void mq_cmod_process(mqMachine *mach, int cyclesElapsed)
         if(!underflow)
             continue;
 
+        int underflows = 1;
         RT->RTCNT += RT->RTCOR;
-        mq_log(MQ_LOG_DEBUG, "ETMU%d underflow! RTCOR=%08x -> RTCNT=%08x", i, RT->RTCOR, RT->RTCNT);
-        int multi = 0;
-        while((i32)RT->RTCNT < 0) {
+        /* Try to detect multi-underflows (cases where the timer undergoes
+           multiple underflow cycles in a single update) to diagnose them. This
+           either means that the time source is jumping around or that there is
+           a very fast timer that we can't keep up with. */
+        while(RT->RTCNT > RT->RTCOR) {
             RT->RTCNT += RT->RTCOR;
-            multi++;
+            underflows++;
         }
-        if(multi)
-            mq_log(MQ_LOG_WARNING, "ETMU%d multi-underflow! (x%d)", i, multi);
+        if(underflows > 1)
+            mq_log(MQ_LOG_WARNING, "ETMU%d underflowed x%d!", i, underflows);
+
+        RT->RTCR |= (1 << 1); /* UNF */
+        notifyINTC(mach, i);
     }
 }
 
@@ -127,18 +152,19 @@ static void write_RTCNTn(struct mqMMIO *io, u32 addr, u32 value, int size)
         mq_log(MQ_LOG_WARNING, "setting RTCNT%d while timer is running!", n);
 
     RT->RTCNT = value;
-    mq_log(MQ_LOG_DEBUG, "RTCNT%d <- %08x", n, value);
     // TODO[cmod]: Consequences of setting RTCNT--immediate interrupt?
     // TODO[cmod]: Raise interrupt when RTCNT=0 irrespective of RTSTR
 }
 
 static void write_RTCRn(struct mqMMIO *io, u32 addr, u32 value, int size)
 {
-    mqCmod *Cmod = io->userdata;
+    mqMachine *mach = io->userdata;
+    mqCmod *Cmod = mach->modules[moduleID];
     int n = ((addr & 0xfff) - 0x3c) >> 5;
     mqCmod_RTCTimer *RT = &Cmod->timers[n];
     (void)size;
     RT->RTCR = (RT->RTCR & value & 0x02) | (value & 0x01);
+    notifyINTC(mach, n);
     // TODO[cmod]: Consequences of writing to RTCR
 }
 
@@ -186,7 +212,7 @@ bool mq_cmod_setup(mqMachine *mach)
         ok &= mq_page_mapIO(pg44d, ioID, a+8, 1, 0);
 
         ioID = mq_page_addIO(pg44d, "RTCRn", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-            NULL, write_RTCRn, &RT->RTCR, Cmod);
+            NULL, write_RTCRn, &RT->RTCR, mach);
         ok &= mq_page_mapIO(pg44d, ioID, a+12, 1, 0);
     }
 

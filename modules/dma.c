@@ -94,8 +94,6 @@ static void notifyINTC(mqMachine *mach, mqDMA_Channel *ch)
     u32 IE = ch->CHCR & 1;
     TE &= IE;
 
-    mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Interrupt status is HE=%d TE=%d",
-        ch->index, HE, TE);
     mq_intc_setInterruptStatus(mach, channelInterruptCode, (HE | TE) != 0);
 }
 
