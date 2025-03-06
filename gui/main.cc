@@ -203,6 +203,18 @@ static void render(void)
                     mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXE, true);
                 if(ImGui::IsKeyDown(ImGuiKey_Escape))
                     mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXIT, true);
+                if(ImGui::IsKeyDown(ImGuiKey_F1))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F1, true);
+                if(ImGui::IsKeyDown(ImGuiKey_F2))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F2, true);
+                if(ImGui::IsKeyDown(ImGuiKey_F3))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F3, true);
+                if(ImGui::IsKeyDown(ImGuiKey_F4))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F4, true);
+                if(ImGui::IsKeyDown(ImGuiKey_F5))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F5, true);
+                if(ImGui::IsKeyDown(ImGuiKey_F6))
+                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F6, true);
             }
         }
     }
