@@ -7,6 +7,7 @@
 #include <mq/cpu.h>
 #include <mq/memory.h>
 #include <mq/machine.h>
+#include <mq/modules/intc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -147,7 +148,8 @@ static int highestPriorityException(u32 excMask)
     return -1;
 }
 
-static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
+static bool handleException(
+    mqMachine *mach, mqCpu *cpu, int exc, u32 previousPC)
 {
     /* SR.BL double-faults if an exception occurs, but simply waits in the case
        of interrupts. However interrupts are already masked by the logic in
@@ -163,11 +165,19 @@ static bool handleException(mqCpu *cpu, int exc, u32 previousPC)
     /* Break from sleep */
     cpu->sleeping = false;
 
-    if(exc_isInterrupt(exc))
-        mq_log(MQ_LOG_DEBUG, "Handling interrupt 0x%03x", cpu->INTEVT);
-    else
+    if(exc_isInterrupt(exc)) {
+        mqINTC *INTC = mq_intc_get(mach);
+        mq_intc_statsAcceptInterrupt(INTC, cpu->nextInterrupt);
+
+        if(INTC->statsInterruptCount[cpu->nextInterrupt] <= 10)
+            mq_log(MQ_LOG_DEBUG, "Handling interrupt 0x%03x", cpu->INTEVT);
+        if(INTC->statsInterruptCount[cpu->nextInterrupt] == 10)
+            mq_log(MQ_LOG_DEBUG, "Note: making 0x%03x silent", cpu->INTEVT);
+    }
+    else {
         mq_log(MQ_LOG_DEBUG, "Handling exception %s",
             mq_cpu_exceptionName(exc));
+    }
 
     cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
@@ -244,7 +254,7 @@ static void updateIncomingInterrupt(mqCpu *cpu)
     }
 }
 
-void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu)
+void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
 {
     u32 previousPC = cpu->pc;
 
@@ -293,7 +303,7 @@ endCycle:
        instruction because some exceptions are re-execution type. */
     if(MQ_UNLIKELY(cpu->excMask)) {
         int exc = highestPriorityException(cpu->excMask);
-        if(!handleException(cpu, exc, previousPC))
+        if(!handleException(mach, cpu, exc, previousPC))
             mach->stuck = true;
     }
 }
@@ -326,8 +336,10 @@ void mq_cpu_setSR(mqCpu *cpu, u32 SR)
         updateIncomingInterrupt(cpu);
 }
 
-void mq_cpu_setIncomingInterrupt(mqCpu *cpu, u32 INTEVT, int priority)
+void mq_cpu_setIncomingInterrupt(
+    mqCpu *cpu, int interrupt, u32 INTEVT, int priority)
 {
+    cpu->nextInterrupt = interrupt;
     cpu->nextInterruptINTEVT = INTEVT;
     cpu->nextInterruptPriority = priority;
     updateIncomingInterrupt(cpu);

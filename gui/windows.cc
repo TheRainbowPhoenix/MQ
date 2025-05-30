@@ -38,7 +38,7 @@ static void AddChunkList(
             s.selectedChunk = i;
             s.selectedPage = -1;
             s.selectedIO = -1;
-            a.type = a.Type::MWA_VIEW_HEX;
+            a.type = MemoryWindowAction::Type::MWA_VIEW_HEX;
             a.address = i << 20;
 
             /* Autoselect page #0 if there is exactly one non-null page */
@@ -106,7 +106,7 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
         if(clicked && s.selectedPage != (int)i) {
             s.selectedPage = i;
             s.selectedIO = -1;
-            a.type = a.Type::MWA_VIEW_HEX;
+            a.type = MemoryWindowAction::Type::MWA_VIEW_HEX;
             a.address = chunkBase + (i << 12);
         }
 
@@ -154,7 +154,7 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
         bool clicked = ImGui::Selectable(str, i == s.selectedIO);
         if(io->name) {
             ImGui::SameLine(0, 7);
-            ImGui::TextDisabled(io->name);
+            ImGui::TextDisabled("%s", io->name);
         }
 
         if(clicked)
@@ -347,13 +347,13 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
 
             ImGui::TableNextColumn();
             if(SZ >= 0 && SZ < 4)
-                ImGui::Text(SZ_str[SZ]);
+                ImGui::Text("%s", SZ_str[SZ]);
             else
                 ImGui::Text("%d", SZ);
 
             ImGui::TableNextColumn();
             if(data.PR >= 0 && data.PR < 4)
-                ImGui::Text(PR_str[data.PR]);
+                ImGui::Text("%s", PR_str[data.PR]);
             else
                 ImGui::Text("%d", data.PR);
 
@@ -447,7 +447,7 @@ void AddInterruptsWindowContents(mqMachine *mach)
     ImVec2 size = ImGui::GetContentRegionAvail();
     ImVec2 halfSize(size.x / 2 - 5, size.y);
 
-    if(ImGui::BeginTable("Interrupts", 4,
+    if(ImGui::BeginTable("Interrupts", 5,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
             ImGuiTableFlags_ScrollY,
             halfSize)) {
@@ -455,6 +455,7 @@ void AddInterruptsWindowContents(mqMachine *mach)
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Prio.", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableSetupColumn("Count", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableHeadersRow();
 
         for(int i = 0; i < MQ_INT_NUM; i++) {
@@ -463,6 +464,7 @@ void AddInterruptsWindowContents(mqMachine *mach)
                 INTC ? mq_intc_isInterruptMasked(INTC, (mqInt)i) : false;
             bool raised = INTC ? INTC->interruptStatus[i] : false;
             int priority = INTC ? mq_intc_interruptPriority(INTC, (mqInt)i) : 0;
+            int count = INTC ? INTC->statsInterruptCount[i] : 0;
 
             if(hideMasked && (masked || !priority))
                 continue;
@@ -490,13 +492,16 @@ void AddInterruptsWindowContents(mqMachine *mach)
 
             char const *name = mq_intc_interruptName((mqInt)i);
             ImGui::TableNextColumn();
-            ImGui::Text(name ? name : "(null)");
+            ImGui::Text("%s", name ? name : "(null)");
 
             ImGui::TableNextColumn();
             ImGui::Text("%d", priority);
 
             ImGui::TableNextColumn();
-            ImGui::Text(status);
+            ImGui::Text("%s", status);
+
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", count);
 
             ImGui::PopStyleColor();
         }
@@ -530,7 +535,7 @@ void AddInterruptsWindowContents(mqMachine *mach)
 
             char const *name = mq_cpu_exceptionName(i);
             ImGui::TableNextColumn();
-            ImGui::Text(name ? name : "(null)");
+            ImGui::Text("%s", name ? name : "(null)");
 
             ImGui::TableNextColumn();
             ImGui::Text(raised ? "raised" : "-");

@@ -17,7 +17,7 @@ void fatal(int rc, char const *fmt, ...);
 
 int main(int argc, char **argv)
 {
-    if(argc != 2 || !strcmp(argv[0], "--help"))
+    if(argc != 2 || !strcmp(argv[1], "--help"))
         fatal(argc != 2, "usage: %s <add-in file>\n", argv[0]);
 
     char const *addinFile = argv[1];

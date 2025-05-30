@@ -165,7 +165,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     mach->stuck = false;
 }
 
-bool mq_machine_load_g3a(mqMachine *mach, char const *path)
+static bool load_addin(mqMachine *mach, char const *path, u32 target, u32 off)
 {
     FILE *fp = fopen(path, "r");
     void *data = NULL;
@@ -181,8 +181,7 @@ bool mq_machine_load_g3a(mqMachine *mach, char const *path)
     if(fread(data, size, 1, fp) != 1) goto err;
     fclose(fp);
 
-    bool x = mq_memory_load(
-        mach->memory, 0x81800000, data + 0x7000, size - 0x7000);
+    bool x = mq_memory_load(mach->memory, target, data + off, size - off);
     free(data);
     return x;
 
@@ -194,6 +193,16 @@ err:
         free(data);
     mach->stuck = true;
     return false;
+}
+
+bool mq_machine_load_g1a(mqMachine *mach, char const *path)
+{
+    return load_addin(mach, path, 0x81800000, 0);
+}
+
+bool mq_machine_load_g3a(mqMachine *mach, char const *path)
+{
+    return load_addin(mach, path, 0x81800000, 0x7000);
 }
 
 int mq_machine_cycle(mqMachine *mach, int cycles)

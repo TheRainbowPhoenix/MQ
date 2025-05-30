@@ -32,45 +32,167 @@ void SeparatorTextD(char const *str)
     ImGui::PopStyleColor();
 }
 
+bool IconButton(int iconID, char const *tooltip, bool disabled)
+{
+    char str[32];
+    sprintf(str, "%lc", 0xe000 + iconID);
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+    if(disabled)
+        ImGui::BeginDisabled();
+    bool b = ImGui::Button(str, ImVec2(20, 20));
+    if(disabled)
+        ImGui::EndDisabled();
+    ImGui::SetItemTooltip(tooltip);
+    ImGui::PopStyleVar();
+    return b;
+}
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &st)
 {
     st.WindowTitleAlign = ImVec2(0.5, 0.5);
+    st.WindowMenuButtonPosition = ImGuiDir_None;
+    st.WindowBorderSize = 0;
     st.FramePadding = ImVec2(8, 4);
     st.ItemSpacing = ImVec2(10, 5);
     st.ItemInnerSpacing = ImVec2(6, 5);
     st.ScrollbarSize = 10;
     st.GrabMinSize = 8;
     st.FrameBorderSize = 1;
-    st.TabBorderSize = 1;
+    st.TabBorderSize = 0;
     st.FrameRounding = 2;
     st.GrabRounding = 2;
     st.TabRounding = 2;
     st.TabBarOverlineSize = 0;
     st.SeparatorTextBorderSize = 1;
     st.SeparatorTextPadding = {0,0};
+    st.DockingSeparatorSize = 1;
+    st.DisabledAlpha = 0.4;
 
-    st.Colors[ImGuiCol_WindowBg]           = {.185, .185, .2,  1  };
-    st.Colors[ImGuiCol_FrameBg]            = {.22,  .22,  .24, 1  };
+    st.Colors[ImGuiCol_WindowBg]           = {.185, .185, .192,1  };
+    st.Colors[ImGuiCol_FrameBg]            = {.22,  .22,  .23, 1  };
     st.Colors[ImGuiCol_FrameBgHovered]     = {.7,   .81,  1,   .2 };
     st.Colors[ImGuiCol_FrameBgActive]      = {.70,  .81,  1,   .36};
-    st.Colors[ImGuiCol_TitleBg]            = {.14,  .14,  .14, 1  };
-    st.Colors[ImGuiCol_TitleBgActive]      = {.14,  .14,  .14, 1  };
-    st.Colors[ImGuiCol_TitleBgCollapsed]   = {.14,  .14,  .14, 1  };
+    st.Colors[ImGuiCol_TitleBg]            = {.125, .125, .125,1  };
+    st.Colors[ImGuiCol_TitleBgActive]      = st.Colors[ImGuiCol_TitleBg];
+    st.Colors[ImGuiCol_TitleBgCollapsed]   = st.Colors[ImGuiCol_TitleBg];
+    st.Colors[ImGuiCol_MenuBarBg]          = st.Colors[ImGuiCol_TitleBg];
     st.Colors[ImGuiCol_Header]             = {.26,  .59,  .98, .28};
     st.Colors[ImGuiCol_HeaderHovered]      = {.26,  .59,  .98, .47};
     st.Colors[ImGuiCol_HeaderActive]       = {.26,  .59,  .98, .59};
     st.Colors[ImGuiCol_CheckMark]          = {.92,  .95,  .98, 1  };
-    st.Colors[ImGuiCol_TabUnfocused]       = {.165, .165, .18, .97};
-    st.Colors[ImGuiCol_TabUnfocusedActive] = {.17,  .17,  .19, 1  };
+    st.Colors[ImGuiCol_TabDimmed]          = {.165, .165, .18, .97};
+    st.Colors[ImGuiCol_TabDimmedSelected]  = {.235, .235, .25, 1  };
     st.Colors[ImGuiCol_DockingPreview]     = {.25,  .375, .5,  .5 };
-    st.Colors[ImGuiCol_TabDimmedSelected]  = st.Colors[ImGuiCol_WindowBg];
     st.Colors[ImGuiCol_Tab]                = st.Colors[ImGuiCol_TabDimmed];
 
     st.Colors[ImGuiCol_Border].w = 0.25;
     st.Colors[ImGuiCol_ScrollbarBg].w = 0.00;
 }
+
+//===========================================================================//
+
+namespace ImGui {
+
+static int const _CustomMenu_MenuPad = 7;
+static bool _CustomMenu_Opened = false;
+static bool _CustomMenu_MenuOpened = false;
+static bool _CustomMenu_ChildOpened = false;
+
+bool BeginCustomMenuBar()
+{
+    /* Lots of working around over here... set FramePadding to have a taller
+       menu and increase menu button height with ItemSpacing (?!). */
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,
+        ImVec2(0, _CustomMenu_MenuPad));
+    /* Remove padding for the menu because (1) it clips and we want all the
+       height, (2) it doesn't influence the position anyway. */
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+
+    _CustomMenu_Opened = ImGui::BeginMainMenuBar();
+    if(_CustomMenu_Opened) {
+        /* Restore window/frame padding for the menu windows */
+        // TODO: Custom menu: Get from style
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+    }
+
+    return _CustomMenu_Opened;
+}
+
+void EndCustomMenuBar()
+{
+    if(_CustomMenu_Opened) {
+        ImGui::PopStyleVar(); // WindowPadding (normal)
+        ImGui::EndMainMenuBar();
+    }
+    ImGui::PopStyleVar(); // WindowPadding (custom)
+    ImGui::PopStyleVar(); // FramePadding
+    _CustomMenu_Opened = false;
+}
+
+bool BeginCustomMenu(char const *label)
+{
+    /* Second part of the taller menu button trick */
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+        ImVec2(6, _CustomMenu_MenuPad));
+
+    _CustomMenu_MenuOpened = ImGui::BeginMenu(label);
+    if(_CustomMenu_MenuOpened) {
+        /* Restore ItemSpacing for menu items */
+        // TODO: Custom menu: Get from style
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 5));
+    }
+
+    return _CustomMenu_MenuOpened;
+}
+
+void EndCustomMenu()
+{
+    if(_CustomMenu_MenuOpened) {
+        ImGui::PopStyleVar(); // ItemSpacing (normal)
+        ImGui::EndMenu();
+    }
+    ImGui::PopStyleVar(); // ItemSpacing (custom menu)
+    _CustomMenu_MenuOpened = false;
+}
+
+bool BeginCustomMenuChild(char const *label, ImVec2 size, ImVec2 padding)
+{
+    /* Now insert a child window so we can switch from the menu's slightly
+       weird horizontal layout and add some padding. */
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, padding);
+
+    _CustomMenu_ChildOpened = ImGui::BeginChild(label, size,
+        ImGuiChildFlags_AlwaysUseWindowPadding,
+        ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+        ImGuiWindowFlags_NoScrollWithMouse);
+
+    /* Reset padding for other windows like tooltips */
+    // TODO: Custom menu: Get from style
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 8));
+    return _CustomMenu_ChildOpened;
+}
+
+void EndCustomMenuChild()
+{
+    ImGui::PopStyleVar(); // WindowPadding (normal)
+    ImGui::EndChild();
+    ImGui::PopStyleVar(); // WindowPadding (child)
+}
+
+void CustomMenuSeparator()
+{
+    ImVec2 min = ImGui::GetCursorScreenPos();
+    ImVec2 max(min.x + 1, min.y + ImGui::GetContentRegionAvail().y);
+    auto color = ImGui::GetStyle().Colors[ImGuiCol_Separator];
+    ImGui::GetWindowDrawList()->AddRectFilled(min, max,
+        ImGui::ColorConvertFloat4ToU32(color));
+    ImGui::Dummy(ImVec2(1, 1));
+}
+
+} /* namespace ImGui */
 
 //============================================================================//
 

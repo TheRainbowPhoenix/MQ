@@ -106,6 +106,9 @@ struct mqINTC {
     enum mqInt nextInterrupt;
     /* Priority of that interrupt; or 0 */
     int nextInterruptPriority;
+
+    /* Statistics; number of times each interrupt has been accepted */
+    int statsInterruptCount[MQ_INT_NUM];
 };
 
 struct mqINTC_InterruptInfo {
@@ -142,9 +145,8 @@ bool mq_intc_isInterruptMasked(mqINTC *INTC, mqInt interrupt);
    to be called from the outside. */
 void mq_intc_updateLogic(mqMachine *mach);
 
-/* Propagate changs to SR.BL, SR.IMASK and USERIMASK to the interrupt signal.
-   Should be called whenever these change. */
-void mq_intc_updateBlockLogic(mqMachine *mach);
+/* Record statistics that an interrupt of given ID has been accepted. */
+void mq_intc_statsAcceptInterrupt(mqINTC *INTC, mqInt interrupt);
 
 //=== Misc. information ======================================================//
 

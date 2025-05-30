@@ -1,4 +1,5 @@
 #include "gui.h"
+#include <azur/config.h>
 
 //=== Display window =========================================================//
 
@@ -88,7 +89,13 @@ void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
         float th = h / sh;
         shader_texture.add_subtexture(
             -w/2, -h/2, w, h,
-            u0, v0, tw, th, m_texture->format() == GL_RED);
+            u0, v0, tw, th,
+#ifdef AZUR_GRAPHICS_OPENGL_ES_2_0
+            m_texture->format() == GL_LUMINANCE
+#else
+            m_texture->format() == GL_RED
+#endif
+        );
 
         m_texture->bind();
         shader_texture.draw();
@@ -172,7 +179,7 @@ void ProgramTexture::set_vertex_attributes() const
         (void *)offsetof(ProgramTexture_Attributes, uv)
     );
     glVertexAttribPointer(glGetAttribLocation(this->prog, "a_grayscale"),
-        1, GL_INT, GL_FALSE,
+        1, GL_FLOAT, GL_FALSE,
         sizeof(ProgramTexture_Attributes),
         (void *)offsetof(ProgramTexture_Attributes, grayscale)
     );
@@ -188,10 +195,10 @@ void ProgramTexture::add_subtexture(int x, int y, int width, int height,
     float u, float v, float tw, float th, bool grayscale)
 {
     ProgramTexture_Attributes attr[4] = {
-        { vec2(x,       y),        vec2(u, v),       (int)grayscale },
-        { vec2(x+width, y),        vec2(u+tw, v),    (int)grayscale },
-        { vec2(x,       y+height), vec2(u, v+th),    (int)grayscale },
-        { vec2(x+width, y+height), vec2(u+tw, v+th), (int)grayscale },
+        { vec2(x,       y),        vec2(u, v),       (float)(int)grayscale },
+        { vec2(x+width, y),        vec2(u+tw, v),    (float)(int)grayscale },
+        { vec2(x,       y+height), vec2(u, v+th),    (float)(int)grayscale },
+        { vec2(x+width, y+height), vec2(u+tw, v+th), (float)(int)grayscale },
     };
 
     this->vertices.push_back(attr[0]);

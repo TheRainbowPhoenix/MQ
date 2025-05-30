@@ -136,13 +136,13 @@ static void notifyCPU(mqMachine *mach)
 
     int interrupt = INTC->nextInterrupt;
     if(interrupt < 0) {
-        mq_cpu_setIncomingInterrupt(&mach->cpu, 0, 0);
+        mq_cpu_setIncomingInterrupt(&mach->cpu, -1, 0, 0);
         return;
     }
 
     u32 INTEVT = interrupts[interrupt].INTEVT;
     int priority = mq_intc_interruptPriority(INTC, interrupt);
-    mq_cpu_setIncomingInterrupt(&mach->cpu, INTEVT, priority);
+    mq_cpu_setIncomingInterrupt(&mach->cpu, interrupt, INTEVT, priority);
 }
 
 void mq_intc_updateLogic(mqMachine *mach)
@@ -169,6 +169,12 @@ void mq_intc_updateLogic(mqMachine *mach)
     INTC->nextInterrupt = highestInterrupt;
     INTC->nextInterruptPriority = highestPriority;
     notifyCPU(mach);
+}
+
+void mq_intc_statsAcceptInterrupt(mqINTC *INTC, mqInt interrupt)
+{
+    if((uint)interrupt < MQ_INT_NUM)
+        INTC->statsInterruptCount[interrupt]++;
 }
 
 static u32 read_IPRn(mqMMIO *io, u32 addr, int size)

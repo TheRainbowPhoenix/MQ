@@ -111,7 +111,8 @@ struct mqCpu
        interrupt should be accepted next. Setting these doesn't automatically
        lead to an interrupt being accepted because the CPU then applies SR.BL
        and SR.IMASK on top of it. The data sent here by the INTC is already
-       filtered thorugh USERIMASK though. */
+       filtered through USERIMASK though. */
+    int nextInterrupt;
     u32 nextInterruptINTEVT;
     int nextInterruptPriority;
 
@@ -155,7 +156,8 @@ bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value);
 
 /* Set the next interrput to be accepted. This function is normally called only
    by the INTC; for sending out interrupts, use the INTC module. */
-void mq_cpu_setIncomingInterrupt(mqCpu *cpu, u32 INTEVT, int priority);
+void mq_cpu_setIncomingInterrupt(
+    mqCpu *cpu, int interrupt, u32 INTEVT, int priority);
 
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 

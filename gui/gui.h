@@ -14,9 +14,9 @@
 /* 2D texture shader rendering subrectangles in quads. */
 
 struct ProgramTexture_Attributes {
-    vec2 vertex;    // Vertex location in OpenGL coordinate space
-    vec2 uv;        // Location within texture
-    int grayscale;  // Non-zero for grayscale mode (red is all channels)
+    vec2 vertex;      // Vertex location in OpenGL coordinate space
+    vec2 uv;          // Location within texture
+    float grayscale;  // 1.0 for grayscale mode (red is all channels)
 };
 
 struct ProgramTexture: public Shader<ProgramTexture_Attributes>

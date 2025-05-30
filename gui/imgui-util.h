@@ -27,6 +27,15 @@ void TextLR(char const *left, char const *fmt, ...);
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
 
+/* Icon button with a tooltip text. */
+bool IconButton(int iconID, char const *tooltip, bool disabled=false);
+
+/* Move cursor by a given amount. */
+static inline void MoveCursorScreenPos(ImVec2 diff) {
+   ImVec2 pos = ImGui::GetCursorScreenPos();
+   ImGui::SetCursorScreenPos(ImVec2(pos.x + diff.x, pos.y + diff.y));
+}
+
 /* Text but with the mono font. */
 template<typename... Args>
 void TextMono(Args... args) {
@@ -46,6 +55,40 @@ void Checkbox2(Args... args) {
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &style);
+
+//=== Customized main menu bar that accepts other widgets ====================//
+
+namespace ImGui {
+
+/* Custom main menu bar. This menu bar has a specific layout with menus on the
+   left and a child window on the right for additional buttons/widgets/etc.
+   It's a bit hacky style-wise hence this abstraction.
+
+   In order to pop style variables, EndCustomMenuBar() must be called *even* if
+   BeginCustomMenuBar() returns false. The function has internal state to
+   remember whether to EndMainMenuBar() or not. So you can't nest this (makes
+   no sense anyway as this is the main menu). */
+bool BeginCustomMenuBar();
+void EndCustomMenuBar();
+
+/* Create a top-level menu entry in the custom main menu bar. This is only for
+   top-level menus; like for the bar itself, EndCustomMenu() must be called
+   *even* if BeginCustomMenu() returns false, and it can't be nested. For
+   sub-menus, use BeginMenu() as usual. */
+bool BeginCustomMenu(char const *label);
+void EndCustomMenu();
+
+/* Start the child window where we can put more items in the menu bar. Like for
+   the bar, EndCustomMenuChild() mut be called *even* if BeginCustomMenuChild()
+   returns false. */
+bool BeginCustomMenuChild(char const *label, ImVec2 size, ImVec2 padding);
+void EndCustomMenuChild();
+
+/* Separator within the child window. */
+void CustomMenuSeparator();
+
+} /* namespace ImGui */
+
 
 //=== Dockable windows rendered with custom OpenGL code ======================//
 

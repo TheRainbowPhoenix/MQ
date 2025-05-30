@@ -54,6 +54,7 @@ set(GUI_SOURCES
   gui/display-window.cc
   gui/imgui-util.cc
   gui/main.cc
+  gui/stb.cc
   gui/texture.cc
   gui/util.cc
   gui/windows.cc)
@@ -65,6 +66,8 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   list(APPEND ASSETS
     gui/assets/DejaVuSans.ttf
     gui/assets/DejaVuSansMono.ttf
+    gui/assets/DejaVuSans-Bold.ttf
+    gui/assets/icons.png
     gui/glsl/vs_tiles.glsl
     gui/glsl/fs_tiles.glsl
   )
@@ -72,13 +75,16 @@ endif()
 
 add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} ${ASSETS})
 target_compile_options(mq PRIVATE
-  -O3 -flto=auto -g -Wall -Wextra -Wno-pointer-arith -fsanitize=address)
+  -O3 -flto=auto -g -Wall -Wextra -Wno-pointer-arith)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_options(mq PRIVATE -flto=auto -fsanitize=address)
+  "${CMAKE_CURRENT_BINARY_DIR}"
+  "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb")
+target_link_options(mq PRIVATE -flto=auto)
 
 if(AZUR_PLATFORM STREQUAL linux)
+  target_compile_options(mq PRIVATE -fsanitize=address)
+  target_link_options(mq PRIVATE -fsanitize=address)
   target_link_libraries(mq Azur::Azur Azur::GLM Azur::ImGui)
 endif()
 

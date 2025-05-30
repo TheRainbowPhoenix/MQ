@@ -13,11 +13,18 @@
 #include <azur/azur.h>
 #include <azur/log.h>
 #include <SDL2/SDL.h>
+#include <stb_image.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <malloc.h>
+#include <locale.h>
 #include <memory>
+#include <vector>
+#include <string>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 DisplayGlWindow DGW;
 Texture displayTexture;
@@ -31,22 +38,26 @@ static mqMachine *mach = nullptr;
 struct DelayedInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
-    bool mq_initialize_gravity_duck = false;
-    bool mq_initialize_gintctl = false;
+    int mq_load_working_folder_addin = -1;
     int mq_cycles = 0;
     bool mq_heap_init = false;
     bool mq_mmu_unbind = false;
     bool mq_mmu_bind = false;
+    std::string open_path = "";
 
-    /* (unused) */
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
+
+    bool quit = false;
 };
 
 struct DelayedInput input;
 
+std::vector<std::string> workingFolderAddins;
+
 ImFont *fontSans = nullptr;
 ImFont *fontMono = nullptr;
+ImFont *fontBold = nullptr;
 
 static void handle_log(enum mq_log_priority priority, char *str)
 {
@@ -101,8 +112,13 @@ static void render(void)
         mqDisplay *d = mach->display;
         displayTexture.bind();
         if(d->format == MQ_DISPLAY_FORMAT_L8) {
+#ifdef AZUR_GRAPHICS_OPENGL_ES_2_0
+            displayTexture.setFormat(GL_LUMINANCE, GL_UNSIGNED_BYTE,
+                                     d->width, d->height);
+#else
             displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
                                      d->width, d->height);
+#endif
             displayTexture.setData(d->data);
         }
         else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
@@ -125,18 +141,68 @@ static void render(void)
     ImGui::SetNextWindowSize(ImVec2(width, height));
 
     bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
-    if(ImGui::BeginMainMenuBar()) {
-        if(ImGui::BeginMenu("File")) {
-            open = open || ImGui::MenuItem("Open...", "Ctrl+O");
-            ImGui::EndMenu();
+    input.quit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
+        ImGuiInputFlags_RouteGlobal);
+
+    if(ImGui::BeginCustomMenuBar()) {
+        if(ImGui::BeginCustomMenuChild("##menutitle", {30,0}, {1,4})) {
+            ImGui::MoveCursorScreenPos({0, 3});
+            ImGui::PushFont(fontBold);
+            ImGui::Text("MQ");
+            ImGui::PopFont();
         }
-        ImGui::EndMainMenuBar();
+        ImGui::EndCustomMenuChild();
+
+        if(ImGui::BeginCustomMenu("File")) {
+            open |= ImGui::MenuItem("Open add-in...", "Ctrl+O");
+            input.quit |= ImGui::MenuItem("Quit", "Ctrl+Q");
+        }
+        ImGui::EndCustomMenu();
+        if(ImGui::BeginCustomMenu("Machine")) {
+            input.mq_initialize_addin_fx |=
+                ImGui::MenuItem("Reset to blank FX add-in");
+            input.mq_initialize_addin_cg |=
+                ImGui::MenuItem("Reset to blank CG add-in");
+            input.ui_pattern_mono |=
+                ImGui::MenuItem("Generate B&W frame");
+            input.ui_pattern_rgb |=
+                ImGui::MenuItem("Generate RGB frame");
+        }
+        ImGui::EndCustomMenu();
+
+        if(ImGui::BeginCustomMenuChild("##menutools", {0,0}, {1,4})) {
+            ImGui::CustomMenuSeparator();
+            ImGui::SameLine(0, 6);
+
+            ImGui::BeginDisabled(!mach->initialized);
+            bool paused = input.mq_cycles == 0;
+            bool stuck = mach->stuck;
+
+            if(paused && ImGui::IconButton(0, "Run"))
+                input.mq_cycles = -1;
+            if(!paused && ImGui::IconButton(1, "Pause"))
+                input.mq_cycles = 0;
+            ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(2, "Step", !paused))
+                input.mq_cycles = 1;
+            ImGui::SameLine(0, 6);
+            ImGui::EndDisabled();
+
+            ImGui::MoveCursorScreenPos({0, 3});
+            if(!mach->initialized)
+                ImGui::TextDisabled("Not initialized");
+            else if(stuck)
+                ImGui::TextColored({1,.3,.3,1}, "Stuck!");
+            else
+                ImGui::Text(paused ? "Paused" : "Running...");
+        }
+        ImGui::EndCustomMenuChild();
     }
-    if(open) {
-        std::string path = openFileDialog();
-        if(path.size())
-            printf("Open! %s\n", path.c_str());
-    }
+    ImGui::EndCustomMenuBar();
+
+    if(open)
+        input.open_path = openFileDialog();
 
     auto dock = ImGui::DockSpaceOverViewport();
 
@@ -180,7 +246,9 @@ static void render(void)
                 if(mq_keyboard_isKeyPressed(kbd, i)) {
                     // TODO: Visual effect for keyboard-based key presses
                     // (or add a shortcut to the button-not sure what's best)
+                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5);
                     ImGui::Button(str, {w, h});
+                    ImGui::PopStyleVar();
                 }
                 else
                     ImGui::Button(str, {w, h});
@@ -223,24 +291,25 @@ static void render(void)
     static bool show_demo_window = false;
 
     if(ImGui::Begin("Control", nullptr, 0)) {
+#ifndef AZUR_PLATFORM_EMSCRIPTEN
         struct mallinfo2 mi = mallinfo2();
         /* This info is not available with AddressSanitizer's wrapper's */
         if(mi.arena || mi.hblkhd)
             ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
                 (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
+#endif
 
         ImGui::Checkbox2("Show demo window", &show_demo_window);
 
-        if(ImGui::Button("Reset add-in FX"))
-            input.mq_initialize_addin_fx = true;
-        ImGui::SameLine();
-        if(ImGui::Button("Reset add-in CG"))
-            input.mq_initialize_addin_cg = true;
-
-        if(ImGui::Button("Reset and load GravityDuck.g3a"))
-            input.mq_initialize_gravity_duck = true;
-        if(ImGui::Button("Reset and load gintctl.g3a"))
-            input.mq_initialize_gintctl = true;
+        if(workingFolderAddins.size() == 0)
+            ImGui::Text("(No add-ins in working folder)");
+        for(uint i = 0; i < workingFolderAddins.size(); i++) {
+            char str[128];
+            snprintf(str, sizeof str, "Reset and load %s",
+                workingFolderAddins[i].c_str());
+            if(ImGui::Button(str))
+                input.mq_load_working_folder_addin = i;
+        }
 
         if(mach->initialized) {
             ImGui::Text("Cycle:");
@@ -259,11 +328,6 @@ static void render(void)
             ImGui::SameLine();
             if(ImGui::Button("10k"))
                 input.mq_cycles = 10000;
-            if(ImGui::Button("Run"))
-                input.mq_cycles = -1;
-            ImGui::SameLine();
-            if(ImGui::Button("Pause"))
-                input.mq_cycles = 0;
         }
         else {
             ImGui::Text("Machine is not initialized.");
@@ -365,7 +429,7 @@ static void render(void)
     static MemoryWindowState MWS {};
     MemoryWindowAction MWA = AddMemoryWindow(mach, MWS);
 
-    if(MWA.type == MWA.Type::MWA_VIEW_HEX)
+    if(MWA.type == MemoryWindowAction::Type::MWA_VIEW_HEX)
         HV.Cursor = MWA.address;
 
     if(ImGui::Begin("Heap")) {
@@ -398,9 +462,9 @@ static void render(void)
     ImGui::End();
 
     MMUWindowAction MMUWA = AddMMUWindow(mach);
-    if(MMUWA.type == MMUWA.Type::MMUWA_BIND)
+    if(MMUWA.type == MMUWindowAction::Type::MMUWA_BIND)
         input.mq_mmu_bind = true;
-    if(MMUWA.type == MMUWA.Type::MMUWA_UNBIND)
+    if(MMUWA.type == MMUWindowAction::Type::MMUWA_UNBIND)
         input.mq_mmu_unbind = true;
 
     if(ImGui::Begin("Hex Viewer")) {
@@ -417,7 +481,7 @@ static void render(void)
         auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
         auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
-            ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
+            ImGuiDir_Right, 0.70f, nullptr, &dock_left_top);
         auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
             dock_left_bottom,
             ImGuiDir_Right, 0.51f, nullptr, &dock_left_bottom);
@@ -527,10 +591,28 @@ static bool generate_rgb_pattern(mqDisplay *display)
 
 //---
 
+static void open_addin(std::string &path)
+{
+    if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+        mq_machine_load_g1a(mach, path.c_str());
+    }
+    else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_load_g3a(mach, path.c_str());
+    }
+    else {
+        azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
+    }
+}
+
 static int update(void)
 {
     SDL_Event e;
     int cyclesLeft = 0;
+
+    if(input.quit)
+        return 1;
 
     while(SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
@@ -552,15 +634,13 @@ static int update(void)
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_initialize_gravity_duck) {
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
-        mq_machine_load_g3a(mach, "GravityDuck.g3a");
+    if(input.mq_load_working_folder_addin >= 0) {
+        open_addin(workingFolderAddins[input.mq_load_working_folder_addin]);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_initialize_gintctl) {
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
-        mq_machine_load_g3a(mach, "gintctl.g3a");
-        render_needed = std::max(render_needed, 1);
+    else if(input.open_path.size()) {
+        open_addin(input.open_path);
+        render_needed=  std::max(render_needed, 1);
     }
     else if(input.mq_cycles) {
         /* Limit the number of cycles for each GUI frame to not lock the GUI.
@@ -602,8 +682,73 @@ static int update(void)
     return 0;
 }
 
+int *icon_rect_ids = NULL;
+
+static void load_icons(char const *filepath)
+{
+    ImGuiIO &io = ImGui::GetIO();
+    ImFont *font = fontSans;
+    u32 PUA = 0xe000; // UTF-8 Private Use Area (from BMP)
+
+    /* Load the image and find out how many icons there are */
+    int icon_w, icon_h, icon_n;
+    u8 *icon_px = stbi_load(filepath, &icon_w, &icon_h, &icon_n, 4);
+    if(!icon_px) {
+        azlog(ERROR, "stbi_load(\"%s\") failed\n", filepath);
+        return;
+    }
+    int icon_count = icon_w / 16;
+
+    /* Allocate glyphs and build the font atlas */
+    icon_rect_ids = (int *)malloc(icon_count * sizeof *icon_rect_ids);
+
+    for(int i = 0; i < icon_count; i++) {
+        icon_rect_ids[i] = io.Fonts->AddCustomRectFontGlyph(
+            font, PUA+i, 16, 16, 16, ImVec2(0,-1));
+    }
+
+    io.Fonts->TexPixelsUseColors = true;
+    io.Fonts->Build();
+
+    /* Retrieve atlas texture in RGBA format */
+    u8 *atlas_px = nullptr;
+    int atlas_w, atlas_h;
+    io.Fonts->GetTexDataAsRGBA32(&atlas_px, &atlas_w, &atlas_h);
+
+    /* Copy the icons into the atlas */
+    for(int i = 0; i < icon_count; i++) {
+        int id = icon_rect_ids[i];
+        ImFontAtlasCustomRect const *rect = io.Fonts->GetCustomRectByIndex(id);
+        if(!rect)
+            continue;
+
+        for(int y = 0; y < rect->Height; y++) {
+            u32 *dst = (u32 *)atlas_px + (rect->Y + y) * atlas_w + (rect->X);
+            for(int x = 0; x < rect->Width; x++) {
+                u8 *src = icon_px + (y * icon_w + (16 * i + x)) * 4;
+                *dst++ = IM_COL32(src[0], src[1], src[2], src[3]);
+            }
+        }
+    }
+
+    stbi_image_free(icon_px);
+}
+
+static void find_cwd_addins(std::vector<std::string> &addins)
+{
+    for(auto const &entry: fs::directory_iterator(".")) {
+        if(!entry.is_regular_file())
+            continue;
+
+        std::string ext = entry.path().extension();
+        if(ext == ".g1a" || ext == ".G1A" || ext == ".g3a" || ext == ".G3A")
+            addins.push_back(entry.path().filename());
+    }
+}
+
 int main(void)
 {
+    setlocale(LC_ALL, "C.UTF-8");
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
 
     ConsoleText.alloc(65536, 256);
@@ -660,9 +805,14 @@ int main(void)
     // TODO: Embed assets in native build to dodge workdir requirement
     fontSans = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSans.ttf", 13.0f);
     fontMono = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSansMono.ttf", 13.0f);
+    fontBold = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSans-Bold.ttf", 13.0f);
     io.Fonts->AddFontDefault();
+    load_icons("gui/assets/icons.png");
 
     ImGui_LoadMQStyle(ImGui::GetStyle());
+
+    /* Provide options for loading add-ins in the current folder */
+    find_cwd_addins(workingFolderAddins);
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
 

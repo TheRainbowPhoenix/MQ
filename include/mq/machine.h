@@ -73,6 +73,7 @@ enum {
 
 void mq_machine_initialize(mqMachine *mach, int initializeKind);
 
+bool mq_machine_load_g1a(mqMachine *mach, char const *path);
 bool mq_machine_load_g3a(mqMachine *mach, char const *path);
 
 int mq_machine_cycle(mqMachine *mach, int cycles);
