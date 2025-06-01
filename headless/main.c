@@ -12,8 +12,45 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
+#include <string.h>
+#include <errno.h>
 
 void fatal(int rc, char const *fmt, ...);
+
+void *openAndReadFile(char const *path, long *size_ptr)
+{
+    FILE *fp;
+    void *data = NULL;
+    long size;
+
+    *size_ptr = 0;
+
+    fp = fopen(path, "r");
+    if(!fp) goto err;
+
+    fseek(fp, 0, SEEK_END);
+    size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    /* Allocate a non-NULL pointer even if file is empty */
+    data = malloc(size + (size == 0));
+    if(!data) goto err;
+
+    if(fread(data, size, 1, fp) != 1) goto err;
+    fclose(fp);
+
+    *size_ptr = size;
+    return data;
+
+err:
+    fprintf(stderr, "openAndReadFile: cannot open '%s': %s\n",
+        path, strerror(errno));
+    if(fp)
+        fclose(fp);
+    if(data)
+        free(data);
+    return NULL;
+}
 
 int main(int argc, char **argv)
 {
@@ -31,8 +68,11 @@ int main(int argc, char **argv)
         fatal(1, "could not allocate machine\n");
 
     mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
-    if(!mq_machine_load_g3a(mach, addinFile))
+    long size;
+    void *data = openAndReadFile(addinFile, &size);
+    if(!data || !mq_machine_load_g3a(mach, data, size))
         fatal(1, "could not load %s\n", addinFile);
+    free(data);
 
     printf("Waiting 1 billion cycles...\n");
     mq_machine_cycle(mach, 1000*1000*1000);

@@ -94,6 +94,10 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   # due to a stupid API-version-mismatch TypeError
   target_compile_options(mq PRIVATE -g2)
   target_link_options(mq PRIVATE -g2)
+  # Export _malloc and a few other functions even if unused, because the file
+  # dialog calls them from JS code that's not evaluated at compile time
+  target_link_options(mq PRIVATE
+    -s "EXPORTED_FUNCTIONS=['_main','_malloc','_free','ccall']")
 
   # Embed assets to load them without filesystem access
   foreach(ASSET IN LISTS ASSETS)

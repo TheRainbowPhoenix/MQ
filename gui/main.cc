@@ -43,7 +43,6 @@ struct DelayedInput {
     bool mq_heap_init = false;
     bool mq_mmu_unbind = false;
     bool mq_mmu_bind = false;
-    std::string open_path = "";
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -52,6 +51,7 @@ struct DelayedInput {
 };
 
 struct DelayedInput input;
+struct OpenFileBuffer inputFile;
 
 std::vector<std::string> workingFolderAddins;
 
@@ -201,8 +201,10 @@ static void render(void)
     }
     ImGui::EndCustomMenuBar();
 
+    /* On native builds tihs fills inputFile instantly, while on emscripten
+       this fills it asynchronously and we'll get it in a future frame */
     if(open)
-        input.open_path = openFileDialog();
+        openFileDialog(&inputFile);
 
     auto dock = ImGui::DockSpaceOverViewport();
 
@@ -591,15 +593,15 @@ static bool generate_rgb_pattern(mqDisplay *display)
 
 //---
 
-static void open_addin(std::string &path)
+static void open_addin(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
-        mq_machine_load_g1a(mach, path.c_str());
+        mq_machine_load_g1a(mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
-        mq_machine_load_g3a(mach, path.c_str());
+        mq_machine_load_g3a(mach, data, size);
     }
     else {
         azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
@@ -635,12 +637,22 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_load_working_folder_addin >= 0) {
-        open_addin(workingFolderAddins[input.mq_load_working_folder_addin]);
-        render_needed = std::max(render_needed, 1);
+        fs::path path = workingFolderAddins[input.mq_load_working_folder_addin];
+        long size;
+        void *data = openAndReadFile(path.c_str(), &size);
+        if(data) {
+            inputFile.path = path;
+            inputFile.data = data;
+            inputFile.size = size;
+        }
     }
-    else if(input.open_path.size()) {
-        open_addin(input.open_path);
-        render_needed=  std::max(render_needed, 1);
+    /* Intentional re-check */
+    if(inputFile.data) {
+        azlog(WARN, "ok got a buffer?");
+        open_addin(inputFile.path, inputFile.data, inputFile.size);
+        free(inputFile.data);
+        inputFile = OpenFileBuffer();
+        render_needed = std::max(render_needed, 1);
     }
     else if(input.mq_cycles) {
         /* Limit the number of cycles for each GUI frame to not lock the GUI.

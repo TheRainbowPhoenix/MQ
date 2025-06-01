@@ -165,44 +165,23 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     mach->stuck = false;
 }
 
-static bool load_addin(mqMachine *mach, char const *path, u32 target, u32 off)
+bool mq_machine_load_g1a(mqMachine *mach, void *data, long size)
 {
-    FILE *fp = fopen(path, "r");
-    void *data = NULL;
-    if(!fp) goto err;
+    /* Brief sanity check */
+    if(size <= 0x200 || size > (520 << 10))
+        return false;
 
-    fseek(fp, 0, SEEK_END);
-    long size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-
-    data = malloc(size);
-    if(!data) goto err;
-
-    if(fread(data, size, 1, fp) != 1) goto err;
-    fclose(fp);
-
-    bool x = mq_memory_load(mach->memory, target, data + off, size - off);
-    free(data);
-    return x;
-
-err:
-    perror("mq_machine_load_g3a");
-    if(fp)
-        fclose(fp);
-    if(data)
-        free(data);
-    mach->stuck = true;
-    return false;
+    return mq_memory_load(mach->memory, 0x81800000, data, size);
 }
 
-bool mq_machine_load_g1a(mqMachine *mach, char const *path)
+bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
 {
-    return load_addin(mach, path, 0x81800000, 0);
-}
+    /* Brief sanity check */
+    if(size <= 0x7004 || size > (2500 << 10))
+        return false;
 
-bool mq_machine_load_g3a(mqMachine *mach, char const *path)
-{
-    return load_addin(mach, path, 0x81800000, 0x7000);
+    return mq_memory_load(
+        mach->memory, 0x81800000, data + 0x7000, size - 0x7000);
 }
 
 int mq_machine_cycle(mqMachine *mach, int cycles)
