@@ -255,11 +255,12 @@ void mq_mach_syscall(mqMachine *mach)
         }
         break;
 
-    case 0x02c1: /* RTC_GetTicks() */
+    case 0x02c1: { /* RTC_GetTicks() */
         // FIXME: GetTicks() more than trivial counter
         static int ticks = 0;
         mach->cpu.r[0] = ++ticks;
         break;
+    }
 
     case 0x1170: { /* itoa() */
         int num = mach->cpu.r[4];

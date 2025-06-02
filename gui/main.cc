@@ -648,7 +648,6 @@ static int update(void)
     }
     /* Intentional re-check */
     if(inputFile.data) {
-        azlog(WARN, "ok got a buffer?");
         open_addin(inputFile.path, inputFile.data, inputFile.size);
         free(inputFile.data);
         inputFile = OpenFileBuffer();

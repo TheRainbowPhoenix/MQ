@@ -42,6 +42,7 @@ typedef int64_t i64;
 /* Attributes */
 
 #define MQ_INLINE static inline __attribute__((always_inline))
+#define MQ_UNUSED __attribute__((unused))
 #define MQ_LIKELY(EXPR) __builtin_expect((EXPR), 1)
 #define MQ_UNLIKELY(EXPR) __builtin_expect((EXPR), 0)
 

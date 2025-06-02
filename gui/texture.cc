@@ -39,7 +39,7 @@ void Texture::setFormat(
 
     if(format != m_format || pixelType != m_pixelType || width2 != m_width2 ||
        height2 != m_height2) {
-        glTexImage2D(m_type, 0, GL_RGBA, width2, height2, 0, format, pixelType,
+        glTexImage2D(m_type, 0, format, width2, height2, 0, format, pixelType,
                      NULL);
         m_format = format;
         m_pixelType = pixelType;

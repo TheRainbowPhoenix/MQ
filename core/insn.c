@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 // TODO[insn]: None of the privileged instructions check for SR.MD yet!

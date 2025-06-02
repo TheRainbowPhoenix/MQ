@@ -63,12 +63,12 @@ static void write_INTEVT(mqCpu *cpu, u32 value)
     cpu->INTEVT = value & 0x00003fff;
 }
 
-static u32 read_PVR(void)
+static u32 read_PVR(MQ_UNUSED void *userdata)
 {
     return 0x10300b00;
 }
 
-static u32 read_PRR(void)
+static u32 read_PRR(MQ_UNUSED void *userdata)
 {
     return 0x00002c00;
 }
