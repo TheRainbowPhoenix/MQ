@@ -107,14 +107,14 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_machine_setupOnChipMemory(mach);
 
         /* Set the stack pointer to be P1 instead of MMU, as the OS does */
-        mach->cpu.r[15] = layout_ram + (512 << 10);
+        mach->cpu.r[15] = layout_ram + (32 << 10);
 
         /* P0 program code */
         void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
         mq_memory_createBlock(mach->memory, layout_addin, 2 << 20, addin);
         /* P0 userspace RAM */
-        void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
-        mq_memory_createBlock(mach->memory, layout_ram, 512 << 10, uram);
+        void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 32 << 10);
+        mq_memory_createBlock(mach->memory, layout_ram, 32 << 10, uram);
         /* VRAM */
         u32 VRAMsize = 128 * 64 + 1024; // margin for buffer overflows...
         VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
