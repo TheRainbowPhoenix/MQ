@@ -17,6 +17,7 @@
 #include <mq/modules/mmu.h>
 #include <mq/modules/r61524.h>
 #include <mq/modules/t6k11.h>
+#include <mq/modules/pfc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -144,7 +145,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         mq_intc_setup(mach);
 
-        mq_keysc_setup(mach);
+        mq_pfc_setup(mach);
 
         mq_dma_setup(mach);
 
