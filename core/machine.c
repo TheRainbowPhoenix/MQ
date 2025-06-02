@@ -16,6 +16,7 @@
 #include <mq/modules/keysc.h>
 #include <mq/modules/mmu.h>
 #include <mq/modules/r61524.h>
+#include <mq/modules/t6k11.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -96,9 +97,62 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     mach->processTimer = mach->processFrequency;
 
     if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
-        mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
+        u32 layout_addin = 0x81800000;
+        u32 layout_ram   = 0x8c180000;
+        u32 layout_heap  = 0x8c0c0000;
 
-        // TODO[machine]: Memory setup for FX add-in
+        mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
+        mq_cpu_setup(&mach->cpu, mach->memory);
+
+        mq_machine_setupOnChipMemory(mach);
+
+        /* Set the stack pointer to be P1 instead of MMU, as the OS does */
+        mach->cpu.r[15] = layout_ram + (512 << 10);
+
+        /* P0 program code */
+        void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
+        mq_memory_createBlock(mach->memory, layout_addin, 2 << 20, addin);
+        /* P0 userspace RAM */
+        void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
+        mq_memory_createBlock(mach->memory, layout_ram, 512 << 10, uram);
+        /* VRAM */
+        u32 VRAMsize = 128 * 64 + 1024; // margin for buffer overflows...
+        VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
+        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", VRAMsize);
+        mq_memory_createBlock(mach->memory, 0x8c000000, VRAMsize, vram);
+        mq_memory_createBlock(mach->memory, 0xac000000, VRAMsize, vram);
+        /* OS stack */
+        void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
+        mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);
+        mq_memory_createBlock(mach->memory, 0xac0f0000, 512 << 10, ostk);
+
+        // TODO[machine]: Reasonable heap address on fx-CG?!
+        mach->system.heapAddress = layout_heap;
+        mach->system.heapSize = 128 << 10;
+
+        mach->display = mq_display_create();
+        mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64);
+
+        mach->keyboard = mq_keyboard_create();
+        mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
+
+        // TODO[machine]: Handle the NULL page with MMU so it shows up in TLB
+        mq_mmu_setup(mach);
+        mq_mmu_map(mach, 0x00300000, layout_addin,  0, 0x100000, 2);
+        mq_mmu_map(mach, 0x08100000, layout_ram,   55,  0x10000, 8);
+        mq_mmu_bind(mach);
+
+        mq_intc_setup(mach);
+
+        mq_keysc_setup(mach);
+
+        mq_dma_setup(mach);
+
+        mq_cmod_setup(mach);
+
+        mq_t6k11_setup(mach);
+
+        mq_casiowin_setup(mach, MQ_CASIOWIN_FX200);
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
         u32 layout_addin = 0x81800000;
@@ -230,6 +284,11 @@ void mq_mach_syscall(mqMachine *mach)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
+    case 0x03fa: /* Hmem_SetMMU */
+    case 0x0013: /* GlibAddinAplExecutionCheck */
+    case 0x0494: /* SetQuitHandler */
+        break;
+
     case 0x0029: /* ??? - Glib_AddInAplExecutionCheck something like that. */
         mq_log(MQ_LOG_WARNING, "Ignoring %%029, what is that?");
         /* Just return 0. */
