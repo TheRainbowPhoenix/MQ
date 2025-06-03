@@ -39,7 +39,7 @@ static void write_PORTM_CTRL(mqPFC *PFC, u16 value)
     PFC->PORTM_CTRL = value;
 }
 
-static u32 read_PFC(mqMMIO *io, u32 addr, int size) 
+static u32 read_PORTA(mqMMIO *io, u32 addr, int size) 
 {
     mqMachine *mach = io->userdata;
     mqPFC *PFC = mach->modules[moduleID];
@@ -48,7 +48,7 @@ static u32 read_PFC(mqMMIO *io, u32 addr, int size)
     (void)addr;
     (void)size;
 
-    // mq_log(MQ_LOG_DEBUG, "read_PFC @ 0x%08x (size: %d)", addr, size);
+    // mq_log(MQ_LOG_DEBUG, "read_PORTA @ 0x%08x (size: %d)", addr, size);
 
     uint row = 0;
 
@@ -67,24 +67,32 @@ static u32 read_PFC(mqMMIO *io, u32 addr, int size)
         return 0xffffffff;
     }
     
-    int start, count, shift;
-    if (row < 5) {
-        start = 5*6 + (4 - row) * 5 - 1;
-        count = 5;
-        shift = 2;
+    int startIndex, keyCount;
+
+    // AC/ON (row 0)
+    if (row == 0) {
+        startIndex = 34;
+        keyCount = 1; 
     }
+    // Bottom keys (5 keys per row)
+    else if (row < 5) {
+        startIndex = 5*6 + (4 - row) * 5 - 1;
+        keyCount = (row == 4 ? 4 : 5); // Remove AC/ON from row 4
+    }
+    // Top keys (6 keys per row)
     else {
-        start = (9 - row) * 6 - 1;
-        count = 6;
-        shift = 1;
+        startIndex = (9 - row) * 6 - 1;
+        keyCount = 6;
     }
 
     int status = 0;
-    for (int i = 0; i < count; i++) {
-        uint key_id = start + count - i;
+    int shift = 7 - keyCount;
+
+    for (int i = 0; i < keyCount; i++) {
+        uint key_id = startIndex + keyCount - i;
 
         if (key_id >= mach->keyboard->keyCount) {
-            mq_log(MQ_LOG_WARNING, "Request for key %d which does not exist!\n", key_id);
+            mq_log(MQ_LOG_WARNING, "Request for key %d which does not exist! (row: %d)\n", key_id, row);
             continue;
         }
 
@@ -109,7 +117,7 @@ bool mq_pfc_setup(mqMachine *mach)
 
     bool ok = true;
     
-    int ioID = mq_page_addIO(pg, "KB_PORTA", MQ_MMIO_UNSIZED, read_PFC,
+    int ioID = mq_page_addIO(pg, "KB_PORTA", MQ_MMIO_UNSIZED, read_PORTA,
         NULL, NULL, mach);
     ok &= mq_page_mapIO(pg, ioID, KB_PORTA, 1, 1);
 

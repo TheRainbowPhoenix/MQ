@@ -145,6 +145,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         mq_intc_setup(mach);
 
+        mq_keysc_setup(mach);
+
         mq_pfc_setup(mach);
 
         mq_dma_setup(mach);
