@@ -67,15 +67,15 @@ static u32 read_PORTA(mqMMIO *io, u32 addr, int size)
         return 0xffffffff;
     }
     
-    int startIndex, keyCount;
-
     // AC/ON (row 0)
     if (row == 0) {
-        startIndex = 34;
-        keyCount = 1; 
+        return ~mach->keyboard->keyStatus[34];
     }
+
+    int startIndex, keyCount;
+
     // Bottom keys (5 keys per row)
-    else if (row < 5) {
+    if (row < 5) {
         startIndex = 5*6 + (4 - row) * 5 - 1;
         keyCount = (row == 4 ? 4 : 5); // Remove AC/ON from row 4
     }
