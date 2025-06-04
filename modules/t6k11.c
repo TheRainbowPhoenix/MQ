@@ -45,25 +45,28 @@ static void write_t6k11_data(mqMMIO *io, u32 addr, u32 value, int size)
         // R2: Set Analog Control Mode (APE)
         // R3: Set alternating signal mode (APE)
         // R5: Set Z-address (SZE)
-        // R6: Contrast Control (SCE)
         // R12: D/A converter power control (OPC)
 
         // R1: Counter Mode (CSE)
         case 1:
+        // R6: Contrast Control (SCE)
+        case 6:
             break; // Not implemented
 
         // R4: Set Y-address (SYE) / Set X-address (SXE)
         case 4:
+        case 8:
             bool setX = (value >> 7) & 1;
             if (setX) {
                 T6K11->row = value & 0x3f;
             }
             else {
-                T6K11->col = value & 0x1f;
+                T6K11->col = (value & 0x1f) - (T6K11->REG == 4 ? 0 : 4);
             }
             break;
         // R7: Data Write (DAWR) / Data Read (DARD)
         case 7:
+        case 10:
             for (int i = 0; i < 8; i++) {
                 int b = (value >> (7-i)) & 1;
                 int x = T6K11->col * 8 + i;
