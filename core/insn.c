@@ -928,25 +928,37 @@ MQ_INLINE void ldre(mqMachine *mach, mqCpu *cpu, int disp) {
     fprintf(stderr, "error: not implemented: ldre\n");
     mach->stuck = true;
 }
-MQ_INLINE void movb_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movb_w_r0_dgbr\n");
-    mach->stuck = true;
+MQ_INLINE void movb_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int d) {
+    /* mov.b r0, @(disp, gbr) */
+    uint disp = (uint)(0x000000FF & d);
+    mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + disp, 1, cpu->r[0]);
+    cpu->pc += 2;
 }
-MQ_INLINE void movw_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movw_w_r0_dgbr\n");
-    mach->stuck = true;
+MQ_INLINE void movw_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int d) {
+    /* mov.w r0, @(disp, gbr) */
+    uint disp = (uint)(0x000000FF & d);
+    mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + (disp << 1), 2, cpu->r[0]);
+    cpu->pc += 2;
 }
 MQ_INLINE void movl_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
     fprintf(stderr, "error: not implemented: movl_w_r0_dgbr\n");
     mach->stuck = true;
 }
-MQ_INLINE void movb_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movb_r_dgbr_r0\n");
-    mach->stuck = true;
+MQ_INLINE void movb_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int d) {
+    /* mov.b @(disp, gbr), r0 */
+    uint disp = (uint)(0x000000FF & d);
+    mq_memory_read8(mach, mach->memory, cpu->spRegs[SH_GBR] + disp, &cpu->r[0]);
+    if ((cpu->r[0] & 0x80) == 0) cpu->r[0] &= 0x000000FF;
+    else cpu->r[0] |= 0xFFFFFF00;
+    cpu->pc += 2;
 }
-MQ_INLINE void movw_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movw_r_dgbr_r0\n");
-    mach->stuck = true;
+MQ_INLINE void movw_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int d) {
+    /* mov.w @(disp, gbr), r0 */
+    uint disp = (uint)(0x000000FF & d);
+    mq_memory_read16(mach, mach->memory, cpu->spRegs[SH_GBR] + (disp << 1), &cpu->r[0]);
+    if ((cpu->r[0] & 0x8000) == 0) cpu->r[0] &= 0x0000FFFF;
+    else cpu->r[0] |= 0xFFFF0000;
+    cpu->pc += 2;
 }
 MQ_INLINE void movl_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
     fprintf(stderr, "error: not implemented: movl_r_dgbr_r0\n");
