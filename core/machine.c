@@ -22,11 +22,45 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <mq/syscalls.h>
+#include <errno.h>
+
+u8 *openAndReadAsset(char const *path)
+{
+    FILE *fp = fopen(path, "r");
+    void *data = NULL;
+    if(!fp) goto err;
+
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    data = malloc(size);
+    if(!data) goto err;
+
+    if(fread(data, size, 1, fp) != 1) goto err;
+    fclose(fp);
+
+    return data;
+
+err:
+    mq_log(MQ_LOG_ERROR, "openAndReadAsset: cannot open '%s': %s\n",
+        path, strerror(errno));
+    if(fp)
+        fclose(fp);
+    if(data)
+        free(data);
+    return false;
+}
+
 mqMachine *mq_machine_create(void)
 {
     mqMachine *mach = calloc(1, sizeof *mach);
     mq_cpu_reset(&mach->cpu);
     mach->memory = mq_memory_create();
+    // Load character sets
+    mach->characterSet = openAndReadAsset("assets/CharacterSet.data");
+    mach->characterSetMini = openAndReadAsset("assets/CharacterSetMini.data");
     return mach;
 }
 
@@ -282,14 +316,21 @@ void mq_mach_syscall(mqMachine *mach)
 
     /* Log except for syscalls that happen often */
     if(syscallID != 0x1e6 && syscallID != 0x25f && syscallID != 0x2c1 &&
+       syscallID != 0x135 && syscallID != 0x015 && syscallID != 0x420 && syscallID != 0xc4f && syscallID != 0x807 && syscallID != 0x808 && syscallID != 0x03b &&
+       syscallID != 0x146 && syscallID != 0x9ad && syscallID != 0x813 && syscallID != 0x814 && syscallID != 0xacc && syscallID != 0xacd && syscallID != 0x90f &&
        syscallID != 0x1dd0 && !(syscallID >= 0x1f41 && syscallID <= 0x1f46)
        && syscallID != 0x1170)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
-    case 0x03fa: /* Hmem_SetMMU */
-    case 0x0013: /* GlibAddinAplExecutionCheck */
-    case 0x0494: /* SetQuitHandler */
+    case 0x03fa: /* (can be ignored) Hmem_SetMMU */
+    case 0x0013: /* (can be ignored) GlibAddinAplExecutionCheck */
+    case 0x0494: /* (can be ignored) SetQuitHandler */
+        break;
+
+    case 0x03ed: /* Interrupt_SetOrClrStatusFlags */
+        mq_log(MQ_LOG_ERROR, "Blocking syscall: Interrupt_SetOrClrStatusFlags");
+        mach->stuck = true;
         break;
 
     case 0x0029: /* ??? - Glib_AddInAplExecutionCheck something like that. */
@@ -299,8 +340,70 @@ void mq_mach_syscall(mqMachine *mach)
         break;
 
     case 0x01e6: /* GetVRAMAddress() */
+    case 0x0135:
         // FIXME: GetVRAMAddress() is normally in P2
         mach->cpu.r[0] = 0x8c000000;
+        break;
+
+    case 0x0014: /* GlibGetAddinLibInf() */
+        mq_memory_write(mach, mach->memory, mach->cpu.r[4], 4, 0x0);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[5], 4, 0x1);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[6], 4, 0x1);
+        mach->cpu.r[0] = 0x1;
+        mach->cpu.r[2] = 0xA0151F28;
+        mach->cpu.r[3] = 0x0;
+        mach->cpu.r[4] = 0x1;
+        break;
+
+    case 0x015: /* GlibGetOSVersionInfo() */
+        mq_memory_write(mach, mach->memory, mach->cpu.r[4], 1, 0x1);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[5], 1, 0x3);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[6], 2, 0x0);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[7], 2, 0x0);
+        mach->cpu.r[0] = 0x1;
+        mach->cpu.r[2] = 0x3;
+        mach->cpu.r[3] = 0x1;
+        mach->cpu.r[4] = 0x0;
+        break;
+
+    case 0x0807: /* Locate() */
+        mach->locX = mach->cpu.r[4];
+        mach->locY = mach->cpu.r[5];
+        break;
+
+    case 0x0808: /* Print() */
+        syscall_Print(mach, mach->cpu.r[4], 64);
+        break;
+
+    case 0x0c4f: /* PrintMini() */
+        syscall_PrintMini(mach, mach->cpu.r[4], mach->cpu.r[5], mach->cpu.r[6], mach->cpu.r[7]);
+        break;
+
+    case 0x09ad: /* PrintXY() */
+        syscall_PrintXY(mach, mach->cpu.r[4], mach->cpu.r[5], mach->cpu.r[6], mach->cpu.r[7]);
+        break;
+
+    case 0x0813: /* SaveDisp() */
+        syscall_SaveDisp(mach, mach->cpu.r[4]);
+        break;
+
+    case 0x0814: /* RestoreDisp() */
+        syscall_RestoreDisp(mach, mach->cpu.r[4]);
+        break;
+
+    case 0x08fe: /* PopupWin() */
+        break;
+
+    case 0x0146: /* Bdisp_SetPoint_VRAM() */
+        break;
+
+    case 0x014d: /* Bdisp_AreaReverseVRAM() */
+        break;
+
+    case 0x0420: /* OS_inner_Sleep() */
+        break;
+
+    case 0x090f: /* GetKey() */
         break;
 
     case 0x025f: /* Bdisp_PutDisp_DD() */
@@ -317,7 +420,8 @@ void mq_mach_syscall(mqMachine *mach)
         }
         break;
 
-    case 0x02c1: { /* RTC_GetTicks() */
+        case 0x02c1: 
+        case 0x003b: { /* RTC_GetTicks() */
         // FIXME: GetTicks() more than trivial counter
         static int ticks = 0;
         mach->cpu.r[0] = ++ticks;
@@ -337,6 +441,13 @@ void mq_mach_syscall(mqMachine *mach)
     }
 
     case 0x1da3: /* Bfile_OpenFile_OS() */
+    case 0x042c:
+    case 0x0434:
+    case 0x0435:
+    case 0x042d:
+    case 0x0432:
+    case 0x0439:
+    case 0x043b:
         mach->cpu.r[0] = -1;
         break;
 
@@ -353,16 +464,20 @@ void mq_mach_syscall(mqMachine *mach)
 
     case 0x1f41:
     case 0x1f42: /* free() */
+    case 0x0acc:
         mq_mach_initHeap(mach);
         mq_heap_free(mach->cpu.r[4]);
         break;
     case 0x1f43:
     case 0x1f44: /* malloc() */
+    case 0x0acd:
+    case 0x0e6b:
         mq_mach_initHeap(mach);
         mach->cpu.r[0] = mq_heap_malloc(mach->cpu.r[4]);
         break;
     case 0x1f45:
     case 0x1f46: /* realloc() */
+    case 0x0e6d:
         mq_mach_initHeap(mach);
         mach->cpu.r[0] = mq_heap_realloc(mach->cpu.r[4], mach->cpu.r[5]);
         break;

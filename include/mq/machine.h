@@ -56,6 +56,13 @@ struct mqMachine
     mqKeyboard *keyboard;
     // TODO: Real-time tiemr; may be NULL.
     // mqTimer *timer;
+
+    // Syscall support
+    int locX;
+    int locY;
+    u8* characterSet;
+    u8* characterSetMini;
+    u8* savedDisps[3];
 };
 
 typedef struct mqMachine mqMachine;
