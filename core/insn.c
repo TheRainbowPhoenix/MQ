@@ -364,7 +364,7 @@ MQ_INLINE void mull(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void dmulsl(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* dmuls.l rm, rn */
-    i64 r = (i64)cpu->r[m] * (i64)cpu->r[n];
+    i64 r = (i64)(i32)cpu->r[m] * (i64)(i32)cpu->r[n];
     cpu->spRegs[SH_MACL] = r;
     cpu->spRegs[SH_MACH] = r >> 32;
     cpu->pc += 2;
