@@ -382,6 +382,8 @@ static void render(void)
             (SR >> 30) & 1, (SR >> 29 & 1), (SR >> 28) & 1);
         ImGui::Text(" IMASK=%d",
             (SR >> 4) & 0xf);
+        ImGui::Text(" RC=%d",
+            (SR >> 16) & 0xfff);
         ImGui::EndGroup();
 
         ImGui::SameLine(0, 40);

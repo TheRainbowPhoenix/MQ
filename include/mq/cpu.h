@@ -195,6 +195,16 @@ MQ_INLINE int mq_cpu_getM(mqCpu *cpu)
 {
     return (cpu->spRegs[SH_SR] >> 9) & 1;
 }
+/* Set/get the value of the RC field; the value provide must be 0...4095. */
+MQ_INLINE void mq_cpu_setRC(mqCpu *cpu, int RC)
+{
+    cpu->spRegs[SH_SR] &= ~(0xfff << 16);
+    cpu->spRegs[SH_SR] |= (RC & 0xfff) << 16;
+}
+MQ_INLINE int mq_cpu_getRC(mqCpu *cpu)
+{
+    return (cpu->spRegs[SH_SR] >> 16) & 0xfff;
+}
 
 /* Set the entire SR register. This swaps the register banks if RB changes. */
 void mq_cpu_setSR(mqCpu *cpu, u32 SR);

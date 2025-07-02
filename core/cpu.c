@@ -263,6 +263,11 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
 
     // printf("Cycle: pc=%08x\n", cpu->pc);
 
+    /* Check if this is the last instruction in a repeat control loop. */
+    bool end_dsp_loop = false;
+    if(MQ_UNLIKELY(mq_cpu_getRC(cpu)))
+        end_dsp_loop = (cpu->spRegs[SH_RE] == cpu->pc + 1);
+
     /* Fetch the next instruction. */
     // TODO: Same-basic-block prefetching optimization.
     u32 ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
@@ -296,6 +301,16 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
             // TODO: Should that be illegal slot?
             mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
         }
+    }
+
+    /* If we reach the end of a DSP loop, loop back. */
+    if(end_dsp_loop) {
+        int RC = mq_cpu_getRC(cpu);
+        RC -= (RC > 0);
+        mq_cpu_setRC(cpu, RC);
+
+        if(RC > 0)
+            cpu->pc = cpu->spRegs[SH_RS];
     }
 
 endCycle:

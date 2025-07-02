@@ -801,6 +801,35 @@ MQ_INLINE void movt(mqMachine *mach, mqCpu *cpu, int n) {
     cpu->pc += 2;
 }
 
+MQ_INLINE void ldrs(mqMachine *mach, mqCpu *cpu, int disp) {
+    /* ldrs pc+disp */
+    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
+        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
+    cpu->spRegs[SH_RS] = cpu->pc + 4 + (disp << 1);
+    cpu->pc += 2;
+}
+MQ_INLINE void ldre(mqMachine *mach, mqCpu *cpu, int disp) {
+    /* ldre pc+disp */
+    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
+        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
+    cpu->spRegs[SH_RE] = cpu->pc + 4 + (disp << 1);
+    cpu->pc += 2;
+}
+MQ_INLINE void ldrc(mqMachine *mach, mqCpu *cpu, int m) {
+    /* ldrc rm */
+    // TODO: ldrc: Doesn't set SR.RF to disable setrc-style emulation
+    mq_cpu_setRC(cpu, cpu->r[m] & 0xfff);
+    cpu->spRegs[SH_RE] |= 1;
+    cpu->pc += 2;
+}
+MQ_INLINE void ldrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
+    /* ldrc #imm */
+    // TODO: ldrc_imm: Doesn't set SR.RF to disable setrc-style emulation
+    mq_cpu_setRC(cpu, imm & 0xfff);
+    cpu->spRegs[SH_RE] |= 1;
+    cpu->pc += 2;
+}
+
 MQ_INLINE void pref(mqMachine *mach, mqCpu *cpu, int n) {
     /* pref @rn */
     static bool done = false;
@@ -888,10 +917,6 @@ MQ_INLINE void setrc(mqMachine *mach, mqCpu *cpu, int m) {
     fprintf(stderr, "error: not implemented: setrc\n");
     mach->stuck = true;
 }
-MQ_INLINE void ldrc(mqMachine *mach, mqCpu *cpu, int m) {
-    fprintf(stderr, "error: not implemented: ldrc\n");
-    mach->stuck = true;
-}
 MQ_INLINE void movual_r(mqMachine *mach, mqCpu *cpu, int m) {
     fprintf(stderr, "error: not implemented: movual_r\n");
     mach->stuck = true;
@@ -910,22 +935,6 @@ MQ_INLINE void macw(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void setrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     fprintf(stderr, "error: not implemented: setrc_imm\n");
-    mach->stuck = true;
-}
-MQ_INLINE void ldrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
-    fprintf(stderr, "error: not implemented: ldrc_imm\n");
-    mach->stuck = true;
-}
-MQ_INLINE void ldrs(mqMachine *mach, mqCpu *cpu, int disp) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-    fprintf(stderr, "error: not implemented: ldrs\n");
-    mach->stuck = true;
-}
-MQ_INLINE void ldre(mqMachine *mach, mqCpu *cpu, int disp) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-    fprintf(stderr, "error: not implemented: ldre\n");
     mach->stuck = true;
 }
 MQ_INLINE void movb_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
