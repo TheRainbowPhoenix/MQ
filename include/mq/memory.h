@@ -147,7 +147,7 @@ struct mqPage {
 /* Flags setting general behaviors for I/O accesses. */
 enum {
     /* Access size options--these are coded on low bits so that access with
-       size S is allowed if (S & flags != 0). Not critical, but neat. */
+       size S is allowed if (S & flags) != 0. Not critical, but neat. */
     MQ_MMIO_SIZE_1      = 0x0001,
     MQ_MMIO_SIZE_2      = 0x0002,
     MQ_MMIO_SIZE_4      = 0x0004,
@@ -220,7 +220,7 @@ void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size);
    no-op). */
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *data);
 
-/* Create a buffer page in a chunk, the backing data cannot be NULL. Returns
+/* Create a buffer page in a chunk; the backing data cannot be NULL. Returns
    true on success, false if the page already exists (in which case the call is
    a no-op). */
 bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
@@ -233,10 +233,12 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
    false; the memory will be partially modified.
 
    WARNING: MQ assumes that blocks do not touch. Specifically, it assumes that
-            contiguous pieces of emulated-data (like strings of arrays) are not
+            contiguous pieces of emulated-data (like strings or arrays) are not
             split over two blocks and hence belong to a single buffer. If you
             need to map two blocks directly one after another, make sure they
-            are backed by two consecutive regions of a single large buffer. */
+            are backed by two consecutive regions of a single large buffer.
+
+   FIXME: This breaks for repeating regions, so no direct access there! */
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer);
 
 //=== Configuration of memory-mapped I/O =====================================//
@@ -435,8 +437,9 @@ bool mq_memory_write_pure(mqMemory *mem, u32 addr, int size, u32 value);
    pointer into an emulated buffer, pointing to at least as many bytes as the
    emulated pointer points to in the emulated program. Note that the internal
    buffer is 4-byte endian-swapped. If this function is not called with a
-   4-aligned parameter then data might need to be fetched before the teturn
-   pointer of this function. */
+   4-aligned parameter then a few bytes of the designated interval will be at a
+   negative offset from the pointer returned (and the first few bytes pointed
+   to will be outside the interval). */
 void *mq_memory_access(mqMemory *mem, u32 addr);
 
 //=== Misc. information ======================================================//

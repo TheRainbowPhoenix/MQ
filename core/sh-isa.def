@@ -17,9 +17,9 @@
 #   [*] technically ldc, encoded like lds
 #
 # Instructions in the table can be tagged with flags written "!flag" indicating
-# ISA variations or extenstions so that the decoder can emulate multiple
-# processor types. This annotation is not complete; it is used to generate a
-# compatibility check automatically but such a check can also be added by an
+# ISA variations or extensions so that the decoder can emulate multiple
+# processor types. This annotation need not be complete; it is used to generate
+# a compatibility check automatically but such a check can also be added by an
 # instruction's implementation. For instance, lds/sts/ldc/stc[.l] are !sh4/!dsp
 # for some registers.
 #---
