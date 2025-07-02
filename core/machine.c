@@ -277,6 +277,12 @@ void mq_mach_syscall(mqMachine *mach)
     case 0x1da3: /* Bfile_OpenFile_OS() */
         mach->cpu.r[0] = -1;
         break;
+    case 0x1db6: /* Bfile_FindFirst() */
+        mach->cpu.r[0] = -1;
+        break;
+    case 0x1dba: /* Bfile_FindClose() */
+        mach->cpu.r[0] = -1;
+        break;
 
     case 0x1dd0: { /* memcpy() */
         // TODO: Optimized aligned memcpy() + put that in mq_memory()
