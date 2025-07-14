@@ -101,9 +101,10 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         // TODO[machine]: Memory setup for FX add-in
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
-        u32 layout_addin = 0x81800000;
-        u32 layout_ram   = 0x8c180000;
-        u32 layout_heap  = 0x8c0c0000;
+        u32 layout_addin    = 0x81800000;
+        u32 layout_ram_p1   = 0x8c180000;
+        u32 layout_ram_p2   = 0xac180000;
+        u32 layout_heap     = 0x8c0c0000;
 
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
         mq_cpu_setup(&mach->cpu, mach->memory);
@@ -111,7 +112,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_machine_setupOnChipMemory(mach);
 
         /* Set the stack pointer to be P1 instead of MMU, as the OS does */
-        mach->cpu.r[15] = layout_ram + (512 << 10);
+        mach->cpu.r[15] = layout_ram_p1 + (512 << 10);
 
         // TODO[machine]: More precise memory setup for CG add-in
 
@@ -120,7 +121,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBlock(mach->memory, layout_addin, 2 << 20, addin);
         /* P0 userspace RAM */
         void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
-        mq_memory_createBlock(mach->memory, layout_ram, 512 << 10, uram);
+        mq_memory_createBlock(mach->memory, layout_ram_p1, 512 << 10, uram);
+        mq_memory_createBlock(mach->memory, layout_ram_p2, 512 << 10, uram);
         /* VRAM */
         u32 VRAMsize = 384 * 216 * 2 + 1024; // margin for buffer overflows...
         VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
@@ -147,8 +149,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         // TODO[machine]: Handle the NULL page with MMU so it shows up in TLB
         mq_mmu_setup(mach);
-        mq_mmu_map(mach, 0x00300000, layout_addin,  0, 0x100000, 2);
-        mq_mmu_map(mach, 0x08100000, layout_ram,   55,  0x10000, 8);
+        mq_mmu_map(mach, 0x00300000, layout_addin,   0, 0x100000, 2);
+        mq_mmu_map(mach, 0x08100000, layout_ram_p1, 55,  0x10000, 8);
         mq_mmu_bind(mach);
 
         mq_intc_setup(mach);
