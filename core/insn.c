@@ -986,11 +986,21 @@ MQ_INLINE void trapa(mqMachine *mach, mqCpu *cpu, int imm) {
 
 #pragma GCC diagnostic pop
 
-void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
-{
-#define _OPCODE opcode
-#define _DECIDE(X, ...) return X(mach, cpu, ##__VA_ARGS__)
+
 #include "autogen/sh-isa.inc"
 
-    mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL, 0);
+void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
+{
+    // direct
+    mq_inst_wrapper_table[opcode](mach, cpu, opcode);
+
+//    // 2direct
+//    u8 idx = mq_inst_translation_table[opcode];
+//    mq_inst_wrapper_table[idx](mach, cpu, opcode);
+
+//    // switch
+//#define _OPCODE opcode
+//#define _DECIDE(X, ...) return X(mach, cpu, ##__VA_ARGS__)
+//#include "autogen/sh-isa.inc"
+//    mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL, 0);
 }
