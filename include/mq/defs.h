@@ -20,6 +20,14 @@
 # define MQ_STATIC_ASSERT _Static_assert
 #endif
 
+/* Macros and tools for profiling */
+
+#ifdef __cplusplus
+# include "tracy/Tracy.hpp"
+#else
+# include "tracy/TracyC.h"
+#endif
+
 MQ_START_DEFS
 
 #include <stdint.h>

@@ -256,6 +256,8 @@ static void updateIncomingInterrupt(mqCpu *cpu)
 
 void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
 {
+    TracyCZoneN(_ctx, "cpu", true);
+
     u32 previousPC = cpu->pc;
 
     if(MQ_UNLIKELY(cpu->sleeping))
@@ -274,7 +276,9 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     if(MQ_LIKELY(ins != 0)) {
         // printf("  -> ins=%04x\n", ins);
         /* Decode and execute the instruction. */
+        TracyCZoneN(_ctx, "exec", true);
         _mq_cpu_execute(mach, cpu, ins);
+        TracyCZoneEnd(_ctx);
     }
     /* Only check for the syscall handler if the read fails. This means we can
        only emulate syscalls if we don't map the syscall stub. If we do map it,
@@ -293,7 +297,9 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
         ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
         if(MQ_LIKELY(ins != 0)) {
             // printf("  -> delay ins=%04x\n", ins);
+            TracyCZoneN(_ctx, "delay_slot", true);
             _mq_cpu_execute(mach, cpu, ins);
+            TracyCZoneEnd(_ctx);
             cpu->pc = cpu->delaySlotTarget;
             cpu->inDelaySlot = false;
         }
@@ -321,6 +327,8 @@ endCycle:
         if(!handleException(mach, cpu, exc, previousPC))
             mach->stuck = true;
     }
+
+    TracyCZoneEnd(_ctx);
 }
 
 void mq_cpu_sleep(mqCpu *cpu)

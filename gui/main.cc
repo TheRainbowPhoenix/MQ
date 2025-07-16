@@ -89,6 +89,8 @@ static bool HexViewer_ReadByte(u64 addr, u8 *result)
 
 static void render(void)
 {
+    ZoneScopedN("render");
+
     if(!render_needed)
         return;
     render_needed--;
@@ -515,6 +517,8 @@ static void render(void)
     /* Present results to user */
     SDL_GL_SwapWindow(window);
     previous_time = time;
+
+    FrameMark;
 }
 
 static bool generate_mono_pattern(mqDisplay *display)
@@ -612,6 +616,8 @@ static void open_addin(std::string const &path, void *data, long size)
 
 static int update(void)
 {
+    ZoneScopedN("update");
+
     SDL_Event e;
     int cyclesLeft = 0;
 
@@ -656,16 +662,48 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
     else if(input.mq_cycles) {
+        ZoneScopedN("update mq");
+
+        /* Cycle until we reach 12 milliseconds */
+        struct timespec ts_start;
+        clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        // printf("ts_start=%ld\n", ts_start.tv_nsec);
+
+        while(input.mq_cycles != 0 /* negative is infinity */) {
+            struct timespec ts_current;
+            clock_gettime(CLOCK_MONOTONIC, &ts_current);
+            int64_t ns_elapsed = (ts_current.tv_nsec - ts_start.tv_nsec);
+            int64_t s_elapsed = (ts_current.tv_sec - ts_start.tv_sec);
+            ns_elapsed += 1'000'000'000ull * s_elapsed;
+            // printf("ts_current=%ld ns_elapsed=%ld\n", ts_current.tv_nsec, ns_elapsed);
+            if(ns_elapsed >= 12'000'000)
+                break;
+
+            int cycles = std::min(input.mq_cycles, 100000);
+            if(cycles < 0) {
+                cycles = 100000;
+                cyclesLeft = -1;
+                // printf("input.mq_cycles=%d, cycles=%d\n", input.mq_cycles, cycles);
+            }
+            else {
+                // printf("input.mq_cycles=%d, cycles=%d\n", input.mq_cycles, cycles);
+                input.mq_cycles -= cycles;
+            }
+            mq_machine_cycle(mach, cycles);
+        }
+
         /* Limit the number of cycles for each GUI frame to not lock the GUI.
            TODO: Proper "real-time" controls, e.g limit to 20 ms.
            I don't think I want threads here, too annoying to sync. */
-        int cycles = std::min(input.mq_cycles, 500000);
+#if 0
+        int cycles = std::min(input.mq_cycles, 2000000);
         cyclesLeft = input.mq_cycles - cycles;
         if(cycles < 0) {
-            cycles = 500000;
+            cycles = 2000000;
             cyclesLeft = -1;
         }
         mq_machine_cycle(mach, cycles);
+#endif
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_heap_init) {

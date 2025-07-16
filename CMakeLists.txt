@@ -13,6 +13,30 @@ if(AZUR_PLATFORM STREQUAL gint)
   message(FATAL_ERROR "gint not supported, this only runs on computer!")
 endif()
 
+# Configuration modes and options
+# TODO: This should only apply to Linux builds.
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  # In Debug mode, optimizations are enabled unless -DMQ_DISABLE_OPTIMIZATIONS
+  if(MQ_DISABLE_OPTIMIZATIONS)
+    set(MQ_OPT_CC -O0)
+  else()
+    set(MQ_OPT_CC -O3)
+  endif()
+  set(MQ_OPT_LD)
+
+  # Profiling
+  if(MQ_PROFILING_TRACY)
+    list(APPEND MQ_OPT_CC -DTRACY_ENABLE)
+  elseif(MQ_PROFILING_GPROF)
+    list(APPEND MQ_OPT_CC -pg)
+    list(APPEND MQ_OPT_LD -pg)
+  endif()
+else()
+  # In Release mode, optimizations are enabled and LTO is too
+  set(MQ_OPT_CC -O3 -flto=auto)
+  set(MQ_OPT_LD -flto=auto)
+endif()
+
 set(LIB_SOURCES
   core/cpu.c
   core/defs.c
@@ -75,17 +99,26 @@ endif()
 
 add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} ${ASSETS})
 target_compile_options(mq PRIVATE
-  -O3 -flto=auto -g -Wall -Wextra -Wno-pointer-arith)
+  ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}"
-  "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb")
-target_link_options(mq PRIVATE -flto=auto)
+  "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb"
+  "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
+target_link_options(mq PRIVATE ${MQ_OPT_LD})
+
+# TODO: Use Tracy's CMake integration just to make things a bit cleaner.
+if(MQ_PROFILING_TRACY)
+  target_sources(mq PRIVATE 3rdparty/tracy/public/TracyClient.cpp)
+  target_compile_options(mq PRIVATE -pthread)
+  target_link_options(mq PRIVATE -pthread)
+  target_link_libraries(mq PRIVATE -ldl)
+endif()
 
 if(AZUR_PLATFORM STREQUAL linux)
-  target_compile_options(mq PRIVATE -fsanitize=address)
-  target_link_options(mq PRIVATE -fsanitize=address)
-  target_link_libraries(mq Azur::Azur Azur::GLM Azur::ImGui)
+  # target_compile_options(mq PRIVATE -fsanitize=address)
+  # target_link_options(mq PRIVATE -fsanitize=address)
+  target_link_libraries(mq PRIVATE Azur::Azur Azur::GLM Azur::ImGui)
 endif()
 
 if(AZUR_PLATFORM STREQUAL emscripten)
@@ -119,11 +152,21 @@ endif()
 #=== Headless executable ======================================================#
 
 if(NOT AZUR_PLATFORM STREQUAL emscripten)
-  add_executable(mq-headless ${LIB_SOURCES} headless/main.c)
+  set(HEADLESS_SOURCES
+    headless/main.c
+    ${LIB_SOURCES})
+
+  if(MQ_PROFILING_TRACY)
+    list(APPEND HEADLESS_SOURCES
+      3rdparty/tracy/public/TracyClient.cpp)
+  endif()
+
+  add_executable(mq-headless ${HEADLESS_SOURCES})
   target_compile_options(mq-headless PRIVATE
-    -O3 -flto=auto -g -Wall -Wextra -Wno-pointer-arith)
+    ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith)
   target_include_directories(mq-headless PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_CURRENT_BINARY_DIR}")
-  target_link_options(mq-headless PRIVATE -flto=auto)
+    "${CMAKE_CURRENT_BINARY_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
+  target_link_options(mq-headless PRIVATE ${MQ_OPT_LD})
 endif()

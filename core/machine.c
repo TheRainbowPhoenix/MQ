@@ -192,32 +192,55 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(!mach->initialized)
         return 0;
 
-    int i = 0;
+    int cyclesRequested = cycles;
+    int cyclesRemaining = cycles;
     mq_timer_unfreeze();
 
-    while(i < cycles) {
+    while(cyclesRemaining > 4) {
+        if(MQ_UNLIKELY(mach->stuck))
+            break;
+        mq_cpu_cycle(mach, &mach->cpu);
+        if(MQ_UNLIKELY(mach->stuck))
+            break;
+        mq_cpu_cycle(mach, &mach->cpu);
+        if(MQ_UNLIKELY(mach->stuck))
+            break;
+        mq_cpu_cycle(mach, &mach->cpu);
+        if(MQ_UNLIKELY(mach->stuck))
+            break;
+        mq_cpu_cycle(mach, &mach->cpu);
+
+        if((mach->processTimer -= 4) <= 0)
+            mq_machine_runProcesses(mach, mach->processFrequency);
+        cyclesRemaining -= 4;
+    }
+
+    while(cyclesRemaining > 0) {
         if(MQ_UNLIKELY(mach->stuck))
             break;
         mq_cpu_cycle(mach, &mach->cpu);
 
         if(--mach->processTimer == 0)
             mq_machine_runProcesses(mach, mach->processFrequency);
-        i++;
+        cyclesRemaining--;
     }
 
     mq_timer_freeze();
-    return i;
+    return (cyclesRequested - cyclesRemaining);
 }
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
 {
+    TracyCZoneN(_ctx, "processes", true);
+
     for(int i = 0; i < mq_process_count(); i++) {
         mq_process_t *proc = mach->processes[i];
         if(proc)
             proc(mach, cyclesElapsed);
     }
 
-    mach->processTimer = mach->processFrequency;
+    mach->processTimer += mach->processFrequency;
+    TracyCZoneEnd(_ctx);
 }
 
 void mq_mach_syscall(mqMachine *mach)
