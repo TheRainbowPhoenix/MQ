@@ -35,5 +35,16 @@ bool mq_r61524_setup(mqMachine *mach);
 /* Get the R61524 module for a machine, NULL if there is none. */
 mqR61524 *mq_r61524_get(mqMachine *mach);
 
+/* Check if the module is in pixel writing mode, i.e. that writes to the main
+   address right now would send pixels. Also checks that the display for the
+   machine is of the expected parameters. If so, incoming accesses may be
+   optimized into a call to mq_r61524_writePixels(). */
+bool mq_r61524_isWritingPixels(mqMachine *mach);
+
+/* Send pixels directly from a memory buffer. The source/size must be at least
+   4-aligned (to make the endian-swapping easier). Needs access to the machine
+   because the display surface is involved. */
+void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size);
+
 MQ_END_DEFS
 #endif /* MQ_MODULES_R61524_H */

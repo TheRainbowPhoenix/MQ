@@ -6,6 +6,7 @@
 
 #include <mq/modules/dma.h>
 #include <mq/modules/intc.h>
+#include <mq/modules/r61524.h>
 #include <mq/memory.h>
 #include <mq/hooks.h>
 #include <mq/mq.h>
@@ -54,6 +55,17 @@ static void copyData(mqMachine *mach, u32 SAR, u32 DAR, int size)
        needs to be normalized to P1. */
     SAR |= 0x80000000;
     DAR |= 0x80000000;
+
+    /* Optimize for the case of transferring data to the R61524. This is very
+       common. This optimization only applies at the level of a single
+       transfer; in the future, runChannel() may itself take shortcuts. */
+    if(DAR == 0x94000000 && mq_r61524_isWritingPixels(mach) && size >= 4) {
+        void *src = mq_memory_access(mach->memory, SAR);
+        if(src) {
+            mq_r61524_writePixels(mach, src, size);
+            return;
+        }
+    }
 
     // TODO[dma]: This data copy is SLOW AS HECK
     // Note: We need to support writing to MMIO here so it can't be too easy,
@@ -112,6 +124,9 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
     };
     int transferSize = transferSizes[TS];
     int transferDivisions = (TS == 11 || TS == 12) ? 2 : 1;
+
+    // TODO: Specialization for the common cases for the R61524
+    // (+ mark previous optimization in copyData as "obsolete")
 
     // mq_log(MQ_LOG_DEBUG, "DMA Channel %d: running for %u cycles (TS=%dx%d)",
     //     ch->index, cycles, transferSize, transferDivisions);

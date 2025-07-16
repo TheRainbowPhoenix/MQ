@@ -29,6 +29,50 @@ static void write_PRDR(mqR61524 *R61524, u32 value)
     R61524->PRDR = value;
 }
 
+static bool is_display_correct(mqDisplay *display)
+{
+    return display && display->format == MQ_DISPLAY_FORMAT_RGB565 &&
+       display->width == 396 && display->height == 224;
+}
+
+bool mq_r61524_isWritingPixels(mqMachine *mach)
+{
+    // TODO: mq_r61524_isWritingPixels: Check direction and window!
+    mqR61524 *R61524 = mq_r61524_get(mach);
+    return R61524
+           && R61524->selectedRegister == 0x202 /* DATA */
+           && is_display_correct(mach->display);
+}
+
+void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
+{
+    mqR61524 *R61524 = mq_r61524_get(mach);
+    mqDisplay *display = mach->display;
+
+    u32 *src_BE = ptr;
+    u16 *dst = display->data + 2 * (396 * R61524->VADDR + R61524->HADDR);
+
+    for(int i = 0; i < size / 4; i++) {
+        u32 value = src_BE[i];
+        dst[0] = value >> 16;
+        dst[1] = value;
+        R61524->HADDR += 2;
+        dst += 2;
+    }
+
+    while(R61524->HADDR >= 396) {
+        R61524->HADDR -= 396;
+        R61524->VADDR++;
+        if(R61524->VADDR == 224) {
+            // Full Frame: set dirty only now?
+            mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
+            R61524->VADDR = 0;
+        }
+    }
+
+    display->dirty = true;
+}
+
 static u32 read_r61524(mqMMIO *io, u32 addr, int size)
 {
     mqMachine *mach = io->userdata;
@@ -70,8 +114,7 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         // TODO[r61524]: Honor write direction and window
         // Be careful that x avis is inverted
         // circuit10's Mario Kart would be a good test for that
-        if(!display || display->format != MQ_DISPLAY_FORMAT_RGB565 ||
-           display->width != 396 || display->height != 224)
+        if(!is_display_correct(display))
             mq_log(MQ_LOG_ERROR, "r61524: invalid display!");
         u16 *data = display->data + 2 * (396 * R61524->VADDR + R61524->HADDR);
         if(size == 2) {
