@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
 import dataclasses
-from typing import Any, Dict
+from typing import Dict
+from collections.abc import Sequence
 import copy
 import sys
 import re
@@ -268,9 +269,112 @@ def codegen(node, depth=0) -> str:
 
 def generateDecoder(spec, filename="<inline>"):
     tree, ins = parseSpec(spec, filename)
+    print(ins)
     if tree is not None:
         resolveDecisions(tree, ins)
         return DECODER_HEADER + codegen(tree) + DECODER_FOOTER
+
+#=== Decoder (table version) generation =======================================#
+
+def generateDecoderTableWrapperFunc(inst_table: Sequence[str]) -> str:
+    c_content  = (
+        '//---\n'
+        '// Generated instruction wrapper function\n'
+        '//----\n'
+        '\n'
+        'static void invalid_wrapper(mqMachine *mach, mqCpu *cpu, u16 inst) {\n'
+        '   mq_log(MQ_LOG_ERROR, "unable to decode instruction %08x", inst);\n'
+        '   mach->stuck = true;\n'
+        '   (void)cpu;\n'
+        '}\n'
+        '\n'
+    )
+    for name, encoding in inst_table[1:]:
+        arg_list = ['mach', 'cpu']
+        c_content += f"static void {name}_wrapper("
+        c_content += 'mqMachine *mach, mqCpu *cpu, u16 inst) {\n'
+        for x in re.finditer('n+|m+|d+|i+|c+|s+', encoding):
+            mask = (0x1 << (x.end() - x.start())) - 1
+            shift = 16 - x.end()
+            arg = x[0][0]
+            c_content += f"    int {arg} = "
+            c_content += f"(inst & {(mask << shift):#06x}) >> {shift};\n"
+            arg_list.append(arg)
+        if len(arg_list) == 2:
+            c_content += '    (void)inst;\n'
+        c_content += f"    {name}({', '.join(arg_list)});\n"
+        c_content += '}\n\n'
+    return c_content
+
+
+def generateDecoderTableInfo(
+    inst_table: Sequence[str],
+    inst_translate: Sequence[int],
+) -> str:
+    c_content  = (
+        '//---\n'
+        '// Generated translation and wrapper table\n'
+        '//----\n'
+        '\n'
+    )
+
+    # 2direct
+    #c_content += 'static const u8 mq_inst_translation_table[65536] = {\n'
+    #for x in inst_translate:
+    #    c_content += f"    {x},\n"
+    #c_content += '};\n\n'
+    #c_content += 'static void (*mq_inst_wrapper_table[])'
+    #c_content += '(mqMachine*,mqCpu*,u16) = {\n'
+    #for inst in inst_table:
+    #    c_content += f"    &{inst[0]}_wrapper,\n"
+    #c_content += '};\n\n'
+
+    # direct
+    c_content += 'static void (*mq_inst_wrapper_table[65536])'
+    c_content += '(mqMachine*,mqCpu*,u16) = {\n'
+    for inst in inst_translate:
+        c_content += f"    &{inst_table[inst][0]}_wrapper,\n"
+    c_content += '};\n\n'
+    return c_content
+
+
+def generateDecoderTable(spec, filename="<inline>"):
+    inst_idx = 1
+    inst_table = [('invalid', -1),]
+    inst_translate = [0] * 65535
+    for inst in parseSpec(spec, filename)[1]:
+        inst_shard = []
+        for shard in [inst.encoding[i:i+4] for i in range(0, 16, 4)]:
+            inst_shard.append(int(shard, 2) if shard[0] in '01' else -1)
+        assert inst_shard[0] >= 0, f"broken instruction -> {inst}"
+        idx = inst_shard[0] << 12
+        for x3 in range(0, 16):
+            x3 = inst_shard[1] if inst_shard[1] >= 0 else x3
+            idx = (idx & 0xf000) | (x3 << 8)
+            for x2 in range(0, 16):
+                x2 = inst_shard[2] if inst_shard[2] >= 0 else x2
+                idx = (idx & 0xff00) | (x2 << 4)
+                for x1 in range(0, 16):
+                    x1 = inst_shard[3] if inst_shard[3] >= 0 else x1
+                    idx = (idx & 0xfff0) | (x1 << 0)
+                    if inst_translate[idx] != 0:
+                        raise Exception(
+                            f"instruction collision {inst_translate[idx]} - "
+                            f"{inst_table[inst_translate[idx]]} - "
+                            f"{inst}"
+                        )
+                    inst_translate[idx] = inst_idx
+                    if inst_shard[3] >= 0:
+                        break
+                if inst_shard[2] >= 0:
+                    break
+            if inst_shard[1] >= 0:
+                break
+        inst_table.append((inst.name, inst.encoding))
+        inst_idx = inst_idx + 1
+    c_content = generateDecoderTableWrapperFunc(inst_table)
+    c_content += generateDecoderTableInfo(inst_table, inst_translate)
+    return c_content
 
 #=== Main function ============================================================#
 
@@ -290,7 +394,8 @@ def main(argv):
     with open(sys.argv[1], "r") as fp_in:
         spec = fp_in.read()
 
-    c_code = generateDecoder(spec, sys.argv[1])
+    #c_code = generateDecoder(spec, sys.argv[1])
+    c_code = generateDecoderTable(spec, sys.argv[1])
 
     if c_code is not None:
         with open(sys.argv[2], "w") as fp_out:
