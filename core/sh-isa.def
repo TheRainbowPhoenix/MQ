@@ -280,4 +280,4 @@ switch($[12:4]) {
 
 #---
 
-# 1111.* is DSP instructions
+1111.iiii.iiii.iiii dsp_entry

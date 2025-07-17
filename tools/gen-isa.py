@@ -341,7 +341,7 @@ def generateDecoderTableInfo(
 def generateDecoderTable(spec, filename="<inline>"):
     inst_idx = 1
     inst_table = [('invalid', -1),]
-    inst_translate = [0] * 65535
+    inst_translate = [0] * 65536
     for inst in parseSpec(spec, filename)[1]:
         inst_shard = []
         for shard in [inst.encoding[i:i+4] for i in range(0, 16, 4)]:
@@ -363,6 +363,7 @@ def generateDecoderTable(spec, filename="<inline>"):
                             f"{inst_table[inst_translate[idx]]} - "
                             f"{inst}"
                         )
+                    print(f"{idx} - {hex(idx)}")
                     inst_translate[idx] = inst_idx
                     if inst_shard[3] >= 0:
                         break
