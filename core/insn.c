@@ -906,7 +906,7 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
         };
         int a = sh_reg[(i & 0b0000001100000000) >> 8];
         int d = dsp_reg[(i & 0b0000000011110000) >> 4];
-        mq_memory_write(mach, mach->memory, cpu->r[a], 4, cpu->r[d]);
+        mq_memory_write(mach, mach->memory, cpu->r[a], 4, cpu->spRegs[d]);
         cpu->r[a] += 4;
         cpu->pc += 2;
         return;

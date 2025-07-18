@@ -363,7 +363,6 @@ def generateDecoderTable(spec, filename="<inline>"):
                             f"{inst_table[inst_translate[idx]]} - "
                             f"{inst}"
                         )
-                    print(f"{idx} - {hex(idx)}")
                     inst_translate[idx] = inst_idx
                     if inst_shard[3] >= 0:
                         break
