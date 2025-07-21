@@ -311,6 +311,9 @@ void mq_mach_syscall(mqMachine *mach)
     case 0x1dba: /* Bfile_FindClose() */
         mach->cpu.r[0] = -1;
         break;
+    case 0x01dae: /* Bfile_CreateEntry() */
+        mach->cpu.r[0] = -1;
+        break;
 
     case 0x1dd0: { /* memcpy() */
         // TODO: Optimized aligned memcpy() + put that in mq_memory()
@@ -340,7 +343,7 @@ void mq_mach_syscall(mqMachine *mach)
         break;
 
     default:
-        mq_log(MQ_LOG_ERROR, "Unknown sycall, getting stuck.");
+        mq_log(MQ_LOG_ERROR, "Unknown sycall %08x, getting stuck.", syscallID);
         mach->stuck = true;
         return;
     }
