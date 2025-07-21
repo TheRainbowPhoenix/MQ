@@ -49,7 +49,7 @@ In order to test you'll need to serve the files somewehre, as the main `.html` f
 
 MQ supports profiling with [Tracy](https://github.com/wolfpld/tracy).
 
-After cloning, build the Tracy server. The GUI uses [nativefiledialogs-extended](https://github.com/btzy/nativefiledialog-extended) for file dialogs, which tries to use the XDG portal by default on Linux. If this doesn't work for you (there's an exlicit error), try to configure with `-DGTK_FILESELECTOR=1`.
+After cloning, build the Tracy server. The GUI uses [nativefiledialogs-extended](https://github.com/btzy/nativefiledialog-extended) for file dialogs, which tries to use the XDG portal by default on Linux. If this doesn't work for you (i.e. you get an error message when using open/save file features in the GUI), try to configure with `-DGTK_FILESELECTOR=1`.
 
 ```bash
 cd 3rdparty/tracy

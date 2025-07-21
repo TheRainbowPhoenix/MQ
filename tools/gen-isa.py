@@ -379,7 +379,7 @@ def generateDecoderTable(spec, filename="<inline>"):
 #=== Main function ============================================================#
 
 USAGE = """\
-usage: gen-isa.py <INPUT.def> <OUTPUT.c>
+usage: gen-isa.py [--table|--switch] <INPUT.def> <OUTPUT.c>
 Generates the decoder for MQ based on an ISA description\
 """
 
@@ -387,18 +387,22 @@ def main(argv):
     if "--help" in argv:
         print(USAGE)
         return 0
-    if len(argv) != 3:
+    if len(argv) != 4 or sys.argv[1] not in ["--table", "--switch"]:
         print(USAGE)
         return 1
 
-    with open(sys.argv[1], "r") as fp_in:
+    mode, in_path, out_path = sys.argv[1:]
+
+    with open(in_path, "r") as fp_in:
         spec = fp_in.read()
 
-    #c_code = generateDecoder(spec, sys.argv[1])
-    c_code = generateDecoderTable(spec, sys.argv[1])
+    if mode == "--table":
+        c_code = generateDecoderTable(spec, in_path)
+    elif mode == "--switch":
+        c_code = generateDecoder(spec, in_path)
 
     if c_code is not None:
-        with open(sys.argv[2], "w") as fp_out:
+        with open(out_path, "w") as fp_out:
             fp_out.write(c_code)
 
 if __name__ == "__main__":

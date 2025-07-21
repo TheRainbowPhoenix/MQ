@@ -986,7 +986,11 @@ MQ_INLINE void trapa(mqMachine *mach, mqCpu *cpu, int imm) {
 
 #pragma GCC diagnostic pop
 
+// TODO: Don't hardcode switch vs. table
+#define MQ_DECODER_SWITCH 0
+#define MQ_DECODER_TABLE 1
 
+#if MQ_DECODER_TABLE
 #include "autogen/sh-isa.inc"
 
 void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
@@ -997,10 +1001,16 @@ void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
 //    // 2direct
 //    u8 idx = mq_inst_translation_table[opcode];
 //    mq_inst_wrapper_table[idx](mach, cpu, opcode);
-
-//    // switch
-//#define _OPCODE opcode
-//#define _DECIDE(X, ...) return X(mach, cpu, ##__VA_ARGS__)
-//#include "autogen/sh-isa.inc"
-//    mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL, 0);
 }
+#endif /* MQ_DECODER_TABLE */
+
+#if MQ_DECODER_SWITCH
+void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
+{
+#define _OPCODE opcode
+#define _DECIDE(X, ...) return X(mach, cpu, ##__VA_ARGS__)
+#include "autogen/sh-isa.inc"
+
+    mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL, 0);
+}
+#endif /* MQ_DECODER_SWITCH */

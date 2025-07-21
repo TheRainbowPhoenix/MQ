@@ -62,7 +62,7 @@ set(LIB_SOURCES
 
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
   COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/autogen"
-  COMMAND python tools/gen-isa.py core/sh-isa.def
+  COMMAND python tools/gen-isa.py --table core/sh-isa.def
                  "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Generating decoder for sh-isa"
