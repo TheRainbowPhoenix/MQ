@@ -126,6 +126,7 @@ static void write_RTSTRn(struct mqMMIO *io, u32 addr, u32 value, int size)
 
 static void write_RTCORn(struct mqMMIO *io, u32 addr, u32 value, int size)
 {
+    // Note: Immediate underflow after writing to RTCOR?
     mqCmod *Cmod = io->userdata;
     mqCmod_RTCTimer *RT = &Cmod->timers[((addr & 0xfff) - 0x34) >> 5];
     (void)size;

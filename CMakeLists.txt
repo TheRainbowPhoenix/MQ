@@ -56,6 +56,7 @@ set(LIB_SOURCES
   modules/intc.c
   modules/mmu.c
   modules/r61524.c
+  modules/tmu.c
 
   system/casiowin.c
   system/heap.c)

@@ -4,7 +4,7 @@
 //   |:::o/010    License: MIT <https://opensource.org/licenses/MIT>         //
 //-- `---/101 ---------------------------------------------------------------//
 // mq.modules.cmod: Custom Module
-// Reference -- None! Just bribes.
+// Reference -- None! Just crumbs.
 //   https://bible.planet-casio.com/lephenixnoir/en/sh7305/modules/cmod-etmu
 //
 // TODO[cmod]: Clock settings/control
