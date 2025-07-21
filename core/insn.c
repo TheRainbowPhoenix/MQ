@@ -891,10 +891,10 @@ MQ_INLINE void sleep(mqMachine *mach, mqCpu *cpu) {
     cpu->pc += 2;
 }
 
-//======= DSP =========//
+//=== DSP ====================================================================//
 
 MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
-    // movl.s Ds,@As+
+    // movs.l Ds, @As+
     if ((i & 0x000f) == 0x000b)
     {
         int const sh_reg[4] = {4, 5, 2, 3};
@@ -904,8 +904,8 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
              SH_X0,  SH_X1,  SH_Y0,  SH_Y1,
              SH_M0, SH_A1G,  SH_M1, SH_A0G,
         };
-        int a = sh_reg[(i & 0b0000001100000000) >> 8];
-        int d = dsp_reg[(i & 0b0000000011110000) >> 4];
+        int a = sh_reg[(i >> 8) & 0x3];
+        int d = dsp_reg[(i >> 4) & 0xf];
         mq_memory_write(mach, mach->memory, cpu->r[a], 4, cpu->spRegs[d]);
         cpu->r[a] += 4;
         cpu->pc += 2;
@@ -914,7 +914,6 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
     mq_log(MQ_LOG_DEBUG, "[%08x] try DSP decoding for %08x\n", cpu->pc, i);
     mach->stuck = true;
 }
-
 
 //===//
 
