@@ -67,9 +67,9 @@ mqINTC_InterruptInfo interrupts[MQ_INT_NUM] = {
     {  9 /* IPRJ */,  4,  8, 0x01, 0xf80 },  // MQ_INT_FSI
     { 11 /* IPRL */, 12,  8, 0x02, 0xfa0 },  // MQ_INT_Cmod_TUNI5
     { 11 /* IPRL */,  8,  8, 0x04, 0xfc0 },  // MQ_INT_a0
-    {  0 /* IPRA */, 12,  4, 0x10, 0x400 },  // MQ_INT_TMU_TUNI2
+    {  0 /* IPRA */, 12,  4, 0x10, 0x400 },  // MQ_INT_TMU_TUNI0
     {  0 /* IPRA */,  8,  4, 0x20, 0x420 },  // MQ_INT_TMU_TUNI1
-    {  0 /* IPRA */,  4,  4, 0x40, 0x440 },  // MQ_INT_TMU_TUNI0
+    {  0 /* IPRA */,  4,  4, 0x40, 0x440 },  // MQ_INT_TMU_TUNI2
     {  9 /* IPRJ */,  0,  0, 0x02, 0x4e0 },  // MQ_INT_c7
     {  9 /* IPRJ */,  0,  0, 0x04, 0x500 },  // MQ_INT_c8
     {  9 /* IPRJ */,  0,  0, 0x01, 0x520 },  // MQ_INT_c9

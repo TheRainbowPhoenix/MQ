@@ -61,9 +61,9 @@ enum mqInt {
     MQ_INT_FSI,             // 9e, IPRJ & 00f0, IMR8  & 01, 0xf80
     MQ_INT_Cmod_TUNI5,      // 9f, IPRL & f000, IMR8  & 02, 0xfa0
     MQ_INT_a0,              // a0, IPRL & 0f00, IMR8  & 04, 0xfc0
-    MQ_INT_TMU_TUNI2,       // c0, IPRA & f000, IMR4  & 10, 0x400
+    MQ_INT_TMU_TUNI0,       // c0, IPRA & f000, IMR4  & 10, 0x400
     MQ_INT_TMU_TUNI1,       // c1, IPRA & 0f00, IMR4  & 20, 0x420
-    MQ_INT_TMU_TUNI0,       // c2, IPRA & 00f0, IMR4  & 40, 0x440
+    MQ_INT_TMU_TUNI2,       // c2, IPRA & 00f0, IMR4  & 40, 0x440
     MQ_INT_c7,              // c7, IPRJ & 000f, IMR0  & 02, 0x4e0
     MQ_INT_c8,              // c8, IPRJ & 000f, IMR0  & 04, 0x500
     MQ_INT_c9,              // c9, IPRJ & 000f, IMR0  & 01, 0x520
