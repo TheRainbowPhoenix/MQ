@@ -10,6 +10,7 @@
 #include <mq/hooks.h>
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
+#include <mq/modules/cpg.h>
 #include <mq/modules/cmod.h>
 #include <mq/modules/dma.h>
 #include <mq/modules/intc.h>
@@ -153,6 +154,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_mmu_map(mach, 0x00300000, layout_addin,   0, 0x100000, 2);
         mq_mmu_map(mach, 0x08100000, layout_ram_p1, 55,  0x10000, 8);
         mq_mmu_bind(mach);
+
+        mq_cpg_setup(mach);
 
         mq_intc_setup(mach);
 
