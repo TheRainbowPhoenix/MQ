@@ -961,46 +961,69 @@ MQ_INLINE void setrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     fprintf(stderr, "error: not implemented: setrc_imm\n");
     mach->stuck = true;
 }
+
+
 MQ_INLINE void movb_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movb_w_r0_dgbr\n");
-    mach->stuck = true;
+    mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + disp, 1, cpu->r[0]);
+    cpu->pc += 2;
 }
 MQ_INLINE void movw_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movw_w_r0_dgbr\n");
-    mach->stuck = true;
+    mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + 2*disp, 2, cpu->r[0]);
+    cpu->pc += 2;
 }
 MQ_INLINE void movl_w_r0_dgbr(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movl_w_r0_dgbr\n");
-    mach->stuck = true;
+    mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + 4*disp, 4, cpu->r[0]);
+    cpu->pc += 2;
 }
 MQ_INLINE void movb_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movb_r_dgbr_r0\n");
-    mach->stuck = true;
+    if (mq_memory_read8(mach, mach->memory, cpu->spRegs[SH_GBR] + disp, &cpu->r[0]))
+        cpu->r[0] = (i8)cpu->r[0];
+    cpu->pc += 2;
 }
 MQ_INLINE void movw_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movw_r_dgbr_r0\n");
-    mach->stuck = true;
+    if (mq_memory_read16(mach, mach->memory, cpu->spRegs[SH_GBR] + disp, &cpu->r[0]))
+        cpu->r[0] = (i16)cpu->r[0];
+    cpu->pc += 2;
 }
 MQ_INLINE void movl_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
-    fprintf(stderr, "error: not implemented: movl_r_dgbr_r0\n");
-    mach->stuck = true;
+    mq_memory_read32(mach, mach->memory, cpu->spRegs[SH_GBR] + 4*disp, &cpu->r[0]);
+    cpu->pc += 2;
 }
 MQ_INLINE void andb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
-    fprintf(stderr, "error: not implemented: andb_imm_r0gbr\n");
-    mach->stuck = true;
+    u32 temp;
+    if (mq_memory_read8(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], &temp))
+    {
+        temp &= 0xFF & imm;
+        mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], 1, temp);
+    }
+    cpu->pc += 2;
 }
 MQ_INLINE void orb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
-    fprintf(stderr, "error: not implemented: orb_imm_r0gbr\n");
-    mach->stuck = true;
+    u32 temp;
+    if (mq_memory_read8(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], &temp))
+    {
+        temp |= 0xFF & imm;
+        mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], 1, temp);
+    }
+    cpu->pc += 2;
 }
 MQ_INLINE void tstb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
-    fprintf(stderr, "error: not implemented: tstb_imm_r0gbr\n");
-    mach->stuck = true;
+    u32 temp;
+    if (mq_memory_read8(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], &temp))
+        mq_cpu_setT(cpu, (temp & imm) == 0);
+    cpu->pc += 2;
 }
 MQ_INLINE void xorb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
-    fprintf(stderr, "error: not implemented: xorb_imm_r0gbr\n");
-    mach->stuck = true;
+    u32 temp;
+    if (mq_memory_read8(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], &temp))
+    {
+        temp ^= 0xFF & imm;
+        mq_memory_write(mach, mach->memory, cpu->spRegs[SH_GBR] + cpu->r[0], 1, temp);
+    }
+    cpu->pc += 2;
 }
+
+
 MQ_INLINE void trapa(mqMachine *mach, mqCpu *cpu, int imm) {
     if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
         return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
