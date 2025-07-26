@@ -50,7 +50,15 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
     mqDisplay *display = mach->display;
 
     u32 *src_BE = ptr;
-    u16 *dst = display->data + 2 * (396 * R61524->VADDR + R61524->HADDR);
+    u16 hpitch, vpitch, true_hsa, true_hea;
+    true_hsa = 395 - R61524->HEA;
+    true_hea = 395 - R61524->HSA;
+    hpitch = true_hea - true_hsa;
+    vpitch = R61524->VEA - R61524->VSA;
+    u16 *dst = display->data + 2 * (396 * (R61524->VADDR+R61524->VSA) + R61524->HADDR+true_hsa);
+
+    // TODO: The real R61524 seems to simply ignore writes if the 
+    // windowing settings are out of bounds.
 
     for(int i = 0; i < size / 4; i++) {
         u32 value = src_BE[i];
@@ -60,16 +68,13 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
         dst += 2;
     }
     
-    u16 true_hsa = 395 - R61524->HEA;
-    u16 true_hea = 395 - R61524->HSA;
-    while(R61524->HADDR > true_hea) {
-        R61524->HADDR -= true_hea+1;
-        R61524->HADDR += true_hsa;
+    if(R61524->HADDR > hpitch) {
+        R61524->HADDR -= hpitch+1;
         R61524->VADDR++;
-        if(R61524->VADDR > R61524->VEA) {
+        if(R61524->VADDR > vpitch) {
             // Full Frame: set dirty only now?
             mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
-            R61524->VADDR = R61524->VSA;
+            R61524->VADDR = 0;
         }
     }
 
@@ -117,10 +122,21 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
     case 0x202: /* DATA */
         if(!is_display_correct(display))
             mq_log(MQ_LOG_ERROR, "r61524: invalid display!");
-        u16 *data = display->data + 2 * (396 * R61524->VADDR + R61524->HADDR);
+        u16 hpitch, vpitch;
+        true_hsa = 395 - R61524->HEA;
+        true_hea = 395 - R61524->HSA;
+        hpitch = true_hea - true_hsa;
+        vpitch = R61524->VEA - R61524->VSA;
+        u16 *data = display->data + 2 * (396 * (R61524->VADDR+R61524->VSA) + R61524->HADDR+true_hsa);
+
+
+        // TODO: The real R61524 seems to simply ignore writes if the 
+        // windowing settings are out of bounds.
+
         if(size == 2) {
             data[0] = value;
             R61524->HADDR++;
+            data++;
         }
         if(size == 4) {
             data[0] = value >> 16;
@@ -130,16 +146,13 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         if(size == 1)
             mq_log(MQ_LOG_ERROR, "r61524: ignoring write of %d bytes!", size);
 
-        true_hsa = 395 - R61524->HEA;
-        true_hea = 395 - R61524->HSA;
-        if(R61524->HADDR > true_hea) {
-            R61524->HADDR -= true_hea+1;
-            R61524->HADDR += true_hsa;
+        if(R61524->HADDR > hpitch) {
+            R61524->HADDR = 0;
             R61524->VADDR++;
-            if(R61524->VADDR > R61524->VEA) {
+            if(R61524->VADDR > vpitch) {
                 // Full Frame: set dirty only now?
                 mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
-                R61524->VADDR = R61524->VSA;
+                R61524->VADDR = 0;
             }
         }
         display->dirty = true;
