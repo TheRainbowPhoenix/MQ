@@ -59,14 +59,17 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
         R61524->HADDR += 2;
         dst += 2;
     }
-
-    while(R61524->HADDR >= 396) {
-        R61524->HADDR -= 396;
+    
+    u16 true_hsa = 395 - R61524->HEA;
+    u16 true_hea = 395 - R61524->HSA;
+    while(R61524->HADDR > true_hea) {
+        R61524->HADDR -= true_hea+1;
+        R61524->HADDR += true_hsa;
         R61524->VADDR++;
-        if(R61524->VADDR == 224) {
+        if(R61524->VADDR > R61524->VEA) {
             // Full Frame: set dirty only now?
             mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
-            R61524->VADDR = 0;
+            R61524->VADDR = R61524->VSA;
         }
     }
 
@@ -91,6 +94,7 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
 {
     mqMachine *mach = io->userdata;
     mqR61524 *R61524 = mach->modules[moduleID];
+    u16 true_hsa, true_hea;
     if(!R61524)
         return;
     (void)addr;
@@ -111,9 +115,6 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         R61524->VADDR = value;
         break;
     case 0x202: /* DATA */
-        // TODO[r61524]: Honor write direction and window
-        // Be careful that x avis is inverted
-        // circuit10's Mario Kart would be a good test for that
         if(!is_display_correct(display))
             mq_log(MQ_LOG_ERROR, "r61524: invalid display!");
         u16 *data = display->data + 2 * (396 * R61524->VADDR + R61524->HADDR);
@@ -128,13 +129,17 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         }
         if(size == 1)
             mq_log(MQ_LOG_ERROR, "r61524: ignoring write of %d bytes!", size);
-        if(R61524->HADDR >= 396) {
-            R61524->HADDR -= 396;
+
+        true_hsa = 395 - R61524->HEA;
+        true_hea = 395 - R61524->HSA;
+        if(R61524->HADDR > true_hea) {
+            R61524->HADDR -= true_hea+1;
+            R61524->HADDR += true_hsa;
             R61524->VADDR++;
-            if(R61524->VADDR == 224) {
+            if(R61524->VADDR > R61524->VEA) {
                 // Full Frame: set dirty only now?
                 mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
-                R61524->VADDR = 0;
+                R61524->VADDR = R61524->VSA;
             }
         }
         display->dirty = true;
