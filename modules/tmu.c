@@ -163,8 +163,6 @@ static void write_TCRn(struct mqMMIO *io, u32 addr, u32 value, int size)
     mqTimer *Timer = &TMU->internalTimers[n];
     (void)size;
 
-    mq_log(MQ_LOG_ERROR, "TCR%d <- %04x\n", n, value);
-
     /* If the prescaler is changed, change the timer resolution. */
     // TODO: Timer remainder is lost when setting prescaler (not too bad)
     int oldPrescaler = (T->TCR & 0x07);
