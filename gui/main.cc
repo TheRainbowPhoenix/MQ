@@ -301,6 +301,26 @@ static void render(void)
         if(mi.arena || mi.hblkhd)
             ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
                 (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
+
+        // TODO: Better alternative on Linux:
+        // 1. Open /proc/self/status
+        // 2. Parse for VmRSS (Resident Set Size) and VmSwap (in swap)
+        // 3. VmRSS is divided in RssAnon (± heap), RssFile (fixed), RssShmem
+        // 4. For users, we're interested in VmRSS (+ VmSwap)
+        // 5. For debugging, we're interested in RssAnon (≈ mi.arena)
+        // Reference:
+        //   top(1), "Linux Memory Types"
+        // Or, for the proper programmatic interface:
+        // 1. Open /proc/self/statm
+        // 2. Read all numbers, multiplied by sysconf(_SC_PAGESIZE)
+        // 3. [size, resident, shared, text, _, data/stack, _]
+        //    * size is VmSize -> useless
+        //    * shared won't be used
+        //    * text is fixed
+        //    * data/stack counts unmapped, non-resident pages -> useless
+        // 4. Keep using mallinfo() for memory stats
+        // Reference:
+        //   proc_pid_statm(5)
 #endif
 
         ImGui::Checkbox2("Show demo window", &show_demo_window);
