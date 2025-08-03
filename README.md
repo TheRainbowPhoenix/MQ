@@ -2,6 +2,10 @@
 
 Project description is TODO.
 
+```bash
+git clone --recursive https://git.planet-casio.com/Lephenixnoir/mq
+```
+
 ![](misc/screenshot.png)
 
 ## Building for Linux
@@ -52,6 +56,7 @@ MQ supports profiling with [Tracy](https://github.com/wolfpld/tracy).
 After cloning, build the Tracy server. The GUI uses [nativefiledialogs-extended](https://github.com/btzy/nativefiledialog-extended) for file dialogs, which tries to use the XDG portal by default on Linux. If this doesn't work for you (i.e. you get an error message when using open/save file features in the GUI), try to configure with `-DGTK_FILESELECTOR=1`.
 
 ```bash
+git submodule update --init --recursive
 cd 3rdparty/tracy
 # Set a cache for both profiler and capture so the libraries don't get rebuilt
 export CPM_SOURCE_CACHE=$(realpath .)/.cpm-cache
