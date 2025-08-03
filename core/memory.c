@@ -737,9 +737,10 @@ bool mq_memory_write(
     /* Writes to NULL pages; see equivalent for reads. */
     // TODO: Limit NULL writes to add-ins
     if(addr < 0x00001000) {
-        mq_log(MQ_LOG_WARNING,
-            "[PC=%08x] NULL page write @ %08x -> ignoring",
-            mach->cpu.pc, addr);
+        // TODO[memory]: Figure out a reasonable way to raise NULL writes
+        // mq_log(MQ_LOG_WARNING,
+        //     "[PC=%08x] NULL page write @ %08x -> ignoring",
+        //     mach->cpu.pc, addr);
         return true;
     }
     /* Memory writes outside bounds of defined memory raise TLB errors when
