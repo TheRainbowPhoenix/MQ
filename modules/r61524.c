@@ -49,17 +49,14 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
     mqR61524 *R61524 = mq_r61524_get(mach);
     mqDisplay *display = mach->display;
 
+    int w = R61524->rHEA - R61524->rHSA + 1;
+    int h = R61524->VEA - R61524->VSA + 1;
+
     u32 *src_BE = ptr;
-    u16 hpitch, vpitch, true_hsa, true_hea;
-    true_hsa = 395 - R61524->HEA;
-    true_hea = 395 - R61524->HSA;
-    hpitch = true_hea - true_hsa;
-    vpitch = R61524->VEA - R61524->VSA;
-    u16 *dst = display->data + 2 * (396 * (R61524->VADDR+R61524->VSA) + R61524->HADDR+true_hsa);
+    u16 *dst = display->data + 2 * (396 * (R61524->VADDR + R61524->VSA) +
+        R61524->HADDR + R61524->rHSA);
 
-    // TODO: The real R61524 seems to simply ignore writes if the 
-    // windowing settings are out of bounds.
-
+    // TODO[r61524]: Real hardware seems to ignore out-of-bounds writes?
     for(int i = 0; i < size / 4; i++) {
         u32 value = src_BE[i];
         dst[0] = value >> 16;
@@ -68,10 +65,10 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
         dst += 2;
     }
     
-    if(R61524->HADDR > hpitch) {
-        R61524->HADDR -= hpitch+1;
+    if(R61524->HADDR >= w) {
+        R61524->HADDR -= w;
         R61524->VADDR++;
-        if(R61524->VADDR > vpitch) {
+        if(R61524->VADDR >= h) {
             // Full Frame: set dirty only now?
             mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
             R61524->VADDR = 0;
@@ -90,6 +87,17 @@ static u32 read_r61524(mqMMIO *io, u32 addr, int size)
     (void)addr;
     (void)size;
 
+    switch(R61524->selectedRegister) {
+    case 0x210: /* HSA */
+        return 395 - R61524->rHEA;
+    case 0x211: /* HEA */
+        return 395 - R61524->rHSA;
+    case 0x212: /* VSA */
+        return R61524->VSA;
+    case 0x213: /* VEA */
+        return R61524->VEA;
+    }
+
     mq_log(MQ_LOG_DEBUG, "read_r61524: read register %03x (TODO, returning 0)",
         R61524->selectedRegister);
     return 0;
@@ -99,7 +107,6 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
 {
     mqMachine *mach = io->userdata;
     mqR61524 *R61524 = mach->modules[moduleID];
-    u16 true_hsa, true_hea;
     if(!R61524)
         return;
     (void)addr;
@@ -122,17 +129,13 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
     case 0x202: /* DATA */
         if(!is_display_correct(display))
             mq_log(MQ_LOG_ERROR, "r61524: invalid display!");
-        u16 hpitch, vpitch;
-        true_hsa = 395 - R61524->HEA;
-        true_hea = 395 - R61524->HSA;
-        hpitch = true_hea - true_hsa;
-        vpitch = R61524->VEA - R61524->VSA;
-        u16 *data = display->data + 2 * (396 * (R61524->VADDR+R61524->VSA) + R61524->HADDR+true_hsa);
 
+        int w = R61524->rHEA - R61524->rHSA + 1;
+        int h = R61524->VEA - R61524->VSA + 1;
+        u16 *data = display->data + 2 * (396 * (R61524->VADDR + R61524->VSA) +
+            R61524->HADDR + R61524->rHSA);
 
-        // TODO: The real R61524 seems to simply ignore writes if the 
-        // windowing settings are out of bounds.
-
+        // TODO[r61524]: Real hardware seems to ignore out-of-bounds writes?
         if(size == 2) {
             data[0] = value;
             R61524->HADDR++;
@@ -146,10 +149,10 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         if(size == 1)
             mq_log(MQ_LOG_ERROR, "r61524: ignoring write of %d bytes!", size);
 
-        if(R61524->HADDR > hpitch) {
+        if(R61524->HADDR >= w) {
             R61524->HADDR = 0;
             R61524->VADDR++;
-            if(R61524->VADDR > vpitch) {
+            if(R61524->VADDR >= h) {
                 // Full Frame: set dirty only now?
                 mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
                 R61524->VADDR = 0;
@@ -157,16 +160,16 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         }
         display->dirty = true;
         break;
-    case 0x210:
-        R61524->HSA = value;
+    case 0x210: /* HSA */
+        R61524->rHEA = 395 - value;
         break;
-    case 0x211:
-        R61524->HEA = value;
+    case 0x211: /* HEA */
+        R61524->rHSA = 395 - value;
         break;
-    case 0x212:
+    case 0x212: /* VSA */
         R61524->VSA = value;
         break;
-    case 0x213:
+    case 0x213: /* VEA */
         R61524->VEA = value;
         break;
     default:
@@ -188,9 +191,9 @@ bool mq_r61524_setup(mqMachine *mach)
         return false;
 
     /* Set the initial window state to fullscreen */
-    // TODO[r61524]: Set CASIO's settings as the default because add-ins?
-    R61524->HSA = 0;
-    R61524->HEA = 395;
+    // TODO[r61524]: Set CASIO's settings as the default window for add-ins?
+    R61524->rHSA = 0;
+    R61524->rHEA = 395;
     R61524->VSA = 0;
     R61524->VEA = 223;
 

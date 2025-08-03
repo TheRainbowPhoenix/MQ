@@ -21,8 +21,14 @@ struct mqR61524 {
     /* Currently-selected register */
     u16 selectedRegister;
 
-    /* Window settings. Note: HSA/HEA starts from the right! */
-    u16 HSA, HEA, VSA, VEA;
+    /* Window settings. On real hardware, HSA/HEA start from the right. The
+       values stored here ("reversed" HSA/HEA) are equal to:
+       * rHSA = 395 - HEA
+       * rHEA = 395 - HSA
+       I/O operations based on HSA/HEA do the conversion on-the-fly. Internal
+       logic uses rHSA/rHEA which correspond to the intuitive direction of the
+       displayed image. */
+    u16 rHSA, rHEA, VSA, VEA;
     /* Current position */
     u16 HADDR, VADDR;
 };
@@ -43,7 +49,7 @@ bool mq_r61524_isWritingPixels(mqMachine *mach);
 
 /* Send pixels directly from a memory buffer. The source/size must be at least
    4-aligned (to make the endian-swapping easier). Needs access to the machine
-   because the display surface is involved. */
+   because the display surface is involved. Can only write a single frame! */
 void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size);
 
 MQ_END_DEFS
