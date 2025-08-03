@@ -676,6 +676,11 @@ static bool _mq_chunk_write(
 
     mqPage *pg = MQ_PAGEPTR_GET(pagePtr);
     int ioID, pgAddr = addr & 0xfff;
+
+    /* Zero out bits beyond the size written */
+    int zero_bits = (4 - size) * 8;
+    value = (value << zero_bits) >> zero_bits;
+
     if(pg && pg->length > pgAddr && (ioID = pg->map[pgAddr])) {
         mqMMIO *io = &pg->io[ioID - 1];
 
