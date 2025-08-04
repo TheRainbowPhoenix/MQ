@@ -542,7 +542,7 @@ bool mq_memory_load(mqMemory *mem, u32 baseAddr, void const *data, int size)
         }
 
         mqChunk *chunk = MQ_CHUNKPTR_GET(chunkPtr);
-        mqPagePointer pagePtr = chunk->pages[addr >> 8];
+        mqPagePointer pagePtr = chunk->pages[addr >> 12];
         addr &= 0xfff;
 
         if(pagePtr == MQ_PAGEPTR_NULL)
