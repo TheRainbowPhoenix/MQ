@@ -80,8 +80,6 @@ int mq_machine_cycle(mqMachine *mach, int cycles);
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed);
 
-void mq_mach_syscall(mqMachine *mach);
-
 bool mq_mach_initHeap(mqMachine *mach);
 
 MQ_END_DEFS

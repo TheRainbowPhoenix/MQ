@@ -8,6 +8,7 @@
 #include <mq/memory.h>
 #include <mq/machine.h>
 #include <mq/modules/intc.h>
+#include <mq/system/casiowin.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -22,26 +23,25 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
     mq_cpu_reset(cpu);
     cpu->CPUOPM = 0x00000320;
 
+    // TODO: mq_cpu_initialize: Move out of this into CASIOWIN module
+    // (since this describes how CASIOWIN loads programs)
     if(initializeKind == MQ_CPU_INITIALIZE_POWERON) {
         cpu->spRegs[SH_SR] = 0x700000f0; // MD=1 RB=1 BL=1 IMASK=15
         cpu->spRegs[SH_VBR] = 0x00000000;
         cpu->spRegs[SH_DSR] = 0x0000;
         cpu->pc = 0xa0000000;
-        cpu->syscallHandler = 0;
     }
     else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_FX) {
         cpu->spRegs[SH_SR] = 0x40000000; // MD=1
         cpu->r[4] = 0; // isAppli
         cpu->r[5] = 0; // optNum
         cpu->pc = 0x00300200;
-        cpu->syscallHandler = 0x80010070;
     }
     else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_CG) {
         cpu->spRegs[SH_SR] = 0x40000000; // MD=1
         cpu->r[4] = 0; // isAppli
         cpu->r[5] = 0; // optNum
         cpu->pc = 0x00300000;
-        cpu->syscallHandler = 0x80020070;
     }
 
     /* CPU registers are initialized here (most to 0). */
@@ -284,7 +284,7 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
        then we can always set it to jump somewhere we don't and set the syscall
        handler to that address. */
     else if(cpu->pc == cpu->syscallHandler && cpu->pc) {
-        mq_mach_syscall(mach);
+        mq_casiowin_syscall(mach);
         goto endCycle;
     }
     else {

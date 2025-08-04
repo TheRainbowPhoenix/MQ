@@ -48,5 +48,8 @@ bool mq_casiowin_setup(struct mqMachine *mach, enum mqCasiowin_Version version);
 /* Get the CASIOWIN module for a machine, NULL if there's none. */
 mqCasiowin *mq_casiowin_get(struct mqMachine *mach);
 
+/* Handle syscall. */
+void mq_casiowin_syscall(struct mqMachine *mach);
+
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */
