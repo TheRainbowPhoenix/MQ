@@ -33,7 +33,6 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
         cpu->spRegs[SH_SR] = 0x40000000; // MD=1
         cpu->r[4] = 0; // isAppli
         cpu->r[5] = 0; // optNum
-        // TODO: Initial r15
         cpu->pc = 0x00300200;
         cpu->syscallHandler = 0x80010070;
     }
@@ -45,7 +44,7 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
         cpu->syscallHandler = 0x80020070;
     }
 
-    /* MPU registers are initialized here (most to 0). */
+    /* CPU registers are initialized here (most to 0). */
 }
 
 static void write_TRA(mqCpu *cpu, u32 value)

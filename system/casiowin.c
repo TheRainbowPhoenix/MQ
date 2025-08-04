@@ -27,6 +27,8 @@ mqCasiowin *mq_casiowin_get(mqMachine *mach)
 static u32 os_base_address(enum mqCasiowin_Version version)
 {
     switch(version) {
+    case MQ_CASIOWIN_FX205:
+        return 0x80010000;
     case MQ_CASIOWIN_CG380:
         return 0x80020000;
     }
@@ -37,6 +39,8 @@ static u32 os_base_address(enum mqCasiowin_Version version)
 static u32 os_footer_address(enum mqCasiowin_Version version)
 {
     switch(version) {
+    case MQ_CASIOWIN_FX205:
+        return 0x8024ff18;
     case MQ_CASIOWIN_CG380:
         return 0x80b5ffe0;
     }
@@ -47,6 +51,7 @@ static u32 os_footer_address(enum mqCasiowin_Version version)
 static char const *os_version_string(enum mqCasiowin_Version version)
 {
     switch(version) {
+    case MQ_CASIOWIN_FX205:     return "02.05.0000";
     case MQ_CASIOWIN_CG380:     return "03.80.0000";
     }
     mq_log(MQ_LOG_ERROR, "os_version_string: missing for %d o(x_x)o", version);
@@ -56,6 +61,7 @@ static char const *os_version_string(enum mqCasiowin_Version version)
 static char const *os_date_string(enum mqCasiowin_Version version)
 {
     switch(version) {
+    case MQ_CASIOWIN_FX205:     return "2015.0207.1555";
     case MQ_CASIOWIN_CG380:     return "2023.0419.1456";
     }
     mq_log(MQ_LOG_ERROR, "os_date_string: missing for %d o(x_x)o", version);

@@ -21,7 +21,7 @@ struct mqMachine;
 /* Supported OS versions. */
 enum mqCasiowin_Version {
     // MQ_CASIOWIN_FX100,  // Super old FX... (SH3)
-    // MQ_CASIOWIN_FX200,  // Old FX (both SH3 and SH4 exist)
+    MQ_CASIOWIN_FX205,     // Old FX (both SH3 and SH4 exist)
     // MQ_CASIOWIN_FX300,  // G-III/35+E II (SH4 only)
     // MQ_CASIOWIN_CG200,  // Prizm fx-CG 10/20
     MQ_CASIOWIN_CG380,
