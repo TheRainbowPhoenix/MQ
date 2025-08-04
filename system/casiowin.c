@@ -26,66 +26,44 @@ mqCasiowin *mq_casiowin_get(mqMachine *mach)
     return mach->modules ? mach->modules[moduleID] : NULL;
 }
 
-static u32 syscall_handler(enum mqCasiowin_Version version)
-{
-    switch(version) {
-    case MQ_CASIOWIN_FX205:     return 0x80010070;
-    case MQ_CASIOWIN_CG380:     return 0x80020070;
-    }
-    mq_log(MQ_LOG_ERROR, "syscall_handler: missing for %d o(x_x)o", version);
-    return 0;
-}
+static struct mqCasiowin_OSInfo OSInfo_FX205 = {
+    .OSBaseAddress          = 0x80010000,
+    .OSFooterAddress        = 0x8024ff18,
+    .versionString          = "02.05.0000",
+    .dateString             = "2015.0207.1555",
+    .syscallStubAddress     = 0x80010070,
+    .heapAddress            = 0x88030000, /* @ 192 kB */
+    .heapSize               = 48 << 10,
+};
+static struct mqCasiowin_OSInfo OSInfo_CG380 = {
+    .OSBaseAddress          = 0x80020000,
+    .OSFooterAddress        = 0x80b5ffe0,
+    .versionString          = "03.80.0000",
+    .dateString             = "2023.0419.1456",
+    .syscallStubAddress     = 0x80020070,
+    .heapAddress            = 0x8c0c0000, /* @ 768 kB */
+    .heapSize               = 128 << 10,
+};
 
-static u32 os_base_address(enum mqCasiowin_Version version)
-{
-    switch(version) {
-    case MQ_CASIOWIN_FX205:     return 0x80010000;
-    case MQ_CASIOWIN_CG380:     return 0x80020000;
-    }
-    mq_log(MQ_LOG_ERROR, "os_base_address: missing for %d o(x_x)o", version);
-    return -1;
-}
-
-static u32 os_footer_address(enum mqCasiowin_Version version)
+mqCasiowin_OSInfo const *mq_casiowin_getOSInfo(mqCasiowin_Version version)
 {
     switch(version) {
     case MQ_CASIOWIN_FX205:
-        return 0x8024ff18;
+        return &OSInfo_FX205;
     case MQ_CASIOWIN_CG380:
-        return 0x80b5ffe0;
+        return &OSInfo_CG380;
     }
-    mq_log(MQ_LOG_ERROR, "os_footer_address: missing for %d o(x_x)o", version);
-    return -1;
+    return NULL;
 }
 
-static char const *os_version_string(enum mqCasiowin_Version version)
+bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
 {
-    switch(version) {
-    case MQ_CASIOWIN_FX205:     return "02.05.0000";
-    case MQ_CASIOWIN_CG380:     return "03.80.0000";
-    }
-    mq_log(MQ_LOG_ERROR, "os_version_string: missing for %d o(x_x)o", version);
-    return "99.99.9999";
-}
-
-static char const *os_date_string(enum mqCasiowin_Version version)
-{
-    switch(version) {
-    case MQ_CASIOWIN_FX205:     return "2015.0207.1555";
-    case MQ_CASIOWIN_CG380:     return "2023.0419.1456";
-    }
-    mq_log(MQ_LOG_ERROR, "os_date_string: missing for %d o(x_x)o", version);
-    return "9999.9999.9999";
-}
-
-bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
-{
-    mach->cpu.syscallHandler = syscall_handler(version);
-
-    u32 OSBase = os_base_address(version);
-    u32 footer = os_footer_address(version);
-    if(!OSBase || (OSBase & 0xfff))
+    mqCasiowin_OSInfo const *info = mq_casiowin_getOSInfo(version);
+    if(!info || !info->OSBaseAddress || (info->OSBaseAddress & 0xfff))
         return false;
+
+    u32 OSBase = info->OSBaseAddress;
+    u32 footer = info->OSFooterAddress;
 
     mqPage *pg_os = mq_memory_getPage(mach->memory, OSBase);
     mqPage *pg_eboot = mq_memory_getPage(mach->memory, OSBase - 0x1000);
@@ -103,21 +81,22 @@ bool mq_casiowin_setup(mqMachine *mach, enum mqCasiowin_Version version)
     if(!Casiowin)
         return false;
 
+    Casiowin->info = mq_casiowin_getOSInfo(version);
     Casiowin->version = version;
-    memcpy(Casiowin->str_version, os_version_string(version), 10);
-    memcpy(Casiowin->str_serial, "mq000000", 8);
-    memcpy(Casiowin->str_date, os_date_string(version), 14);
 
     bool ok = true;
     ok &= mq_page_mapString(pg_eboot, "CW_SERIAL", OSBase - 0x30,
-        Casiowin->str_serial, 8);
+        "mq000000", 8);
     ok &= mq_page_mapString(pg_os, "CW_VERSION", OSBase + 0x20,
-        Casiowin->str_version, 10);
+        info->versionString, 10);
 
     if(pg_footer) {
         ok &= mq_page_mapString(pg_footer, "CW_DATE", footer,
-            Casiowin->str_date, 14);
+            info->dateString, 14);
     }
+
+    /* Export some of the data to other components for optimization purposes */
+    mach->cpu.syscallHandler = info->syscallStubAddress;
 
     if(ok)
         mach->modules[moduleID] = Casiowin;
@@ -131,6 +110,9 @@ static void mq_casiowin_cleanup(mqMachine *mach)
     mqCasiowin *Casiowin = mach->modules[moduleID];
     if(Casiowin)
         free(Casiowin);
+
+    // TODO[casiowin]: mq_heap_reset: Should be bound to machine, not global!
+    mq_heap_reset();
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_casiowin_cleanup)
 
@@ -222,17 +204,17 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x1f41:
     case 0x1f42: /* free() */
-        mq_mach_initHeap(mach);
+        mq_casiowin_initHeap(mach);
         mq_heap_free(cpu->r[4]);
         return;
     case 0x1f43:
     case 0x1f44: /* malloc() */
-        mq_mach_initHeap(mach);
+        mq_casiowin_initHeap(mach);
         cpu->r[0] = mq_heap_malloc(cpu->r[4]);
         return;
     case 0x1f45:
     case 0x1f46: /* realloc() */
-        mq_mach_initHeap(mach);
+        mq_casiowin_initHeap(mach);
         cpu->r[0] = mq_heap_realloc(cpu->r[4], cpu->r[5]);
         return;
     }
@@ -240,6 +222,28 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     mq_log(MQ_LOG_ERROR, "Unknown CG syscall %%%03x, getting stuck.",
         syscallID);
     mach->stuck = true;
+}
+
+bool mq_casiowin_initHeap(mqMachine *mach)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    if(!Casiowin)
+        return false;
+
+    u32 start = Casiowin->info->heapAddress;
+    u32 size = Casiowin->info->heapSize;
+
+    if(!start || !size || mq_heap_isInitialized(NULL, NULL))
+        return false;
+
+    void *buffer = mq_memory_allocBuffer(mach->memory, "HEAP", size);
+    if(!buffer)
+        return false;
+
+    if(!mq_memory_createBlock(mach->memory, start, size, buffer))
+        return false;
+
+    return mq_heap_init(start, start + size, buffer);
 }
 
 void mq_casiowin_syscall(mqMachine *mach)

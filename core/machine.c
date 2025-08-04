@@ -9,7 +9,6 @@
 #include <mq/mq.h>
 #include <mq/hooks.h>
 #include <mq/system/casiowin.h>
-#include <mq/system/heap.h>
 #include <mq/modules/cmod.h>
 #include <mq/modules/dma.h>
 #include <mq/modules/intc.h>
@@ -33,7 +32,6 @@ void mq_machine_reset(mqMachine *mach)
 {
     mq_cpu_reset(&mach->cpu);
     mq_memory_reset(mach->memory);
-    memset(&mach->system, 0, sizeof mach->system);
     mach->initialized = false;
     mach->stuck = false;
 
@@ -54,8 +52,6 @@ void mq_machine_reset(mqMachine *mach)
     if(mach->keyboard)
         mq_keyboard_destroy(mach->keyboard);
     mach->keyboard = NULL;
-
-    mq_heap_reset();
 }
 
 void mq_machine_destroy(mqMachine *mach)
@@ -118,9 +114,9 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
     if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
         u32 layout_addin    = 0x80300000; /* @ 3 MB (in fs for OS 2.xx) */
+        u32 layout_vram     = 0x8800100d; /* @ 4 kB + misalignment */
         u32 layout_uram_p1  = 0x88020000; /* @ 128 kB */
         u32 layout_uram_p2  = 0xa8020000;
-        u32 layout_heap     = 0x88030000; /* @ 192 kB */
 
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
         mq_cpu_setup(&mach->cpu, mach->memory);
@@ -141,10 +137,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBlock(mach->memory, layout_uram_p1, 32 << 10, uram);
         mq_memory_createBlock(mach->memory, layout_uram_p2, 32 << 10, uram);
         /* VRAM */
-        // TODO
-
-        mach->system.heapAddress = layout_heap;
-        mach->system.heapSize = 48 << 10;
+        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", 1060);
+        mq_memory_createBlock(mach->memory, layout_vram & -32, 1060, vram);
 
         mach->display = mq_display_create();
         mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64);
@@ -154,8 +148,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         // TODO[machine]: Add the NULL page to TLB
         mq_mmu_setup(mach);
-        mq_mmu_map(mach, 0x00300000, layout_addin,    0, 0x10000,  8);
-        mq_mmu_map(mach, 0x08100000, layout_uram_p1, 55, 0x1000,  32);
+        mq_mmu_map(mach, 0x00300000, layout_addin,    0, 0x10000, 8);
+        mq_mmu_map(mach, 0x08100000, layout_uram_p1, 55, 0x1000,  8);
         mq_mmu_bind(mach);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
@@ -169,7 +163,6 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         u32 layout_addin    = 0x81800000; /* @ 24 MB, somewhere in fs */
         u32 layout_uram_p1  = 0x8c180000; /* @ 1.5 MB */
         u32 layout_uram_p2  = 0xac180000;
-        u32 layout_heap     = 0x8c0c0000; /* @ 768 kB */
 
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
         mq_cpu_setup(&mach->cpu, mach->memory);
@@ -198,9 +191,6 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
         mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);
         mq_memory_createBlock(mach->memory, 0xac0f0000, 512 << 10, ostk);
-
-        mach->system.heapAddress = layout_heap;
-        mach->system.heapSize = 128 << 10;
 
         mach->display = mq_display_create();
         mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
@@ -297,22 +287,4 @@ void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
 
     mach->processTimer += mach->processFrequency;
     TracyCZoneEnd(_ctx);
-}
-
-bool mq_mach_initHeap(mqMachine *mach)
-{
-    u32 start = mach->system.heapAddress;
-    u32 size = mach->system.heapSize;
-
-    if(!start || !size || mq_heap_isInitialized(NULL, NULL))
-        return false;
-
-    void *buffer = mq_memory_allocBuffer(mach->memory, "HEAP", size);
-    if(!buffer)
-        return false;
-
-    if(!mq_memory_createBlock(mach->memory, start, size, buffer))
-        return false;
-
-    return mq_heap_init(start, start + size, buffer);
 }

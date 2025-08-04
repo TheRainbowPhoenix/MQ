@@ -288,7 +288,7 @@ bool mq_page_mapRegister32(mqPage *page, char const *name, u32 addr,
    base address that would hit the buffer are ignored. Thus, this function only
    works fully on 4-aligned base addresses. */
 bool mq_page_mapString(
-    mqPage *page, char const *name, u32 addr, void *str, u16 size);
+    mqPage *page, char const *name, u32 addr, void const *str, u16 size);
 
 //=== TODO: Unclassified memory functions ====================================//
 

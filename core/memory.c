@@ -403,7 +403,7 @@ static u32 readStringIO(struct mqMMIO *io, u32 addr, int size)
 }
 
 bool mq_page_mapString(
-    mqPage *pg, char const *name, u32 addr, void *str, u16 size)
+    mqPage *pg, char const *name, u32 addr, void const *str, u16 size)
 {
     /* Pack both the string size and its start address in the data field. */
     MQ_STATIC_ASSERT(sizeof(void *) >= 4);
@@ -411,7 +411,7 @@ bool mq_page_mapString(
     uintptr_t data = (size << 16) | (addr & 0xffff);
 
     int ioID = mq_page_addIO(pg, name, MQ_MMIO_UNSIZED, readStringIO, NULL,
-        str, (void *)data);
+        (void *)str, (void *)data);
     return (ioID >= 0) && mq_page_mapIO(pg, ioID, addr, size, 1);
 }
 

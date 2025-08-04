@@ -1,6 +1,7 @@
 #include "gui.h"
 #include <mq/mq.h>
 #include <mq/machine.h>
+#include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
@@ -727,7 +728,7 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_heap_init) {
-        mq_mach_initHeap(mach);
+        mq_casiowin_initHeap(mach);
     }
 
     if(input.ui_pattern_mono && mach->display) {

@@ -17,6 +17,7 @@
 MQ_START_DEFS
 
 struct mqMachine;
+typedef struct mqMachine mqMachine;
 
 /* Supported OS versions. */
 enum mqCasiowin_Version {
@@ -29,27 +30,57 @@ enum mqCasiowin_Version {
     // MQ_CASIOWIN_MP200,  // Math+ 2.00
 };
 
+/* Detailed information about each OS version. Unless otherwise specified, all
+   addresses are set in P1. */
+struct mqCasiowin_OSInfo {
+    /* OS base and footer addresses */
+    u32 OSBaseAddress;
+    u32 OSFooterAddress;
+
+    /* Version and date strings */
+    char const *versionString;      /* MM.mm.pppp */
+    char const *dateString;         /* YYYY.mmdd.hhmm */
+
+    /* Syscall stub address; 0 if there is no syscall stub */
+    u32 syscallStubAddress;
+    // TODO[casiowin]: Syscall API version
+
+    /* Heap address and size */
+    u32 heapAddress;
+    u32 heapSize;
+};
+
 /* Information that we keep track of in the machine structure. */
 struct mqCasiowin {
     enum mqCasiowin_Version version;
+    struct mqCasiowin_OSInfo const *info;
+
     // TODO[mqCasiowin]: Localization, SH3/SH4 revision, version patch.
 
-    /* Strings which get read from different offsets. Not NUL-terminated! */
-    char str_version[10];
-    char str_serial[8];
-    char str_date[14];
+    /* Globals from the display system */
 };
 
+typedef enum mqCasiowin_Version mqCasiowin_Version;
+typedef struct mqCasiowin_OSInfo mqCasiowin_OSInfo;
 typedef struct mqCasiowin mqCasiowin;
 
 /* Setup the CASIOWIN interface for the given OS version. */
-bool mq_casiowin_setup(struct mqMachine *mach, enum mqCasiowin_Version version);
+bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version);
 
 /* Get the CASIOWIN module for a machine, NULL if there's none. */
-mqCasiowin *mq_casiowin_get(struct mqMachine *mach);
+mqCasiowin *mq_casiowin_get(mqMachine *mach);
 
-/* Handle syscall. */
-void mq_casiowin_syscall(struct mqMachine *mach);
+/* Get the static, constant OS information for a given version. This function
+   does not require a machine or mqCasiowin instance. */
+mqCasiowin_OSInfo const *mq_casiowin_getOSInfo(mqCasiowin_Version version);
+
+/* Handle a syscall. */
+void mq_casiowin_syscall(mqMachine *mach);
+
+/* Initialize the system heap (emulated through gint's allocator). This
+   function can be called explicitly but generally that's not required, as it
+   will be initialized on-demand if a heap syscall is invoked. */
+bool mq_casiowin_initHeap(mqMachine *mach);
 
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */

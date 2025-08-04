@@ -40,22 +40,16 @@ struct mqMachine
     /* How many cycles between each run of background processes */
     int processFrequency;
 
-    /* System emulation details */
-    struct {
-        // TODO: System API version
-        u32 heapAddress;
-        u32 heapSize;
-    } system;
-
     /* Generic devices associated with the machine to interface either with the
        user or with host system resources. */
 
-    /* Display; may be NULL. */
+    /* Display; may be NULL */
     mqDisplay *display;
-    // Keyboard; may be NULL.
+    /* Keyboard; may be NULL */
     mqKeyboard *keyboard;
-    // TODO: Real-time tiemr; may be NULL.
-    // mqTimer *timer;
+
+    // TODO: Data source for mqTimer; to enable deterministic execution instead
+    // of always using clock_gettime().
 };
 
 typedef struct mqMachine mqMachine;
@@ -79,8 +73,6 @@ bool mq_machine_load_g3a(mqMachine *mach, void *path, long size);
 int mq_machine_cycle(mqMachine *mach, int cycles);
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed);
-
-bool mq_mach_initHeap(mqMachine *mach);
 
 MQ_END_DEFS
 #endif /* MQ_MACHINE_H */
