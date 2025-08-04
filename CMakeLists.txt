@@ -13,6 +13,9 @@ if(AZUR_PLATFORM STREQUAL gint)
   message(FATAL_ERROR "gint not supported, this only runs on computer!")
 endif()
 
+# Folder for auto-generated files
+set(AUTOGEN "${CMAKE_CURRENT_BINARY_DIR}/autogen")
+
 # Configuration modes and options
 # TODO: This should only apply to Linux builds.
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -45,6 +48,7 @@ set(LIB_SOURCES
   core/machine.c
   core/memory.c
   core/mq.c
+  "${AUTOGEN}/assets.c"
 
   interfaces/display.c
   interfaces/keyboard.c
@@ -61,17 +65,34 @@ set(LIB_SOURCES
   system/casiowin.c
   system/heap.c)
 
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
-  COMMAND mkdir -p "${CMAKE_CURRENT_BINARY_DIR}/autogen"
+add_custom_command(OUTPUT "${AUTOGEN}sh-isa.inc"
+  COMMAND mkdir -p "${AUTOGEN}"
   COMMAND python tools/gen-isa.py --table core/sh-isa.def
-                 "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc"
+                 "${AUTOGEN}/sh-isa.inc"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Generating decoder for sh-isa"
   DEPENDS tools/gen-isa.py core/sh-isa.def)
 # Annoyingly, I couldn't get the dependency to be auto-detected. Anything that
 # uses a custom target is out of the question because that always rebuilds.
 set_source_files_properties(core/insn.c PROPERTIES
-  OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/autogen/sh-isa.inc")
+  OBJECT_DEPENDS "${AUTOGEN}/sh-isa.inc")
+
+# Assets converted via a Python script equivalent to xxd -i into a header.
+# Having a single file is not super elegant but it simplifies the dependencies
+# a lot (it's pulled by source files and the header comes with it, so it's
+# always up-to-date with no manual dependency declarations)
+set(EMBEDDED_ASSETS
+  system/fx-font.bin
+  system/fx-font-mini.bin)
+add_custom_command(
+  OUTPUT "${AUTOGEN}/assets.c" "${AUTOGEN}/assets.h"
+  COMMAND mkdir -p "${AUTOGEN}"
+  COMMAND python tools/gen-assets.py
+                 -c "${AUTOGEN}/assets.c" -h "${AUTOGEN}/assets.h"
+                 ${EMBEDDED_ASSETS}
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMENT "Embeddeding assets"
+  DEPENDS tools/gen-assets.py ${EMBEDDED_ASSETS})
 
 #=== Main GUI executable ======================================================#
 
