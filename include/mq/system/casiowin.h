@@ -48,6 +48,9 @@ struct mqCasiowin_OSInfo {
     /* Heap address and size */
     u32 heapAddress;
     u32 heapSize;
+    /* VRAM address and size */
+    u32 vramAddress;
+    u32 vramSize;
 
     /* Address of the "data" area which is the fake area where the emulator
        puts all of the OS data that needs to be accessed by address. */
@@ -70,6 +73,13 @@ struct mqCasiowin {
     // TODO[mqCasiowin]: Localization, SH3/SH4 revision, version patch.
 
     /* Globals from the display system */
+
+    /* VRAM buffer pointer. This points to a memory buffer, which means it's
+       4-byte little-endian mode! */
+    void *vramLE;
+    /* Cursor position, starting at 0 (i.e. one less than Locate arguments) */
+    int BdispCursorX;
+    int BdispCursorY;
 };
 
 typedef enum mqCasiowin_Version mqCasiowin_Version;
@@ -93,6 +103,22 @@ void mq_casiowin_syscall(mqMachine *mach);
    function can be called explicitly but generally that's not required, as it
    will be initialized on-demand if a heap syscall is invoked. */
 bool mq_casiowin_initHeap(mqMachine *mach);
+
+//=== Mono rendering functions ===============================================//
+// These functions are used to serve syscalls. They can be called to emulate
+// other high-level functions or larger syscalls.
+
+/* Get and set individual pixels (out-of-bound is a constant 0). */
+int mq_casiowin_mono_get_pixel(u8 *vramLE, uint x, uint y);
+void mq_casiowin_mono_set_pixel(u8 *vramLE, uint x, uint y, int color);
+
+/* Some common variants of the endless printing functions. */
+void mq_casiowin_mono_Print(
+    mqMachine *mach, u32 stringAddress, int maxX);
+void mq_casiowin_mono_PrintMini(
+    mqMachine *mach, int x, int y, u32 stringAddress, int mode);
+void mq_casiowin_mono_PrintXY(
+    mqMachine *mach, int x, int y, u32 stringAddress, int mode);
 
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */

@@ -115,7 +115,6 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
     if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
         u32 layout_addin    = 0x80300000; /* @ 3 MB (in fs for OS 2.xx) */
-        u32 layout_vram     = 0x8800100d; /* @ 4 kB + misalignment */
         u32 layout_uram_p1  = 0x88020000; /* @ 128 kB */
         u32 layout_uram_p2  = 0xa8020000;
 
@@ -137,9 +136,6 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 32 << 10);
         mq_memory_createBlock(mach->memory, layout_uram_p1, 32 << 10, uram);
         mq_memory_createBlock(mach->memory, layout_uram_p2, 32 << 10, uram);
-        /* VRAM */
-        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", 1060);
-        mq_memory_createBlock(mach->memory, layout_vram & -32, 1060, vram);
 
         mach->display = mq_display_create();
         mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64);
@@ -180,12 +176,6 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
         mq_memory_createBlock(mach->memory, layout_uram_p1, 512 << 10, uram);
         mq_memory_createBlock(mach->memory, layout_uram_p2, 512 << 10, uram);
-        /* VRAM */
-        u32 VRAMsize = 384 * 216 * 2 + 1024; // margin for buffer overflows...
-        VRAMsize = ((VRAMsize - 1) | (4096 - 1)) + 1;
-        void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", VRAMsize);
-        mq_memory_createBlock(mach->memory, 0x8c000000, VRAMsize, vram);
-        mq_memory_createBlock(mach->memory, 0xac000000, VRAMsize, vram);
         /* OS stack */
         void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
         mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);

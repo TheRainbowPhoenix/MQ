@@ -49,6 +49,8 @@ static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .syscallStubAddress     = 0x80010070,
     .heapAddress            = 0x88030000, /* @ 192 kB */
     .heapSize               = 48 << 10,
+    .vramAddress            = 0x88001000, /* @ 4 kB; aligned, unlike real OS */
+    .vramSize               = 1024 + 32,  /* Overflow margin */
     .dataAreaAddress        = 0x80240000, /* @ -64 kB, approximately */
     .dataAreaSize           = 4 << 10,
     .dataKeymap             = keymap_fx,
@@ -62,6 +64,8 @@ static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .syscallStubAddress     = 0x80020070,
     .heapAddress            = 0x8c0c0000, /* @ 768 kB */
     .heapSize               = 128 << 10,
+    .vramAddress            = 0x8c000000, /* @ 0 MB */
+    .vramSize               = 0x29000,    /* 384x216 + 1 kB, page-aligned */
     .dataAreaAddress        = 0x80b40000, /* @ -128 kB, approximately */
     .dataAreaSize           = 4 << 10,
     .dataKeymap             = NULL,
@@ -150,6 +154,16 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     }
     else ok = false;
 
+    /* OS framebuffer, used by many programs */
+    void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", info->vramSize);
+    u32 vramP1 = info->vramAddress;
+    u32 vramP2 = (vramP1 & 0x1fffffff) | 0xa0000000;
+    mq_memory_createBlock(mach->memory, vramP1, info->vramSize, vram);
+    mq_memory_createBlock(mach->memory, vramP2, info->vramSize, vram);
+
+    /* Globals */
+    Casiowin->vramLE = vram;
+
     /* Export some of the data to other components for optimization purposes */
     mach->cpu.syscallHandler = info->syscallStubAddress;
 
@@ -176,7 +190,8 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
 
     /* Log except for syscalls that happen often */
-    if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420)
+    if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420 &&
+       syscallID != 0xc4f)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
@@ -205,9 +220,16 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0135: /* GetVRAMAddress() */
-        // TODO[casiowin]: Don't duplicate VRAM address
-        cpu->r[0] = 0x8800100d;
+        cpu->r[0] = Casiowin->info->vramAddress;
         return;
+
+    case 0x0146: /* Bdisp_SetPoint_VRAM() */
+        mq_casiowin_mono_set_pixel(Casiowin->vramLE,
+            cpu->r[4], cpu->r[5], cpu->r[6]);
+        return;
+
+    // case 0x014d: /* Bdisp_AreaReverseVRAM() */
+    //     return;
 
     case 0x03fa: /* Hmem_SetMMU() */
         cpu->r[0] = 0;
@@ -232,9 +254,44 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     case 0x0435: /* Bfile_WriteFile() */
         cpu->r[0] = -1;
         return;
+    case 0x0439: /* Bfile_DeleteEntry() */
+        cpu->r[0] = -1;
+        return;
 
     case 0x0494: /* SetQuitHandler() */
         // TODO: SetQuitHandler() syscall (for saves)
+        return;
+
+    case 0x0807: /* Locate() */
+        int x = mach->cpu.r[4];
+        int y = mach->cpu.r[5];
+        if(x >= 1 && x <= 21 && y >= 1 && y <= 8) {
+            Casiowin->BdispCursorX = x - 1;
+            Casiowin->BdispCursorY = y - 1;
+        }
+        return;
+
+    case 0x0808: /* Print() */
+        mq_casiowin_mono_Print(mach, mach->cpu.r[4], 64);
+        return;
+
+    // case 0x0813: /* SaveDisp() */
+    //     syscall_SaveDisp(mach, mach->cpu.r[4]);
+    //     return;
+
+    // case 0x0814: /* RestoreDisp() */
+    //     syscall_RestoreDisp(mach, mach->cpu.r[4]);
+    //     return;
+
+    // case 0x08fe: /* PopupWin() */
+    //     return;
+
+    // case 0x090f: /* GetKey() */
+    //     return;
+
+    case 0x09ad: /* PrintXY() */
+        mq_casiowin_mono_PrintXY(mach,
+            mach->cpu.r[4], mach->cpu.r[5], mach->cpu.r[6], mach->cpu.r[7]);
         return;
 
     case 0x0acc: /* free() */
@@ -245,6 +302,12 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mq_casiowin_initHeap(mach);
         cpu->r[0] = mq_heap_malloc(cpu->r[4]);
         return;
+
+    case 0x0c4f: /* PrintMini() */
+        mq_casiowin_mono_PrintMini(mach,
+            mach->cpu.r[4], mach->cpu.r[5], mach->cpu.r[6], mach->cpu.r[7]);
+        return;
+
     case 0x0e6d: /* realloc() */
         mq_casiowin_initHeap(mach);
         cpu->r[0] = mq_heap_realloc(cpu->r[4], cpu->r[5]);
@@ -262,6 +325,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
 static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 {
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
     // TODO: Check syscall API version
 
     /* Log except for syscalls that happen often */
@@ -278,8 +342,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x01e6: /* GetVRAMAddress() */
-        // FIXME: GetVRAMAddress() is normally in P2
-        cpu->r[0] = 0x8c000000;
+        cpu->r[0] = (Casiowin->info->vramAddress & 0x1fffffff) | 0xa0000000;
         return;
 
     case 0x025f: /* Bdisp_PutDisp_DD() */
