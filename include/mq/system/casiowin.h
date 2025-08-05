@@ -48,12 +48,24 @@ struct mqCasiowin_OSInfo {
     /* Heap address and size */
     u32 heapAddress;
     u32 heapSize;
+
+    /* Address of the "data" area which is the fake area where the emulator
+       puts all of the OS data that needs to be accessed by address. */
+    u32 dataAreaAddress;
+    u32 dataAreaSize;
+    /* Keymap, served by %1032 on FX and use for KeycodeToMatrixCode. May be
+       NULL/0/-1 in which case there's no keymap. */
+    int *dataKeymap;
+    int dataKeymapSize;
 };
 
 /* Information that we keep track of in the machine structure. */
 struct mqCasiowin {
     enum mqCasiowin_Version version;
     struct mqCasiowin_OSInfo const *info;
+
+    /* Generated addresses for various data area values. */
+    u32 dataKeymapAddress;
 
     // TODO[mqCasiowin]: Localization, SH3/SH4 revision, version patch.
 

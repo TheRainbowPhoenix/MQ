@@ -12,6 +12,7 @@
 #include <mq/cpu.h>
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
+#include <mq/interfaces/timer.h>
 MQ_START_DEFS
 
 struct mqMemory;
@@ -30,6 +31,15 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
+    /* Machine is internally paused for a limited time. This is a high-level
+       emulation of sleep functions. While internally paused, the machine still
+       runs background processes but no CPU instructions, and counts ticks from
+       `internalPauseTimer`. When `internalPauseTicksRemaining` reaches 0 the
+       internal pause ends automatically. */
+    // TODO: Host system sleeps for long high-level sleeps (... but timers?)
+    bool internallyPaused;
+    mqTimer internalPauseTimer;
+    int internalPauseTicksRemaining;
 
     /* Data from hardware modules; the array has size mq_module_count(). */
     void **modules;
@@ -73,6 +83,15 @@ bool mq_machine_load_g3a(mqMachine *mach, void *path, long size);
 int mq_machine_cycle(mqMachine *mach, int cycles);
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed);
+
+/* Make the CPU wait the given amount of time. This simulates a sleep function.
+   Background processes will still run during that time, but the CPU will not.
+
+   (It would be great to yield the thread back to the system in this case. But
+    timers make that difficult.)
+
+   TODO: Test internal pauses in-depth and consider better implementations. */
+void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms);
 
 MQ_END_DEFS
 #endif /* MQ_MACHINE_H */

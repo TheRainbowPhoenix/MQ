@@ -26,6 +26,21 @@ mqCasiowin *mq_casiowin_get(mqMachine *mach)
     return mach->modules ? mach->modules[moduleID] : NULL;
 }
 
+static int keymap_fx[7 * 12] = {
+    0x753f, -1,     -1,     -1,     -1,     -1,     -1,
+    -1,     -1,     0x7534, 0x87,   0x0f,   '.',    '0',
+    -1,     -1,     0x99,   0x89,   '3',    '2',    '1',
+    -1,     -1,     0xb9,   0xa9,   '6',    '5',    '4',
+    -1,     -1,     -1,     0x7549, '9',    '8',    '7',
+    -1,     0x0e,   ',',    ')',    '(',    0x755e, 0xbb,
+    -1,     0x83,   0x82,   0x81,   0x85,   0x95,   0x7531,
+    -1,     0x7545, 0x7547, 0x7532, 0xa8,   0x8b,   0x7537,
+    -1,     0x7542, 0x7544, 0x7533, 0x7540, 0x7538, 0x7536,
+    -1,     0x753e, 0x753d, 0x753c, 0x753b, 0x753a, 0x7539,
+    -1,     -1,     -1,     -1,     -1,     -1,     -1,
+    -1,     -1,     -1,     -1,     -1,     -1,     -1,
+};
+
 static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .OSBaseAddress          = 0x80010000,
     .OSFooterAddress        = 0x8024ff18,
@@ -34,6 +49,10 @@ static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .syscallStubAddress     = 0x80010070,
     .heapAddress            = 0x88030000, /* @ 192 kB */
     .heapSize               = 48 << 10,
+    .dataAreaAddress        = 0x80240000, /* @ -64 kB, approximately */
+    .dataAreaSize           = 4 << 10,
+    .dataKeymap             = keymap_fx,
+    .dataKeymapSize         = 7 * 12 * 4,
 };
 static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .OSBaseAddress          = 0x80020000,
@@ -43,6 +62,10 @@ static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .syscallStubAddress     = 0x80020070,
     .heapAddress            = 0x8c0c0000, /* @ 768 kB */
     .heapSize               = 128 << 10,
+    .dataAreaAddress        = 0x80b40000, /* @ -128 kB, approximately */
+    .dataAreaSize           = 4 << 10,
+    .dataKeymap             = NULL,
+    .dataKeymapSize         = 0,
 };
 
 mqCasiowin_OSInfo const *mq_casiowin_getOSInfo(mqCasiowin_Version version)
@@ -54,6 +77,27 @@ mqCasiowin_OSInfo const *mq_casiowin_getOSInfo(mqCasiowin_Version version)
         return &OSInfo_CG380;
     }
     return NULL;
+}
+
+static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin)
+{
+    mqCasiowin_OSInfo const *info = Casiowin->info;
+    u32 data = info->dataAreaAddress;
+
+    if(info->dataKeymap) {
+        Casiowin->dataKeymapAddress = data;
+
+        for(int i = 0; i < info->dataKeymapSize / 4; i++) {
+            int key = info->dataKeymap[i];
+            mq_memory_write(mach, mach->memory, data, 4, key);
+            data += 4;
+        }
+    }
+
+    if(data - info->dataAreaAddress > info->dataAreaSize) {
+        mq_log(MQ_LOG_ERROR, "OS data area overflow!");
+        mach->stuck = true;
+    }
 }
 
 bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
@@ -85,6 +129,8 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     Casiowin->version = version;
 
     bool ok = true;
+
+    /* Fixed-address data accessed via emulated I/O */
     ok &= mq_page_mapString(pg_eboot, "CW_SERIAL", OSBase - 0x30,
         "mq000000", 8);
     ok &= mq_page_mapString(pg_os, "CW_VERSION", OSBase + 0x20,
@@ -94,6 +140,15 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
         ok &= mq_page_mapString(pg_footer, "CW_DATE", footer,
             info->dateString, 14);
     }
+
+    /* Flexible-address data mapped in a fictional "data area" */
+    void *buffer =
+        mq_memory_allocBuffer(mach->memory, "OSDATA", info->dataAreaSize);
+    if(mq_memory_createBlock(mach->memory, info->dataAreaAddress,
+        info->dataAreaSize, buffer)) {
+        setupDataArea(mach, Casiowin);
+    }
+    else ok = false;
 
     /* Export some of the data to other components for optimization purposes */
     mach->cpu.syscallHandler = info->syscallStubAddress;
@@ -118,6 +173,88 @@ MQ_HOOK_REGISTER(module_cleanup, mq_casiowin_cleanup)
 
 static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 {
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+
+    /* Log except for syscalls that happen often */
+    if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420)
+        mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
+
+    switch(syscallID) {
+    case 0x0013: /* GlibAddinAplExecutionCheck() */
+        cpu->r[0] = 0;
+        return;
+
+    case 0x0014: /* GlibGetAddinLibInf() */
+        // No idea what this does, honestly. Decompiled from fx_3.40
+        mq_memory_write(mach, mach->memory, mach->cpu.r[4], 4, 0x0);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[5], 4, 0x1);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[6], 4, 0x1);
+        return;
+
+    case 0x0015: /* GlibGetOSVersionInfo() */
+        mq_memory_write(mach, mach->memory, mach->cpu.r[4], 1, 0x02);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[5], 1, 0x05);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[6], 2, 0x2201);
+        mq_memory_write(mach, mach->memory, mach->cpu.r[7], 2, 0x0000);
+        return;
+
+    case 0x003b: /* RTC_GetTicks() */
+        // FIXME: GetTicks() more than trivial counter (also on CG!)
+        static int ticks = 0;
+        cpu->r[0] = ++ticks;
+        return;
+
+    case 0x0135: /* GetVRAMAddress() */
+        // TODO[casiowin]: Don't duplicate VRAM address
+        cpu->r[0] = 0x8800100d;
+        return;
+
+    case 0x03fa: /* Hmem_SetMMU() */
+        cpu->r[0] = 0;
+        return;
+
+    case 0x0420: /* OS_InnerSleep_ms() */
+        mq_machine_internalPauseMilliseconds(mach, cpu->r[4]);
+        return;
+
+    case 0x042c: /* Bfile_OpenFile() */
+        cpu->r[0] = -1;
+        return;
+    case 0x042d: /* Bfile_CloseFile() */
+        cpu->r[0] = -1;
+        return;
+    case 0x0432: /* Bfile_ReadFile() */
+        cpu->r[0] = -1;
+        return;
+    case 0x0434: /* Bfile_CreateEntry() */
+        cpu->r[0] = -1;
+        return;
+    case 0x0435: /* Bfile_WriteFile() */
+        cpu->r[0] = -1;
+        return;
+
+    case 0x0494: /* SetQuitHandler() */
+        // TODO: SetQuitHandler() syscall (for saves)
+        return;
+
+    case 0x0acc: /* free() */
+        mq_casiowin_initHeap(mach);
+        mq_heap_free(cpu->r[4]);
+        return;
+    case 0x0acd: /* malloc() */
+        mq_casiowin_initHeap(mach);
+        cpu->r[0] = mq_heap_malloc(cpu->r[4]);
+        return;
+    case 0x0e6d: /* realloc() */
+        mq_casiowin_initHeap(mach);
+        cpu->r[0] = mq_heap_realloc(cpu->r[4], cpu->r[5]);
+        return;
+
+    case 0x1032: /* Get keymap for keycode/matrix code conv. (since 1.05) */
+        cpu->r[0] = Casiowin->dataKeymapAddress;
+        return;
+    }
+
     mq_log(MQ_LOG_ERROR, "Unknown FX syscall %%%03x, getting stuck.",
         syscallID);
     mach->stuck = true;
@@ -160,7 +297,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x02c1: { /* RTC_GetTicks() */
-        // FIXME: GetTicks() more than trivial counter
+        // FIXME: GetTicks() more than trivial counter (also on FX!)
         static int ticks = 0;
         cpu->r[0] = ++ticks;
         return;

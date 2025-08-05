@@ -154,6 +154,7 @@ static bool handleException(
        of interrupts. However interrupts are already masked by the logic in
        updateIncomingInterrupt() if SR.BL=1, so we don't worry about it.
        TODO: Double fault logic when the exception is UBC? */
+    // TODO: When sleeping, interrupts should be accepted even if SR.BL=1
     if(cpu->spRegs[SH_SR] & 0x10000000) {
         if(exc_isInterrupt(exc))
             mq_log(MQ_LOG_ERROR, "Handling interrupt while SR.BL=1?!");

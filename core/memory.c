@@ -215,7 +215,7 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer)
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
 {
     if(!buffer)
-        return NULL;
+        return false;
 
     /* Mind the fact that addr + size might be 2³² which we can't compute
        directly. */

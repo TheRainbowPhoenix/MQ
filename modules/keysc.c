@@ -26,37 +26,34 @@ mqKEYSC *mq_keysc_get(mqMachine *mach)
 
 static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
 {
-    (void)size;
     mqMachine *mach = io->userdata;
     mqKeyboard *kbd = mach->keyboard;
     if(!kbd)
         return 0;
 
-    // KIUDATAi (with j=2i) contains (data[j+1] << 8) | data[j].
-    // data[row] & (1 << col) identifies (row, col)
-    // On fx-CG, keycode is (row << 4) + (7 - col)
-    // -> F1 is row=9, col=6
-    // -> F6 is row=9, col=1
-    // -> 0 is row=1, col=6
-    // -> EXE is row=1, col=2
-    // -> AC/ON is row=0, col=0
-
+    /* KIUDATA can be read with byte and word accesses (at least). It reads
+       like standard memory containing little-endian words, i.e. indices
+         1, 0, 3, 2, 5, 4, ...
+       So a byte access at KIUDATA+j returns data[j^1] and a word access at
+       KIUDATA+j (j even) returns (data[j+1] << 8 | data[j]). */
     int j = addr & 0xf;
-    u16 KIUDATA = 0;
+    u32 value = 0;
 
     for(uint i = 0; i < kbd->keyCount; i++) {
         if(!kbd->keyStatus[i])
             continue;
 
         mqKeyboardKey *key = &kbd->keyInfo[i];
-        if(key->row == j)
-            KIUDATA |= (0x0001 << key->col);
-        else if(key->row == j+1)
-            KIUDATA |= (0x0100 << key->col);
+        if(size == 1 && key->row == (j^1))
+            value |= (0x0001 << key->col);
+        else if(size == 2 && key->row == j)
+            value |= (0x0001 << key->col);
+        else if(size == 2 && key->row == j+1)
+            value |= (0x0100 << key->col);
     }
 
-    // mq_log(MQ_LOG_WARNING, "[KEYSC KIUDATA @ %08x -> %04x", addr, KIUDATA);
-    return KIUDATA;
+    // mq_log(MQ_LOG_WARNING, "[KIUDATA @ %08x/%d -> %04x", addr, size, value);
+    return value;
 }
 
 bool mq_keysc_setup(mqMachine *mach)
@@ -70,10 +67,9 @@ bool mq_keysc_setup(mqMachine *mach)
         return false;
 
     bool ok = true;
-    int ioID = mq_page_addIO(pg, "KIUDATA*", MQ_MMIO_SIZE_2, read_KIUDATA,
-        NULL, NULL, mach);
-    for(int i = 0; i < 6; i++)
-        ok &= mq_page_mapIO(pg, ioID, 0xa44b0000 + 2*i, 1, 2);
+    int ioID = mq_page_addIO(pg, "KIUDATA*", MQ_MMIO_SIZE_1 | MQ_MMIO_SIZE_2,
+        read_KIUDATA, NULL, NULL, mach);
+    ok &= mq_page_mapIO(pg, ioID, 0xa44b0000, 12, 1);
 
     // 0xa44b000c KIUCNTREG
     // 0xa44b000e KIAUTOFIXREG

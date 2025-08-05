@@ -242,6 +242,24 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     int cyclesRemaining = cycles;
     mq_timer_unfreeze();
 
+    // TODO[machine]: Host system sleep for long high-level internal pauses
+    if(mach->internallyPaused) {
+        int ticks = mq_timer_update(&mach->internalPauseTimer);
+
+        /* Stop the internal timer when reaching the end of the sleep period */
+        if((mach->internalPauseTicksRemaining -= ticks) <= 0) {
+            mach->internallyPaused = false;
+            mq_timer_reset(&mach->internalPauseTimer, 0);
+            mach->internalPauseTicksRemaining = 0;
+        }
+        /* Otherwise, run background processes and leave */
+        else {
+            if(--mach->processTimer == 0)
+                mq_machine_runProcesses(mach, mach->processFrequency);
+            return 0;
+        }
+    }
+
     while(cyclesRemaining > 4) {
         if(MQ_UNLIKELY(mach->stuck))
             break;
@@ -287,4 +305,14 @@ void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
 
     mach->processTimer += mach->processFrequency;
     TracyCZoneEnd(_ctx);
+}
+
+void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
+{
+    if(delay_ms <= 0)
+        return;
+
+    mach->internallyPaused = true;
+    mq_timer_reset(&mach->internalPauseTimer, 1000000 /* 1 ms */);
+    mach->internalPauseTicksRemaining = delay_ms;
 }
