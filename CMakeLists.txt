@@ -154,7 +154,8 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   # Export _malloc and a few other functions even if unused, because the file
   # dialog calls them from JS code that's not evaluated at compile time
   target_link_options(mq PRIVATE
-    -s "EXPORTED_FUNCTIONS=['_main','_malloc','_free','ccall']")
+    "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','ccall','ccall']"
+    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
 
   # Embed assets to load them without filesystem access
   foreach(ASSET IN LISTS ASSETS)
