@@ -15,6 +15,7 @@
 #include <mq/modules/keysc.h>
 #include <mq/modules/mmu.h>
 #include <mq/modules/r61524.h>
+#include <mq/modules/t6k11.h>
 #include <mq/modules/tmu.h>
 #include <stdlib.h>
 #include <string.h>
@@ -154,9 +155,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
         mq_machine_setupPeripheralModules_sh7305(mach);
 
-        // TODO: T6K11 display module
-        // mq_t6k11_setup(mach);
-
+        mq_t6k11_setup(mach);
         mq_casiowin_setup(mach, MQ_CASIOWIN_FX205);
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {

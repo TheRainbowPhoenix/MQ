@@ -747,7 +747,10 @@ bool mq_memory_write(
        accessing U0/P0 but just silently do nothing in P1-P4. */
     // TODO: Memory access exception type: instruction read vs. data read.
     if(addr < 0x80000000)
-        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
+        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_WRITE_ADDR, addr);
+    else
+        mq_log(MQ_LOG_WARNING, "[PC=%08x] unhandled write @ %08x -> ignoring",
+            mach->cpu.pc, addr);
 
     return true;
 }
