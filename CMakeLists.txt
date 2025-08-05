@@ -65,7 +65,7 @@ set(LIB_SOURCES
   system/casiowin.c
   system/heap.c)
 
-add_custom_command(OUTPUT "${AUTOGEN}sh-isa.inc"
+add_custom_command(OUTPUT "${AUTOGEN}/sh-isa.inc"
   COMMAND mkdir -p "${AUTOGEN}"
   COMMAND python tools/gen-isa.py --table core/sh-isa.def
                  "${AUTOGEN}/sh-isa.inc"
