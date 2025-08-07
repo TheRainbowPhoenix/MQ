@@ -9,6 +9,7 @@
 #include <mq/mq.h>
 #include <mq/hooks.h>
 #include <mq/system/casiowin.h>
+#include <mq/modules/cpg.h>
 #include <mq/modules/cmod.h>
 #include <mq/modules/dma.h>
 #include <mq/modules/intc.h>
@@ -91,6 +92,8 @@ static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
 
 static void mq_machine_setupPeripheralModules_sh7305(mqMachine *mach)
 {
+    mq_cpg_setup(mach);
+
     mq_intc_setup(mach);
 
     mq_keysc_setup(mach);

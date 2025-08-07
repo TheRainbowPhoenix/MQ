@@ -408,7 +408,10 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     }
 
-    case 0x1da3: /* Bfile_OpenFile_OS() */
+    case 0x1da3: /* Bfile_OpenFile() */
+        cpu->r[0] = -1;
+        return;
+    case 0x1db4: /* Bfile_DeleteEntry() */
         cpu->r[0] = -1;
         return;
     case 0x1db6: /* Bfile_FindFirst() */

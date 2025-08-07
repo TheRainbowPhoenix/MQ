@@ -62,6 +62,7 @@ set(LIB_SOURCES
   modules/r61524.c
   modules/t6k11.c
   modules/tmu.c
+  modules/cpg.c
 
   system/casiowin.c
   system/casiowin-render-fx.c
