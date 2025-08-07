@@ -201,33 +201,42 @@ void mq_casiowin_mono_PrintXY(
 
 //=== SaveDisp and RestoreDisp ===============================================//
 
-// TODO: SaveDisp and RestoreDisp with actual emulator memory
-#if 0
 #define SAVEDISP_PAGE1 1
 #define SAVEDISP_PAGE2 5
 #define SAVEDISP_PAGE3 6
 
-void syscall_SaveDisp(mqMachine *mach, int id)
+static int SaveDisp_vramBufferId(int id)
 {
-    id = (id == SAVEDISP_PAGE1 ? id - 1 : id - 4);
-
-    if(mach->savedDisps[id] == NULL) {
-        mach->savedDisps[id] = malloc(VRAM_SIZE);
+    switch(id) {
+    case SAVEDISP_PAGE1: return 1;
+    case SAVEDISP_PAGE2: return 2;
+    case SAVEDISP_PAGE3: return 3;
+    default: return -1;
     }
-
-    u8 *src = mq_memory_access(mach->memory, 0x8c000000);
-    u8 *dst = mach->savedDisps[id];
-
-    memcpy(dst, src, VRAM_SIZE);
 }
 
-void syscall_RestoreDisp(mqMachine *mach, int id)
+void mq_casiowin_mono_SaveDisp(mqMachine *mach, int id)
 {
-    id = (id == SAVEDISP_PAGE1 ? id - 1 : id - 4);
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    id = SaveDisp_vramBufferId(id);
+    if(id < 0)
+        return;
 
-    u8 *src = mach->savedDisps[id];
-    u8 *dst = mq_memory_access(mach->memory, 0x8c000000);
-
-    memcpy(dst, src, VRAM_SIZE);
+    /* As long as VRAMs are 4-aligned we can just copy contiguously */
+    void *src = mq_memory_access(mach->memory, Casiowin->dataVramAddresses[0]);
+    void *dst = mq_memory_access(mach->memory, Casiowin->dataVramAddresses[id]);
+    memcpy(dst, src, Casiowin->info->dataVramSize);
 }
-#endif
+
+void mq_casiowin_mono_RestoreDisp(mqMachine *mach, int id)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    id = SaveDisp_vramBufferId(id);
+    if(id < 0)
+        return;
+
+    /* As long as VRAMs are 4-aligned we can just copy contiguously */
+    void *src = mq_memory_access(mach->memory, Casiowin->dataVramAddresses[id]);
+    void *dst = mq_memory_access(mach->memory, Casiowin->dataVramAddresses[0]);
+    memcpy(dst, src, Casiowin->info->dataVramSize);
+}

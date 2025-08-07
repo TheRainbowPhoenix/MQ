@@ -49,12 +49,16 @@ static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .syscallStubAddress     = 0x80010070,
     .heapAddress            = 0x88030000, /* @ 192 kB */
     .heapSize               = 48 << 10,
-    .vramAddress            = 0x88001000, /* @ 4 kB; aligned, unlike real OS */
-    .vramSize               = 1024 + 32,  /* Overflow margin */
-    .dataAreaAddress        = 0x80240000, /* @ -64 kB, approximately */
-    .dataAreaSize           = 4 << 10,
-    .dataKeymap             = keymap_fx,
-    .dataKeymapSize         = 7 * 12 * 4,
+
+    .rodataAreaAddress      = 0x80240000, /* @ -64 kB, approximately */
+    .rodataAreaSize         = 4 << 10,
+    .rodataKeymap           = keymap_fx,
+    .rodataKeymapSize       = 7 * 12 * 4,
+
+    .dataAreaAddress        = 0x88001000, /* @ 4 kB; VRAM will be aligned */
+    .dataAreaSize           = 8 << 10,
+    .dataVramSize           = 1024,
+    .dataVramCount          = 4,
 };
 static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .OSBaseAddress          = 0x80020000,
@@ -64,12 +68,16 @@ static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .syscallStubAddress     = 0x80020070,
     .heapAddress            = 0x8c0c0000, /* @ 768 kB */
     .heapSize               = 128 << 10,
-    .vramAddress            = 0x8c000000, /* @ 0 MB */
-    .vramSize               = 0x29000,    /* 384x216 + 1 kB, page-aligned */
-    .dataAreaAddress        = 0x80b40000, /* @ -128 kB, approximately */
-    .dataAreaSize           = 4 << 10,
-    .dataKeymap             = NULL,
-    .dataKeymapSize         = 0,
+
+    .rodataAreaAddress      = 0x80b40000, /* @ -128 kB, approximately */
+    .rodataAreaSize         = 4 << 10,
+    .rodataKeymap           = NULL,
+    .rodataKeymapSize       = 0,
+
+    .dataAreaAddress        = 0x8c000000, /* @ 0 MB */
+    .dataAreaSize           = 0x52000,
+    .dataVramSize           = 384 * 216 * 2,
+    .dataVramCount          = 2,
 };
 
 mqCasiowin_OSInfo const *mq_casiowin_getOSInfo(mqCasiowin_Version version)
@@ -83,20 +91,41 @@ mqCasiowin_OSInfo const *mq_casiowin_getOSInfo(mqCasiowin_Version version)
     return NULL;
 }
 
-static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin)
+static void setupRodataArea(mqMachine *mach, mqCasiowin *Casiowin)
+{
+    mqCasiowin_OSInfo const *info = Casiowin->info;
+    u32 rodata = info->rodataAreaAddress;
+
+    if(info->rodataKeymap) {
+        Casiowin->rodataKeymapAddress = rodata;
+
+        for(int i = 0; i < info->rodataKeymapSize / 4; i++) {
+            int key = info->rodataKeymap[i];
+            mq_memory_write(mach, mach->memory, rodata, 4, key);
+            rodata += 4;
+        }
+    }
+
+    if(rodata - info->rodataAreaAddress > info->rodataAreaSize) {
+        mq_log(MQ_LOG_ERROR, "OS rodata area overflow!");
+        mach->stuck = true;
+    }
+}
+
+static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin, void *buffer)
 {
     mqCasiowin_OSInfo const *info = Casiowin->info;
     u32 data = info->dataAreaAddress;
 
-    if(info->dataKeymap) {
-        Casiowin->dataKeymapAddress = data;
-
-        for(int i = 0; i < info->dataKeymapSize / 4; i++) {
-            int key = info->dataKeymap[i];
-            mq_memory_write(mach, mach->memory, data, 4, key);
-            data += 4;
-        }
+    /* VRAM */
+    if(info->dataVramCount)
+        Casiowin->vramLE = buffer;
+    for(int i = 0; i < info->dataVramCount; i++) {
+        Casiowin->dataVramAddresses[i] = data;
+        data += info->dataVramSize;
     }
+
+    // TODO: VRAM backups
 
     if(data - info->dataAreaAddress > info->dataAreaSize) {
         mq_log(MQ_LOG_ERROR, "OS data area overflow!");
@@ -145,24 +174,25 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
             info->dateString, 14);
     }
 
-    /* Flexible-address data mapped in a fictional "data area" */
-    void *buffer =
-        mq_memory_allocBuffer(mach->memory, "OSDATA", info->dataAreaSize);
-    if(mq_memory_createBlock(mach->memory, info->dataAreaAddress,
-        info->dataAreaSize, buffer)) {
-        setupDataArea(mach, Casiowin);
+    /* Flexible-address read-only data mapped in a fictional "data area" */
+    void *buf =
+        mq_memory_allocBuffer(mach->memory, "OSRODATA", info->rodataAreaSize);
+    if(mq_memory_createBlock(mach->memory, info->rodataAreaAddress,
+        info->rodataAreaSize, buf)) {
+        setupRodataArea(mach, Casiowin);
     }
     else ok = false;
 
-    /* OS framebuffer, used by many programs */
-    void *vram = mq_memory_allocBuffer(mach->memory, "VRAM", info->vramSize);
-    u32 vramP1 = info->vramAddress;
-    u32 vramP2 = (vramP1 & 0x1fffffff) | 0xa0000000;
-    mq_memory_createBlock(mach->memory, vramP1, info->vramSize, vram);
-    mq_memory_createBlock(mach->memory, vramP2, info->vramSize, vram);
-
-    /* Globals */
-    Casiowin->vramLE = vram;
+    /* Flexible-address read-write data. Map it to both P1 and P2 since VRAM is
+       commonly accessed through P2. */
+    buf = mq_memory_allocBuffer(mach->memory, "OSDATA", info->dataAreaSize);
+    u32 dataP1 = info->dataAreaAddress;
+    u32 dataP2 = (dataP1 & 0x1fffffff) | 0xa0000000;
+    if(mq_memory_createBlock(mach->memory, dataP1, info->dataAreaSize, buf)
+    && mq_memory_createBlock(mach->memory, dataP2, info->dataAreaSize, buf)) {
+        setupDataArea(mach, Casiowin, buf);
+    }
+    else ok = false;
 
     /* Export some of the data to other components for optimization purposes */
     mach->cpu.syscallHandler = info->syscallStubAddress;
@@ -220,7 +250,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0135: /* GetVRAMAddress() */
-        cpu->r[0] = Casiowin->info->vramAddress;
+        cpu->r[0] = Casiowin->dataVramAddresses[0];
         return;
 
     case 0x0146: /* Bdisp_SetPoint_VRAM() */
@@ -275,13 +305,13 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mq_casiowin_mono_Print(mach, mach->cpu.r[4], 64);
         return;
 
-    // case 0x0813: /* SaveDisp() */
-    //     syscall_SaveDisp(mach, mach->cpu.r[4]);
-    //     return;
+    case 0x0813: /* SaveDisp() */
+        mq_casiowin_mono_SaveDisp(mach, mach->cpu.r[4]);
+        return;
 
-    // case 0x0814: /* RestoreDisp() */
-    //     syscall_RestoreDisp(mach, mach->cpu.r[4]);
-    //     return;
+    case 0x0814: /* RestoreDisp() */
+        mq_casiowin_mono_RestoreDisp(mach, mach->cpu.r[4]);
+        return;
 
     // case 0x08fe: /* PopupWin() */
     //     return;
@@ -314,7 +344,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x1032: /* Get keymap for keycode/matrix code conv. (since 1.05) */
-        cpu->r[0] = Casiowin->dataKeymapAddress;
+        cpu->r[0] = Casiowin->rodataKeymapAddress;
         return;
     }
 
@@ -342,7 +372,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x01e6: /* GetVRAMAddress() */
-        cpu->r[0] = (Casiowin->info->vramAddress & 0x1fffffff) | 0xa0000000;
+        cpu->r[0] = (Casiowin->dataVramAddresses[0] & 0x1fffffff) | 0xa0000000;
         return;
 
     case 0x025f: /* Bdisp_PutDisp_DD() */

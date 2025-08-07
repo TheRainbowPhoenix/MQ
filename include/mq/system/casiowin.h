@@ -48,18 +48,23 @@ struct mqCasiowin_OSInfo {
     /* Heap address and size */
     u32 heapAddress;
     u32 heapSize;
-    /* VRAM address and size */
-    u32 vramAddress;
-    u32 vramSize;
 
-    /* Address of the "data" area which is the fake area where the emulator
-       puts all of the OS data that needs to be accessed by address. */
-    u32 dataAreaAddress;
-    u32 dataAreaSize;
+    /* Address of the read-only "data area" which is where the emulator puts
+       all the read-only OS data that needs to be accessed by address. */
+    u32 rodataAreaAddress;
+    u32 rodataAreaSize;
     /* Keymap, served by %1032 on FX and use for KeycodeToMatrixCode. May be
        NULL/0/-1 in which case there's no keymap. */
-    int *dataKeymap;
-    int dataKeymapSize;
+    int *rodataKeymap;
+    int rodataKeymapSize;
+
+    /* Same with the read-write data, such the VRAM and its copies. */
+    u32 dataAreaAddress;
+    u32 dataAreaSize;
+    /* VRAM size. VRAM is always first in the data area, for consistency. */
+    u32 dataVramSize;
+    /* Number of VRAM buffers; can be up to 4 (for backups). */
+    int dataVramCount;
 };
 
 /* Information that we keep track of in the machine structure. */
@@ -68,7 +73,8 @@ struct mqCasiowin {
     struct mqCasiowin_OSInfo const *info;
 
     /* Generated addresses for various data area values. */
-    u32 dataKeymapAddress;
+    u32 rodataKeymapAddress;
+    u32 dataVramAddresses[4];
 
     // TODO[mqCasiowin]: Localization, SH3/SH4 revision, version patch.
 
@@ -119,6 +125,10 @@ void mq_casiowin_mono_PrintMini(
     mqMachine *mach, int x, int y, u32 stringAddress, int mode);
 void mq_casiowin_mono_PrintXY(
     mqMachine *mach, int x, int y, u32 stringAddress, int mode);
+
+/* SaveDisp and RestoreDisp syscalls. */
+void mq_casiowin_mono_SaveDisp(mqMachine *mach, int id);
+void mq_casiowin_mono_RestoreDisp(mqMachine *mach, int id);
 
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */
