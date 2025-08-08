@@ -29,7 +29,10 @@ MQ_HOOK_REGISTER(module_cleanup, mq_cpg_cleanup)
 static void write_FRQCR(struct mqCPG *CPG, u32 value)
 {
     CPG->FRQCR = value & 0xbff0ff0f;
-    CPG->FRQCR |= 0x00010010;
+    /* Bits 16-19 are fixed by hardware at their initial value */
+    CPG->FRQCR |= 0x1 << 16;
+    /* Bits 4-7 read the same as SFC (12-15) */
+    CPG->FRQCR |= ((CPG->FRQCR >> 12) & 0xf) << 4;
 }
 
 static void write_FSICLKCR(struct mqCPG *CPG, u32 value)
