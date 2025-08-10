@@ -5,6 +5,14 @@ import sys
 import re
 import os
 
+def itertools_batched(iterable, n):
+    # batched('ABCDEFG', 2) → AB CD EF G
+    if n < 1:
+        raise ValueError('n must be at least one')
+    iterator = iter(iterable)
+    while batch := tuple(itertools.islice(iterator, n)):
+        yield batch
+
 def make_identifier(name):
     # Replace all invalid identifier characters with "_"
     name = re.sub(r"[^a-zA-Z0-9_]", "_", name)
@@ -17,7 +25,7 @@ def embed_bin(data, fp_c, fp_h, name):
     size = len(data)
 
     fp_c.write(f"const unsigned char {name}[{size}] = {{\n")
-    for line in itertools.batched(data, 12):
+    for line in itertools_batched(data, 12):
         fp_c.write("  ")
         fp_c.write(" ".join(f"0x{b:02x}," for b in line))
         fp_c.write("\n")
