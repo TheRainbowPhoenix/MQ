@@ -10,7 +10,8 @@
 #include <mq/mq.h>
 #include <stdlib.h>
 
-#define RESOLUTION_NS_29MHZ (1000000000ull / 29000000ull)
+/* That should be 34.44 units, but rounded down to 34, so about 1.3% off */
+#define RESOLUTION_NS_29MHZ (1000000000ull / 29030000ull)
 
 static int moduleID = -1;
 static int processID = -1;
@@ -195,8 +196,10 @@ bool mq_tmu_setup(mqMachine *mach)
         TMU->timers[i].TCOR = 0xffffffff;
         TMU->timers[i].TCNT = 0xffffffff;
         TMU->timers[i].TCR  = 0x0000;
-        // TODO: Adjust timer frequency if Pϕ is modified within emulator
-        mq_timer_reset(&TMU->internalTimers[i], RESOLUTION_NS_29MHZ);
+        /* Initialize timer to the default prescaler set in TCR (we only update
+           the timer frequency when the prescaler bitfield changes) */
+        mq_timer_reset(&TMU->internalTimers[i],
+            tickResolutionForPrescaler(TMU->timers[i].TCR & 0x7));
     }
 
     bool ok = true;
