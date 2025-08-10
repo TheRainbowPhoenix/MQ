@@ -22,6 +22,9 @@ static void inithook(void)
 }
 MQ_HOOK_REGISTER(init, inithook)
 
+MQ_LOG_REGISTER(MQ_LOG_DMA_TRANSFER_ENDED, "dma-transfer-ended", 4,
+    MQ_LOG_DEBUG, 6)
+
 mqDMA *mq_dma_get(mqMachine *mach)
 {
     return mach->modules ? mach->modules[moduleID] : NULL;
@@ -187,7 +190,8 @@ static void runChannel(mqMachine *mach, mqDMA_Channel *ch, uint cycles)
 
     /* Transfer Ended flag */
     if(ch->TCR == 0) {
-        mq_log(MQ_LOG_DEBUG, "DMA Channel %d: Transfer Ended", ch->index);
+        mq_logn(MQ_LOG_DMA_TRANSFER_ENDED + ch->index,
+            "DMA Channel %d: Transfer Ended", ch->index);
         ch->CHCR |= (1 << 1);
         /* Emit Transfer Ended interrupt */
         if(ch->CHCR & (1 << 2)) // IE

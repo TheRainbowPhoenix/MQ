@@ -19,6 +19,8 @@ static void inithook(void)
 }
 MQ_HOOK_REGISTER(init, inithook)
 
+MQ_LOG_REGISTER(MQ_LOG_R61524_FULL_FRAME, "r61524-frame", 4, MQ_LOG_DEBUG, 1)
+
 mqR61524 *mq_r61524_get(mqMachine *mach)
 {
     return mach->modules ? mach->modules[moduleID] : NULL;
@@ -64,13 +66,14 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
         R61524->HADDR += 2;
         dst += 2;
     }
-    
+
     if(R61524->HADDR >= w) {
         R61524->HADDR -= w;
         R61524->VADDR++;
         if(R61524->VADDR >= h) {
             // Full Frame: set dirty only now?
-            mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
+            mq_logn(MQ_LOG_R61524_FULL_FRAME,
+                "r61524: Finished full frame (direct access)");
             R61524->VADDR = 0;
         }
     }
@@ -154,7 +157,8 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
             R61524->VADDR++;
             if(R61524->VADDR >= h) {
                 // Full Frame: set dirty only now?
-                mq_log(MQ_LOG_DEBUG, "r61524: Finished full frame");
+                mq_logn(MQ_LOG_R61524_FULL_FRAME,
+                    "r61524: Finished full frame (register access)");
                 R61524->VADDR = 0;
             }
         }

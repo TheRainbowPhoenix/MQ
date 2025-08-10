@@ -13,6 +13,8 @@
 #include <string.h>
 #include <stdio.h>
 
+MQ_LOG_REGISTER(MQ_LOG_INTERRUPT, "interrupt", 4, MQ_LOG_DEBUG, MQ_INT_NUM)
+
 void mq_cpu_reset(mqCpu *cpu)
 {
     memset(cpu, 0x00, sizeof *cpu);
@@ -169,10 +171,8 @@ static bool handleException(
         mqINTC *INTC = mq_intc_get(mach);
         mq_intc_statsAcceptInterrupt(INTC, cpu->nextInterrupt);
 
-        if(INTC->statsInterruptCount[cpu->nextInterrupt] <= 10)
-            mq_log(MQ_LOG_DEBUG, "Handling interrupt 0x%03x", cpu->INTEVT);
-        if(INTC->statsInterruptCount[cpu->nextInterrupt] == 10)
-            mq_log(MQ_LOG_DEBUG, "Note: making 0x%03x silent", cpu->INTEVT);
+        mq_logn(MQ_LOG_INTERRUPT + cpu->nextInterrupt,
+            "Handling interrupt 0x%03x", cpu->INTEVT);
     }
     else {
         mq_log(MQ_LOG_DEBUG, "Handling exception %s",
