@@ -141,7 +141,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBlock(mach->memory, layout_uram_p2, 32 << 10, uram);
 
         mach->display = mq_display_create();
-        mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64);
+        mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64);
 
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
@@ -185,7 +185,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBlock(mach->memory, 0xac0f0000, 512 << 10, ostk);
 
         mach->display = mq_display_create();
-        mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
+        mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
 
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);

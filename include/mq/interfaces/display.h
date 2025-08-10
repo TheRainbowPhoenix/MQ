@@ -52,12 +52,12 @@ uint mq_display_framebufferSize(mqDisplay const *display);
    format and size. The new framebuffer is zero-initialized. If the same format
    and size are specified multiple times, the buffer is not reallocated but the
    contents are still cleared. Returns false on allocation failure. */
-bool mqDisplay_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h);
+bool mq_display_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h);
 
 /* Set the display's dirty bit. This is intended to be used in emulation code
    to set the bit (when the display is modified) and in UI code to clear the
    bit (once screen textures have been updated). */
-void mqDisplay_setDirty(mqDisplay *d, bool dirty);
+void mq_display_setDirty(mqDisplay *d, bool dirty);
 
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_DISPLAY_H */

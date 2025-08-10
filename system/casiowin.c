@@ -376,7 +376,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x025f: /* Bdisp_PutDisp_DD() */
-        if(mqDisplay_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565,
+        if(mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565,
                                396, 224)) {
             u16 *src = mq_memory_access(mach->memory, 0x8c000000);
             u16 *dst = mach->display->data + 6;
@@ -385,7 +385,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
                     dst[x] = *(u16 *)((uintptr_t)(src++) ^ 2);
                 dst += mach->display->width;
             }
-            mqDisplay_setDirty(mach->display, true);
+            mq_display_setDirty(mach->display, true);
         }
         return;
 

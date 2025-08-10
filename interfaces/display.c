@@ -44,7 +44,7 @@ uint mq_display_framebufferSize(mqDisplay const *d)
     return mq_display_framebufferSizeFor(d->format, d->width, d->height);
 }
 
-bool mqDisplay_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h)
+bool mq_display_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h)
 {
     uint size = mq_display_framebufferSizeFor(fmt, w, h);
 
@@ -63,11 +63,11 @@ bool mqDisplay_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h)
     d->width = w;
     d->height = h;
     d->data = newData;
-    mqDisplay_setDirty(d, true);
+    mq_display_setDirty(d, true);
     return true;
 }
 
-void mqDisplay_setDirty(mqDisplay *d, bool dirty)
+void mq_display_setDirty(mqDisplay *d, bool dirty)
 {
     d->dirty = dirty;
 }

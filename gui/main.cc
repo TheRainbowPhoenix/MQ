@@ -133,7 +133,7 @@ static void render(void)
             printf("warning: display not updated, unknown format!\n");
 
         DGW.setInherentScale(d->width <= 128 ? 3 : 1);
-        mqDisplay_setDirty(d, false);
+        mq_display_setDirty(d, false);
     }
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -544,7 +544,7 @@ static void render(void)
 
 static bool generate_mono_pattern(mqDisplay *display)
 {
-    if(!mqDisplay_setFormat(display, MQ_DISPLAY_FORMAT_L8, 128, 64))
+    if(!mq_display_setFormat(display, MQ_DISPLAY_FORMAT_L8, 128, 64))
         return false;
 
     int r0 = rand() % 2 + 1;
@@ -570,7 +570,7 @@ static bool generate_mono_pattern(mqDisplay *display)
         ((u8 *)display->data)[display->width * (display->height-1) + x] = 0xff;
     }
 
-    mqDisplay_setDirty(display, true);
+    mq_display_setDirty(display, true);
     return true;
 }
 
@@ -578,7 +578,7 @@ static bool generate_mono_pattern(mqDisplay *display)
 
 static bool generate_rgb_pattern(mqDisplay *display)
 {
-    if(!mqDisplay_setFormat(display, MQ_DISPLAY_FORMAT_RGB565, 396, 224))
+    if(!mq_display_setFormat(display, MQ_DISPLAY_FORMAT_RGB565, 396, 224))
         return false;
 
     u16 palette[16];
@@ -614,7 +614,7 @@ static bool generate_rgb_pattern(mqDisplay *display)
         ((u16 *)display->data)[display->width * (display->height-1) + x] = 0xffff;
     }
 
-    mqDisplay_setDirty(display, true);
+    mq_display_setDirty(display, true);
     return true;
 }
 
