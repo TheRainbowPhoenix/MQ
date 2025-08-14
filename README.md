@@ -95,9 +95,23 @@ fx-CG programs (fx-CG 10/20/50, Prizm, Graph 90+E, fx-CG 100, Graph Math+):
 | [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | Most things work | OK | This is used to test hardware features. |
 | [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1856-1-gravityduck-pierrotll-jeux-add-ins.html) | Playable | OK | No save. Lots of NULL accesses; some are bugs from original program. IIRC crashes upon death in the later levels. Syscall-based. |
 | [Duet](https://www.planet-casio.com/Fr/programmes/programme4173-1-duet-yatis-lephe-jeux-add-ins.html) by Yatis and Lephe | Playable | Slow | No save. Slow to unplayable depending on machines, but works decent on circuit10's emulator. |
-| [Mario Kart](https://www.planet-casio.com/Fr/forums/topic17121-1-mario-kart-game-work-in-progress.html) by circuit10 | Starts | OK | DSP instruction missing, used in rendering drift animations. |
+| [Mario Kart](https://www.planet-casio.com/Fr/forums/topic17121-1-mario-kart-game-work-in-progress.html) by circuit10 | Playable | Slow | N/A |
 | [Cube Field](https://www.planet-casio.com/Fr/programmes/programme1906-1-cubefield-pierrotll-jeux-add-ins.html) by PierrotLL | Playable | Way too fast | N/A |
 | [OutRun](https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html) by SlyVTT | Playable | Variable | Upon first turn, suddenly slows down and background blinks. |
+| [Demineur winXP](https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html) by Smashmaster | Playable* | Slow(?) | First game work, but second crash |
+| [Sudoku solver](https://www.planet-casio.com/Fr/programmes/programme2446-last-sudoku-solver-lancelot-jeux-add-ins.html) by Lancelot | Not Boot | KO | missing `%d39` syscall support |
+| [Flappy bird color](https://www.planet-casio.com/Fr/programmes/programme2428-last-flappy-bird-color-lancelot-jeux-add-ins.html) by Lancelot | Not Boot | KO | missing `%d39` syscall support |
+| [Cgsnake](https://www.planet-casio.com/Fr/programmes/programme1902-last-cgsnake-eiyeron-jeux-add-ins.html) by Eiyeron | Not Boot | KO | Do not crash, just display nothing |
+| [Sonic](https://www.planet-casio.com/Fr/programmes/programme1904-last-sonic-smashmaster-jeux-add-ins.html) by Smashmaster | Playable | OK | Too fast |
+| [Falldown colors](https://www.planet-casio.com/Fr/programmes/programme2060-last-falldown-colors-dodormeur-jeux-add-ins.html) by Dodormeur | Not Boot | KO | Use PRIZM VRAM area |
+| [Obliterate](https://www.planet-casio.com/Fr/programmes/programme2341-last-obliterate-kermmartian-jeux-add-ins.html) by planetcasio | Not Boot | KO | missing support of `%12b` syscall |
+| [Meta Ball](https://www.planet-casio.com/Fr/programmes/programme2344-last-meta-ball-lancelot-jeux-add-ins.html) by Lancelot | Playable | Slow | Too slow. Invalid write sometime |
+| [Life game cg-20](https://www.planet-casio.com/Fr/programmes/programme1853-last-life-game-cg-20-smashmaster-jeux-add-ins.html) by Smashmaster | No display | KO | Use PRIZM VRAM area |
+| [After Burner](https://www.planet-casio.com/Fr/programmes/programme4238-last-after-burner-lephenixnoir-jeux-add-ins.html) by Lephe | Perfect | OK | Perfect! |
+| [AST3 C](https://www.planet-casio.com/Fr/programmes/programme4100-last-ast3-c-tituya-jeux-add-ins.html) by Tituya | Playable | OK | Broken first menu which not display frame entierly |
+| [Super Mario 3D](https://www.planet-casio.com/Fr/programmes/programme4343-last-super-mario-3d-farhi-jeux-add-ins.html) by Farhi | Perfect | OK | Perfect! |
+| [Maverick Bird](https://www.planet-casio.com/Fr/programmes/programme4268-last-maverick-bird-lephenixnoir-jeux-add-ins.html) by Lephe | Perfect | OK | Perfect! |
+| [Mario 3D](https://www.planet-casio.com/Fr/programmes/programme4411-last-mario-3d-games-jeux-add-ins.html) by Games | Playable | OK | Maybe graphical glitch in middle of the screen(?) |
 
 fx-CP programs:
 
