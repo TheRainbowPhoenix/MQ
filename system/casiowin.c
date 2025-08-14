@@ -389,6 +389,13 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         }
         return;
 
+    case 0x0272: { /* Bdisp_AllClr_VRAM() */
+        u16 *dst = mq_memory_access(mach->memory, 0x8c000000);
+        /* Since this is aligned, we can memset it */
+        memset(dst, 0xff, 384 * 216 * 2);
+        return;
+    }
+
     case 0x02c1: { /* RTC_GetTicks() */
         // FIXME: GetTicks() more than trivial counter (also on FX!)
         static int ticks = 0;
@@ -407,6 +414,14 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = cpu->r[5];
         return;
     }
+
+    case 0x1511: /* memset() */
+        /* We can't memset if it's not aligned, because the endianness makes
+           the storage non-contiguous! */
+        for(u32 i = 0; i < cpu->r[6]; i++)
+            mq_memory_write(mach, mach->memory, cpu->r[4], 1, cpu->r[5]);
+        cpu->r[0] = 0;
+        return;
 
     case 0x1da3: /* Bfile_OpenFile() */
         cpu->r[0] = -1;
