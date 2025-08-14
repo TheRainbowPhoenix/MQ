@@ -77,3 +77,28 @@ Profiling TODOs:
 - Assign fixed cores with high priority for the process.
 - Set these cores to a fixed frequency.
 - Once threads, name threads (see doc @2.4)
+
+## List of tested programs
+
+This is a list of _some_ (not all) programs that were tested.
+
+fx-series programs (fx-9860G, G-II, G-III, Graph 35/75/85 +/+E/+E II):
+
+| **Program** | **Functionality** | **Performance** | Remarks |
+|-------------|-------------------|-----------------|---------|
+| [Jetpack Joyride](https://www.planet-casio.com/Fr/programmes/programme2749-1-jetpack-joyride-drakalex007-jeux-add-ins.html) by Drakalex007 | Playable | Way too fast! | No save. Selects SH4 API. |
+
+fx-CG programs (fx-CG 10/20/50, Prizm, Graph 90+E, fx-CG 100, Graph Math+):
+
+| **Program** | **Functionality** | **Performance** | Remarks |
+|-------------|-------------------|-----------------|---------|
+| [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | Most things work | OK | This is used to test hardware features. |
+| [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1856-1-gravityduck-pierrotll-jeux-add-ins.html) | Playable | OK | No save. Lots of NULL accesses; some are bugs from original program. IIRC crashes upon death in the later levels. Syscall-based. |
+| [Duet](https://www.planet-casio.com/Fr/programmes/programme4173-1-duet-yatis-lephe-jeux-add-ins.html) by Yatis and Lephe | Playable | Slow | No save. Slow to unplayable depending on machines, but works decent on circuit10's emulator. |
+| [Mario Kart](https://www.planet-casio.com/Fr/forums/topic17121-1-mario-kart-game-work-in-progress.html) by circuit10 | Starts | OK | DSP instruction missing, used in rendering drift animations. |
+| [Cube Field](https://www.planet-casio.com/Fr/programmes/programme1906-1-cubefield-pierrotll-jeux-add-ins.html) by PierrotLL | Playable | Way too fast | N/A |
+| [OutRun](https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html) by SlyVTT | Playable | Variable | Upon first turn, suddenly slows down and background blinks. |
+
+fx-CP programs:
+
+None so far.
