@@ -67,7 +67,10 @@ MQ_INLINE void addc(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void addv(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* addv rm, rn */
-    bool v = __builtin_add_overflow(cpu->r[m], cpu->r[n], &cpu->r[n]);
+    i32 rm = cpu->r[m];
+    i32 rn = cpu->r[n];
+    bool v = __builtin_add_overflow(rm, rn, &rn);
+    cpu->r[n] = rn;
     mq_cpu_setT(cpu, v);
     cpu->pc += 2;
 }
@@ -85,7 +88,10 @@ MQ_INLINE void subc(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void subv(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* subv rm, rn */
-    bool v = __builtin_sub_overflow(cpu->r[n], cpu->r[m], &cpu->r[n]);
+    i32 rm = cpu->r[m];
+    i32 rn = cpu->r[n];
+    bool v = __builtin_sub_overflow(rn, rm, &rn);
+    cpu->r[n] = rn;
     mq_cpu_setT(cpu, v);
     cpu->pc += 2;
 }
@@ -97,7 +103,7 @@ MQ_INLINE void neg(mqMachine *mach, mqCpu *cpu, int n, int m) {
 MQ_INLINE void negc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* negc rm, rn */
     uint T_out;
-    cpu->r[n] = SUBC(0, cpu->r[m], mq_cpu_getT(cpu), T_out);
+    cpu->r[n] = SUBC((u32)0, cpu->r[m], mq_cpu_getT(cpu), T_out);
     mq_cpu_setT(cpu, T_out);
     cpu->pc += 2;
 }
