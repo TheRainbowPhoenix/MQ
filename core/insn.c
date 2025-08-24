@@ -478,7 +478,8 @@ MQ_INLINE void movl_w(mqMachine *mach, mqCpu *cpu, int n, int m) {
 MQ_INLINE void movb_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.b @rm+, rn */
     if(mq_memory_read8(mach, mach->memory, cpu->r[m], &cpu->r[n])) {
-        cpu->r[m] += 1;
+        if(m != n)
+            cpu->r[m] += 1;
         cpu->r[n] = (i8)cpu->r[n];
     }
     cpu->pc += 2;
@@ -486,15 +487,18 @@ MQ_INLINE void movb_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
 MQ_INLINE void movw_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.w @rm+, rn */
     if(mq_memory_read16(mach, mach->memory, cpu->r[m], &cpu->r[n])) {
-        cpu->r[m] += 2;
+        if(m != n)
+            cpu->r[m] += 2;
         cpu->r[n] = (i16)cpu->r[n];
     }
     cpu->pc += 2;
 }
 MQ_INLINE void movl_r_postinc(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mov.l @rm+, rn */
-    if(mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->r[n]))
-        cpu->r[m] += 4;
+    if(mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->r[n])) {
+        if(m != n)
+            cpu->r[m] += 4;
+    }
     cpu->pc += 2;
 }
 MQ_INLINE void movb_w_predec(mqMachine *mach, mqCpu *cpu, int n, int m) {
@@ -640,8 +644,8 @@ MQ_INLINE void movual_r(mqMachine *mach, mqCpu *cpu, int m) {
     /* movua.l @rm, r0 */
     u32 data8;
     u32 final = 0;
-    for (int i = 0 ; i < 4 ; i++) {
-        if (!mq_memory_read8(mach, mach->memory, cpu->r[m] + i, &data8)) {
+    for(int i = 0 ; i < 4 ; i++) {
+        if(!mq_memory_read8(mach, mach->memory, cpu->r[m] + i, &data8)) {
             cpu->pc += 2;
             return;
         }
@@ -655,14 +659,15 @@ MQ_INLINE void movual_r_postinc(mqMachine *mach, mqCpu *cpu, int m) {
     u32 data8;
     u32 final = 0;
     for (int i = 0 ; i < 4 ; i++) {
-        if (!mq_memory_read8(mach, mach->memory, cpu->r[m] + i, &data8)) {
+        if(!mq_memory_read8(mach, mach->memory, cpu->r[m] + i, &data8)) {
             cpu->pc += 2;
             return;
         }
         final = (final << 8) | data8;
     }
     cpu->r[0] = final;
-    cpu->r[m] += 4;
+    if(m != 0)
+        cpu->r[m] += 4;
     cpu->pc += 2;
 }
 MQ_INLINE void andb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
@@ -1006,7 +1011,7 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
          SH_X0,  SH_X1,  SH_Y0,  SH_Y1,
          SH_M0, SH_A1G,  SH_M1, SH_A0G,
     };
-    if ((i & 0x000f) == 0x000b) { /* movs.l Ds, @As+ */
+    if((i & 0x000f) == 0x000b) { /* movs.l Ds, @As+ */
         int a = cpu_as[(i >> 8) & 0x3];
         int d = dsp_ds[(i >> 4) & 0xf];
         mq_memory_write(mach, mach->memory, cpu->r[a], 4, cpu->spRegs[d]);
@@ -1014,7 +1019,7 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
         cpu->pc += 2;
         return;
     }
-    if ((i & 0x0c0f) == 0x408) { /* movs.w @As+, Ds */
+    if((i & 0x0c0f) == 0x408) { /* movs.w @As+, Ds */
         int a = cpu_as[(i >> 8) & 3];
         int d = dsp_ds[(i >> 4) & 0xf];
         mq_memory_read16(mach, mach->memory, cpu->r[a], &cpu->spRegs[d]);
@@ -1022,7 +1027,7 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
         cpu->pc += 2;
         return;
     }
-    if ((i & 0x0c0f) == 0x409) { /* movs.w Ds, @As+ */
+    if((i & 0x0c0f) == 0x409) { /* movs.w Ds, @As+ */
         int a = cpu_as[(i >> 8) & 3];
         int d = dsp_ds[(i >> 4) & 0xf];
         mq_memory_write(mach, mach->memory, cpu->r[a], 2, cpu->spRegs[d]);
@@ -1053,6 +1058,7 @@ MQ_INLINE void ldtlb(mqMachine *mach, mqCpu *cpu) {
     mach->stuck = true;
 }
 MQ_INLINE void macl(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    // mac.l @r0+, @r0+ -> read r0, r0+=4, read r0, r0+=4
     fprintf(stderr, "error: not implemented: macl\n");
     mach->stuck = true;
 }
@@ -1065,6 +1071,7 @@ MQ_INLINE void tasb(mqMachine *mach, mqCpu *cpu, int n) {
     mach->stuck = true;
 }
 MQ_INLINE void macw(mqMachine *mach, mqCpu *cpu, int n, int m) {
+    // mac.w @r4+, @r4+ -> read r4, r4+=2, read r4, r4+=2
     fprintf(stderr, "error: not implemented: macw\n");
     mach->stuck = true;
 }
