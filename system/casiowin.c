@@ -413,6 +413,19 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     }
 
+    case 0x0921: /* EnableColors() */
+        mq_log(MQ_LOG_ERROR, "syscall %921 EnableColor() ignored");
+        cpu->r[0] = 0;
+        return;
+    case 0x02a3: /* FrameColor() */
+        mq_log(MQ_LOG_ERROR, "syscall %2a3 FrameColor() ignored");
+        cpu->r[0] = 0;
+        return;
+    case 0x18f9: /* PrintXY() */
+        mq_log(MQ_LOG_ERROR, "syscall %18f9 PrintXY() ignored");
+        mach->stuck = true;
+        return;
+
     case 0x1170: { /* itoa() */
         int num = cpu->r[4];
         char *dst = mq_memory_access(mach->memory, cpu->r[5]);
