@@ -636,6 +636,35 @@ MQ_INLINE void movl_r_dgbr_r0(mqMachine *mach, mqCpu *cpu, int disp) {
     mq_memory_read32(mach, mach->memory, source, &cpu->r[0]);
     cpu->pc += 2;
 }
+MQ_INLINE void movual_r(mqMachine *mach, mqCpu *cpu, int m) {
+    /* movua.l @rm, r0 */
+    u32 data8;
+    u32 final = 0;
+    for (int i = 0 ; i < 4 ; i++) {
+        if (!mq_memory_read8(mach, mach->memory, cpu->r[m] + i, &data8)) {
+            cpu->pc += 2;
+            return;
+        }
+        final = (final << 8) | data8;
+    }
+    cpu->r[0] = final;
+    cpu->pc += 2;
+}
+MQ_INLINE void movual_r_postinc(mqMachine *mach, mqCpu *cpu, int m) {
+    /* movua.l @rm+, r0 */
+    u32 data8;
+    u32 final = 0;
+    for (int i = 0 ; i < 4 ; i++) {
+        if (!mq_memory_read8(mach, mach->memory, cpu->r[m] + i, &data8)) {
+            cpu->pc += 2;
+            return;
+        }
+        final = (final << 8) | data8;
+    }
+    cpu->r[0] = final;
+    cpu->r[m] += 4;
+    cpu->pc += 2;
+}
 MQ_INLINE void andb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
     /* and.b #imm, @(r0, gbr) */
     u32 addr = cpu->spRegs[SH_GBR] + cpu->r[0];
@@ -970,20 +999,34 @@ MQ_INLINE void sleep(mqMachine *mach, mqCpu *cpu) {
 //=== DSP ====================================================================//
 
 MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
-    // movs.l Ds, @As+
-    if ((i & 0x000f) == 0x000b)
-    {
-        int const sh_reg[4] = {4, 5, 2, 3};
-        int const dsp_reg[16] = {
-                -1,     -1,     -1,     -1,
-                -1,  SH_A1,     -1,  SH_A0,
-             SH_X0,  SH_X1,  SH_Y0,  SH_Y1,
-             SH_M0, SH_A1G,  SH_M1, SH_A0G,
-        };
-        int a = sh_reg[(i >> 8) & 0x3];
-        int d = dsp_reg[(i >> 4) & 0xf];
+    int const cpu_as[4] = {4, 5, 2, 3};
+    int const dsp_ds[16] = {
+            -1,     -1,     -1,     -1,
+            -1,  SH_A1,     -1,  SH_A0,
+         SH_X0,  SH_X1,  SH_Y0,  SH_Y1,
+         SH_M0, SH_A1G,  SH_M1, SH_A0G,
+    };
+    if ((i & 0x000f) == 0x000b) { /* movs.l Ds, @As+ */
+        int a = cpu_as[(i >> 8) & 0x3];
+        int d = dsp_ds[(i >> 4) & 0xf];
         mq_memory_write(mach, mach->memory, cpu->r[a], 4, cpu->spRegs[d]);
         cpu->r[a] += 4;
+        cpu->pc += 2;
+        return;
+    }
+    if ((i & 0x0c0f) == 0x408) { /* movs.w @As+, Ds */
+        int a = cpu_as[(i >> 8) & 3];
+        int d = dsp_ds[(i >> 4) & 0xf];
+        mq_memory_read16(mach, mach->memory, cpu->r[a], &cpu->spRegs[d]);
+        cpu->r[a] += 2;
+        cpu->pc += 2;
+        return;
+    }
+    if ((i & 0x0c0f) == 0x409) { /* movs.w Ds, @As+ */
+        int a = cpu_as[(i >> 8) & 3];
+        int d = dsp_ds[(i >> 4) & 0xf];
+        mq_memory_write(mach, mach->memory, cpu->r[a], 2, cpu->spRegs[d]);
+        cpu->r[a] += 2;
         cpu->pc += 2;
         return;
     }
@@ -1015,14 +1058,6 @@ MQ_INLINE void macl(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void setrc(mqMachine *mach, mqCpu *cpu, int m) {
     fprintf(stderr, "error: not implemented: setrc\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movual_r(mqMachine *mach, mqCpu *cpu, int m) {
-    fprintf(stderr, "error: not implemented: movual_r\n");
-    mach->stuck = true;
-}
-MQ_INLINE void movual_r_postinc(mqMachine *mach, mqCpu *cpu, int m) {
-    fprintf(stderr, "error: not implemented: movual_r_postinc\n");
     mach->stuck = true;
 }
 MQ_INLINE void tasb(mqMachine *mach, mqCpu *cpu, int n) {

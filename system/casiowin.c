@@ -371,6 +371,11 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = 0;
         return;
 
+    case 0x012b: /* FKey_Mapping1() */
+        mq_log(MQ_LOG_ERROR, "syscall FKey_Mapping1() not supported");
+        mach->stuck = true;
+        return;
+
     case 0x01e6: /* GetVRAMAddress() */
         cpu->r[0] = (Casiowin->dataVramAddresses[0] & 0x1fffffff) | 0xa0000000;
         return;
@@ -395,6 +400,11 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         memset(dst, 0xff, 384 * 216 * 2);
         return;
     }
+
+    case 0x02a8: /* DrawFrame() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2a8 DrawFrame() not supported");
+        mach->stuck = true;
+        return;
 
     case 0x02c1: { /* RTC_GetTicks() */
         // FIXME: GetTicks() more than trivial counter (also on FX!)
@@ -429,7 +439,8 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     case 0x1db4: /* Bfile_DeleteEntry() */
         cpu->r[0] = -1;
         return;
-    case 0x1db6: /* Bfile_FindFirst() */
+    case 0x1db6: /* Bfile_FindFirst_FAT() */
+    case 0x1db7: /* Bfile_FindFirst() */
         cpu->r[0] = -1;
         return;
     case 0x1dba: /* Bfile_FindClose() */
