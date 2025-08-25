@@ -12,6 +12,7 @@
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
 #include <azur/azur.h>
+#include <azur/resources.h>
 #include <azur/log.h>
 #include <SDL2/SDL.h>
 #include <stb_image.h>
@@ -115,10 +116,10 @@ static void render(void)
         mqDisplay *d = mach->display;
         displayTexture.bind();
         if(d->format == MQ_DISPLAY_FORMAT_L8) {
-#ifdef AZUR_GRAPHICS_OPENGL_ES_2_0
+#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
             displayTexture.setFormat(GL_LUMINANCE, GL_UNSIGNED_BYTE,
                                      d->width, d->height);
-#else
+#elif AZUR_GRAPHICS_OPENGL_3_3
             displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
                                      d->width, d->height);
 #endif
@@ -756,7 +757,7 @@ static int update(void)
 
 int *icon_rect_ids = NULL;
 
-static void load_icons(char const *filepath)
+static void load_icons(char const *rid)
 {
     ImGuiIO &io = ImGui::GetIO();
     ImFont *font = fontSans;
@@ -764,9 +765,16 @@ static void load_icons(char const *filepath)
 
     /* Load the image and find out how many icons there are */
     int icon_w, icon_h, icon_n;
-    u8 *icon_px = stbi_load(filepath, &icon_w, &icon_h, &icon_n, 4);
+
+    size_t size;
+    void const *data = azur::getResource(rid, &size);
+    if(!data)
+        return;
+
+    u8 *icon_px = stbi_load_from_memory(
+        (stbi_uc const *)data, size, &icon_w, &icon_h, &icon_n, 4);
     if(!icon_px) {
-        azlog(ERROR, "stbi_load(\"%s\") failed\n", filepath);
+        azlog(ERROR, "stbi_load(\"%s\") failed\n", rid);
         return;
     }
     int icon_count = icon_w / 16;
@@ -818,6 +826,22 @@ static void find_cwd_addins(std::vector<std::string> &addins)
     }
 }
 
+static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
+{
+    ImGuiIO &io = ImGui::GetIO();
+    size_t size;
+    void const *ptr = azur::getResource(rid, &size);
+    if(!ptr) {
+        azlog(ERROR, "No such resource '%s'\n", rid);
+        return nullptr;
+    }
+
+    ImFontConfig fontConfig;
+    fontConfig.FontDataOwnedByAtlas = false;
+    return io.Fonts->AddFontFromMemoryTTF(
+        (void *)ptr, size, pointSize, &fontConfig);
+}
+
 int main(void)
 {
     setlocale(LC_ALL, "C.UTF-8");
@@ -830,6 +854,8 @@ int main(void)
     mach = mq_machine_create();
 
     if(azur_init("MQ", 1366, 768) != 0)
+        return 1;
+    if(!azur_init_imgui())
         return 1;
 
     srand(clock());
@@ -851,35 +877,19 @@ int main(void)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     // glGenerateMipmap(GL_TEXTURE_2D);
 
-    SDL_Window *window = azur_sdl_window();
-
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    if(!ImGui_ImplSDL2_InitForOpenGL(window, SDL_GL_GetCurrentContext())) {
-        azlog(FATAL, "ImGui_ImplSDL2_InitForOpenGL failed\n");
-        return 1;
-    }
-
-    #if defined AZUR_GRAPHICS_OPENGL_3_3
-    char const *glsl_version = "#version 130";
-    #elif defined AZUR_GRAPHICS_OPENGL_ES_2_0
-    char const *glsl_version = "#version 100";
-    #endif
-    if(!ImGui_ImplOpenGL3_Init(glsl_version)) {
-        azlog(FATAL, "ImGui_ImplOpenGL3_Init(\"%s\") failed\n", glsl_version);
-        return 1;
-    }
-
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.IniFilename = NULL;
-    // TODO: Embed assets in native build to dodge workdir requirement
-    fontSans = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSans.ttf", 13.0f);
-    fontMono = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSansMono.ttf", 13.0f);
-    fontBold = io.Fonts->AddFontFromFileTTF("gui/assets/DejaVuSans-Bold.ttf", 13.0f);
+    fontSans = ImGui_AddFontFromResource(
+        "@mqgui:assets/DejaVuSans.subset.ttf", 13.0f);
+    fontMono = ImGui_AddFontFromResource(
+        "@mqgui:assets/DejaVuSansMono.subset.ttf", 13.0f);
+    fontBold = ImGui_AddFontFromResource(
+        "@mqgui:assets/DejaVuSans-Bold.subset.ttf", 13.0f);
     io.Fonts->AddFontDefault();
-    load_icons("gui/assets/icons.png");
+
+    load_icons("@mqgui:assets/icons.png");
 
     ImGui_LoadMQStyle(ImGui::GetStyle());
 
@@ -889,10 +899,6 @@ int main(void)
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
 
     DGW.cleanup();
-
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
 
     azur_quit();
     if(mach) {

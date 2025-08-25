@@ -1,7 +1,7 @@
 in vec2 v_vertex;
 in float v_scaling;
 
-_GL(out vec4 color;)
+out vec4 color;
 
 /* Diamond diagonal size (pixels) */
 const float diamond_size = 80.0;
@@ -20,5 +20,5 @@ void main(void)
     vec4 fg = vec4(1.0, 1.0, 1.0, 1.0);
 
     vec4 c = mix(bg, fg, alpha * smoothstep(0.5-delta, 0.5+delta, d));
-	_GL(color) _GLES(gl_FragColor) = c;
+	color = c;
 }

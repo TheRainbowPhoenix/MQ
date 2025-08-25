@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.15)
 project(MQ VERSION 0.1 LANGUAGES CXX C ASM)
 
 list(APPEND CMAKE_MODULE_PATH "$ENV{AZUR_PATH_${AZUR_PLATFORM}}/lib/cmake")
-find_package(Azur 0.1 REQUIRED)
+find_package(Azur 0.2 REQUIRED)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
@@ -108,21 +108,21 @@ set(GUI_SOURCES
   gui/util.cc
   gui/windows.cc)
 
-set(ASSETS)
+set(ASSETS
+  gui/assets/DejaVuSans.subset.ttf
+  gui/assets/DejaVuSansMono.subset.ttf
+  gui/assets/DejaVuSans-Bold.subset.ttf
+  gui/assets/icons.png
+  gui/glsl/vs_tiles.glsl
+  gui/glsl/fs_tiles.glsl)
 
-if(AZUR_PLATFORM STREQUAL emscripten)
-  configure_file(gui/emscripten/index.html index.html)
-  list(APPEND ASSETS
-    gui/assets/DejaVuSans.ttf
-    gui/assets/DejaVuSansMono.ttf
-    gui/assets/DejaVuSans-Bold.ttf
-    gui/assets/icons.png
-    gui/glsl/vs_tiles.glsl
-    gui/glsl/fs_tiles.glsl
-  )
-endif()
+azur_embed_assets(
+  OUTPUT "${AUTOGEN}/gui-assets.cc"
+  NAME "mqgui"
+  RELATIVE_TO "gui"
+  ${ASSETS})
 
-add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} ${ASSETS})
+add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} "${AUTOGEN}/gui-assets.cc")
 target_compile_options(mq PRIVATE
   ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith)
 target_include_directories(mq PRIVATE
@@ -147,15 +147,11 @@ if(AZUR_PLATFORM STREQUAL linux)
 endif()
 
 if(AZUR_PLATFORM STREQUAL emscripten)
-  target_link_libraries(mq Azur::Azur Azur::GLM Azur::ImGui)
-  # Works around a bug on my machine where emcc fails to minify the source code
-  # due to a stupid API-version-mismatch TypeError
-  target_compile_options(mq PRIVATE -g2)
-  target_link_options(mq PRIVATE -g2)
+  target_link_libraries(mq PRIVATE Azur::Azur Azur::GLM Azur::ImGui)
   # Export _malloc and a few other functions even if unused, because the file
   # dialog calls them from JS code that's not evaluated at compile time
   target_link_options(mq PRIVATE
-    "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','ccall','ccall']"
+    "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','ccall']"
     "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
 
   # Embed assets to load them without filesystem access
@@ -171,8 +167,7 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   endforeach()
   set_target_properties(mq PROPERTIES LINK_DEPENDS "${ASSETS_ABSOLUTE}")
 
-  # Generate an accompanying HTML file
-  set_target_properties(mq PROPERTIES SUFFIX ".html")
+  azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html")
 endif()
 
 #=== Headless executable ======================================================#
