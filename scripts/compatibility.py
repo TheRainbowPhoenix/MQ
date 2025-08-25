@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from copy import copy
 import sys
+import re
 
 import yaml
 
@@ -20,23 +21,35 @@ def _error(text: str) -> NoReturn:
     sys.exit(1)
 
 #---
-# Content generation
+# Types
 #---
 
 @dataclass(frozen=True)
 class CompatAddin:
     """ addin information """
-    name: str
-    author: str
+    name:    str
+    author:  str
     updated: str
-    url: str
-    notes: list[str]
+    url:     str
+    notes:   list[str]
+    model:   str
 
 @dataclass
 class CompatInfo:
     """ high-level information """
     total: int
+    stats: dict[str,int]
     addin: dict[str,list[CompatAddin]]
+
+CompatModels: tuple[str,...] = (
+    'fx9860g_sh3',
+    'fx9860g_sh4',
+    'fx9860g3',
+    'fxcg20',
+    'fxcg50',
+    'fxcg100_2.00',
+    'fxcp400_2.01.2',
+)
 
 CompatStatus: dict[str,tuple[str,str]] = {
     'playable': (
@@ -65,19 +78,40 @@ CompatStatus: dict[str,tuple[str,str]] = {
     ),
 }
 
+#---
+# Data loading
+#---
+
 def _compat_load(root: Path) -> CompatInfo:
     """ load and transform YAML compat description """
     with open(root/'docs/compatibility.yaml', 'r', encoding='utf8') as file:
         compatyaml = yaml.load(file.read(), Loader=yaml.CLoader)
     bad = ''
-    compat = CompatInfo(0, {})
+    compat = CompatInfo(0, {}, {})
     for i, addin in enumerate(compatyaml['addins']):
-        if addin['status'] not in CompatStatus:
-            bad += f"yaml: [{i}]: {addin.get('name')}: unknown status"
-            continue
-        if addin['status'] not in compat.addin:
-            compat.addin[addin['status']] = []
         try:
+            if addin['status'] not in CompatStatus:
+                bad += f"yaml: [{i}]: {addin['name']}: unknown status\n"
+                continue
+            if addin['model'] not in CompatModels:
+                bad += f"yaml: [{i}]: {addin['name']}: unknown model"
+                continue
+            if not re.match(
+                pattern = r'^202\d-[01]\d-[0-3]\d$',
+                string  = str(addin['updated']),
+            ):
+                bad += f"yaml: [{i}]: {addin['name']}: broken date\n"
+                continue
+            if not re.match(
+                pattern = r'^(https:\/\/)?[\w/\-?=%.]+\.[\w/\-&?=%.]+',
+                string  = addin['urls'][0],
+            ):
+                bad += f"yaml: [{i}]: {addin['name']}: broken urls\n"
+                continue
+            if addin['status'] not in compat.addin:
+                compat.addin[addin['status']] = []
+            if addin['model'] not in compat.stats:
+                compat.stats[addin['model']] = 0
             compat.addin[addin['status']].append(
                 CompatAddin(
                     name    = addin['name'],
@@ -85,35 +119,53 @@ def _compat_load(root: Path) -> CompatInfo:
                     url     = addin['urls'][0],
                     updated = addin['updated'],
                     notes   = addin['remarks'],
+                    model   = addin['model'],
                 ),
             )
+            compat.stats[addin['model']] += 1
             compat.total += 1
         except KeyError as err:
-            bad += f"yaml: [{i}] `{addin.get('name')}` -> missing key {err}\n"
+            bad += f"yaml: [{i}] `{addin.get('name')}`: missing key {err}\n"
     if bad:
         _error(bad)
     return compat
 
+#---
+# Content generation
+#---
+
 def _compat_gen_table(root: Path) -> str:
     """ generate the compatibility table """
-    content = '\n'
     compatinfo = _compat_load(root)
+    modelstats: dict[int,list[str]] = {}
+    for name in CompatModels:
+        total = 0 if name not in compatinfo.stats else compatinfo.stats[name]
+        if total not in modelstats:
+            modelstats[total] = []
+        modelstats[total].append(name)
+    content = '\n'
+    content += f"Total programs: `all({compatinfo.total})`: "
+    for total, names in sorted(modelstats.items(), reverse=True):
+        for name in sorted(names, reverse=True):
+            content += f" `{name}({total})`"
+    content += '\n\n'
     for name, desc in CompatStatus.items():
         percent: float = 0
         if name in compatinfo.addin:
             percent = (len(compatinfo.addin[name])*100)/compatinfo.total
         content += f"<code>**{desc[0]} {name.capitalize()}** "
         content += f"({percent:.2f}%)</code> - {desc[1]}</br>\n"
-    content += '\n'
-    content += '| Addin | Status | Updated | Notes |\n'
-    content += '|-------|:------:|:-------:|-------|\n'
+    content += '\n\n'
+    content += '| Addin | Status | Models | Updated | Notes |\n'
+    content += '|-------|:------:|:------:|:-------:|-------|\n'
     for name, desc in CompatStatus.items():
         for addin in compatinfo.addin[name]:
             notes = '</br>- '.join(addin.notes)
-            content += f"| [`{addin.name}`]({addin.url}) by {addin.author} "
-            content += f"| <code>**{desc[0]} {name.capitalize()}**</code> "
-            content += f"| `{addin.updated}` "
-            content += f"| -{notes} |\n"
+            content += f"| [{addin.name}]({addin.url}) by {addin.author} "
+            content += f"| <code>{desc[0]} {name.capitalize()}</code> "
+            content += f"| `{addin.model}` "
+            content += f"| {addin.updated} "
+            content += f"| - {notes} |\n"
     content += '\n'
     return content
 
