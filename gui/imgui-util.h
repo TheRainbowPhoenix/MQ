@@ -36,20 +36,17 @@ static inline void MoveCursorScreenPos(ImVec2 diff) {
    ImGui::SetCursorScreenPos(ImVec2(pos.x + diff.x, pos.y + diff.y));
 }
 
-/* Text but with the mono font. */
-template<typename... Args>
-void TextMono(Args... args) {
-   ImGui::PushFont(fontMono);
-   ImGui::Text(std::forward<Args>(args)...);
-   ImGui::PopFont();
-}
+/* Text but with the mono font. Note: GCC will not check format strings on
+   variadic templates, only variadic functions, so use C-style varargs. */
+__attribute__((format(printf, 1, 2)))
+void TextMono(char const *fmt, ...);
 
 /* Checkbox with smaller frame padding. */
 template<typename... Args>
 void Checkbox2(Args... args) {
-   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 1));
-   ImGui::Checkbox(std::forward<Args>(args)...);
-   ImGui::PopStyleVar();
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 1));
+    ImGui::Checkbox(std::forward<Args>(args)...);
+    ImGui::PopStyleVar();
 }
 
 } /* namespace ImGui */

@@ -39,7 +39,7 @@ err:
     return NULL;
 }
 
-#ifdef AZUR_PLATFORM_EMSCRIPTEN
+#if AZUR_PLATFORM_EMSCRIPTEN
 
 #include "../3rdparty/emscripten-browser-file/emscripten_browser_file.h"
 

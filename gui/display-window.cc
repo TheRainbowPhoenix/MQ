@@ -90,9 +90,9 @@ void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
         shader_texture.add_subtexture(
             -w/2, -h/2, w, h,
             u0, v0, tw, th,
-#ifdef AZUR_GRAPHICS_OPENGL_ES_2_0
+#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
             m_texture->format() == GL_LUMINANCE
-#else
+#elif AZUR_GRAPHICS_OPENGL_3_3
             m_texture->format() == GL_RED
 #endif
         );
@@ -160,7 +160,7 @@ void ProgramTexture::init()
     extern char const *azur_glsl__vs_tex2d;
     extern char const *azur_glsl__fs_tex2d;
 
-    this->prog = azur::gl::loadProgramSources(
+    this->prog = azur::gl::loadProgramSources("<built-in tex2d>",
         GL_VERTEX_SHADER,   azur_glsl__vs_tex2d,
         GL_FRAGMENT_SHADER, azur_glsl__fs_tex2d,
         0);
@@ -218,8 +218,8 @@ void ProgramBackground::init()
     glEnableVertexAttribArray(0);
 
     this->prog = azur::gl::loadProgramFiles(
-        GL_VERTEX_SHADER,   "gui/glsl/vs_tiles.glsl",
-        GL_FRAGMENT_SHADER, "gui/glsl/fs_tiles.glsl",
+        GL_VERTEX_SHADER,   "@mqgui:glsl/vs_tiles.glsl",
+        GL_FRAGMENT_SHADER, "@mqgui:glsl/fs_tiles.glsl",
         0);
 }
 
