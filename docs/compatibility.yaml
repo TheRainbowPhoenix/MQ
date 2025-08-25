@@ -1,0 +1,293 @@
+addins:
+  - name: gintctl
+    author: Lephe
+    status: ingame
+    updated: 2025-08-21
+    model: fxcg50
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/gintctl
+    remarks:
+      - Most things work
+      - This is used to test hardware features
+
+  - name: Gravity Duck
+    author: PierrotLL
+    status: ingame
+    updated: 2025-08-21
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1856-1-gravityduck-pierrotll-jeux-add-ins.html
+    remarks:
+      - No save
+      - Lots of NULL accesses; some are bugs from original program.
+      - IIRC crashes upon death in the later levels.
+      - Syscall-based.
+
+  - name: Duet
+    author: Yatis and Lephe
+    status: ingame
+    updated: 2025-08-21
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4173-1-duet-yatis-lephe-jeux-add-ins.html
+    remarks:
+      - No save
+      - more slow than circuit10's emulator.
+
+  - name: Mario Kart
+    author: Circuit10
+    status: playable
+    updated: 2025-08-21
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/forums/topic17121-1-mario-kart-game-work-in-progress.html
+    remarks:
+      - Playable
+
+  - name: Cube Field
+    author: PierrotLL
+    status: ingame
+    updated: 2025-08-21
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1906-1-cubefield-pierrotll-jeux-add-ins.html
+    remarks:
+      - Way too fast
+
+  - name: OutRun
+    author: SlyvTT
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html
+    remarks:
+      - Upon first turn, suddenly slows down and background blinks.
+
+  - name: Demineur winXP
+    author: Smashmaster
+    updated: 2025-08-21
+    status: intro
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html
+    remarks:
+      - fxcg50 port
+      - Slow(?)
+      - First game work, but second crash
+
+  - name: Sudoku solver
+    author: Lancelot
+    updated: 2025-08-21
+    status: nothing
+    model: fxcg20
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2446-last-sudoku-solver-lancelot-jeux-add-ins.html
+    remarks:
+      - Prizm
+      - missing `%d39` syscall support
+
+  - name: Flappy bird color
+    author: Lancelot
+    updated: 2025-08-21
+    status: nothing
+    model: fxcg20
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2428-last-flappy-bird-color-lancelot-jeux-add-ins.html
+    remarks:
+      - Prizm
+      - missing `%d39` syscall support
+
+  - name: Cgsnake
+    author: Eiyeron
+    updated: 2025-08-21
+    status: loadable
+    model: fxcg20
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1902-last-cgsnake-eiyeron-jeux-add-ins.html
+    remarks:
+      - Prizm
+      - Do not crash, just display nothing
+
+  - name: Sonic
+    author: Smashmaster
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1904-last-sonic-smashmaster-jeux-add-ins.html
+    remarks:
+      - fxcg50 port
+      - Too fast
+
+  - name: Falldown colors
+    author: Dodormeur
+    updated: 2025-08-21
+    status: nothing
+    model: fxcg20
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2060-last-falldown-colors-dodormeur-jeux-add-ins.html
+    remarks:
+      - Use PRIZM VRAM area
+
+  - name: Obliterate
+    author: planetcasio
+    updated: 2025-08-21
+    status: nothing
+    model: fxcg20
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2341-last-obliterate-kermmartian-jeux-add-ins.html
+    remarks:
+      - Prizm
+      - missing support of `%12b` syscall
+
+  - name: Meta Ball
+    author: Lancelot
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2344-last-meta-ball-lancelot-jeux-add-ins.html
+    remarks:
+      - fxcg50 port
+      - Too slow.
+      - Invalid write sometime
+
+  - name: Life game cg-20
+    author: Smashmaster
+    updated: 2025-08-21
+    status: loadable
+    model: fxcg20
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1853-last-life-game-cg-20-smashmaster-jeux-add-ins.html
+    remarks:
+      - Prizm
+      - black screen
+      - Use PRIZM VRAM area
+
+  - name: After Burner
+    author: Lephe
+    updated: 2025-08-21
+    status: playable
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4238-last-after-burner-lephenixnoir-jeux-add-ins.html
+    remarks:
+      - Perfect!
+
+  - name: AST3 C
+    author: Tituya
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4100-last-ast3-c-tituya-jeux-add-ins.html
+    remarks:
+      - Broken first menu which not display frame entierly
+      - Rest of the game is playable
+
+  - name: Super Mario 3D
+    author: Farhi
+    updated: 2025-08-21
+    status: playable
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4343-last-super-mario-3d-farhi-jeux-add-ins.html
+    remarks:
+      - Perfect!
+
+  - name: Maverick Bird
+    author: Lephe
+    updated: 2025-08-21
+    status: playable
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4268-last-maverick-bird-lephenixnoir-jeux-add-ins.html
+    remarks:
+      - Perfect!
+
+  - name: Mario 3D
+    author: Games
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4411-last-mario-3d-games-jeux-add-ins.html
+    remarks:
+      - Maybe graphical glitch in middle of the screen(?)
+
+  - name: Tetrizm
+    author: Planetcasio
+    updated: 2025-08-21
+    status: nothing
+    model: fxcg50
+    urls:
+      - https://www.cemetech.net/downloads/files/659/x659
+    remarks:
+      - CG50 port
+      - missing support for `%12b` to boot
+
+  - name: OpenJazz
+    author: Programmern
+    updated: 2025-08-21
+    status: nothing
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2390-last-openjazz-jackrabbit-programmern-jeux-add-ins.html
+    remarks:
+      - fxcg50 official port(?)
+      - missing syscall `%921 EnableColor()` syscall to boot
+      - missing syscall `%2a3 FrameColor()` syscall to boot
+      - missing syscall `%18f9 PrintXY()` syscall to boot
+
+  - name: Frozen Frenzy
+    author: Massena
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4192-last-frozen-frenzy-massena-jeux-add-ins.html
+    remarks:
+      - too fast
+
+  - name: Dumb Clicker Goto Edition
+    author: Kikoodx
+    updated: 2025-08-21
+    status: playable
+    model: fxcg50
+    urls:
+      - https://git.planet-casio.com/kdx/dcge
+    remarks:
+      - we can click efficiently, nice
+
+  - name: Momento
+    author: Kikoodx
+    updated: 2025-08-21
+    status: playable
+    model: fxcg50
+    urls:
+      - https://git.sr.ht/~kikoodx/momento
+    remarks:
+      - Perfect(?)
+
+  - name: Teh Moon Show
+    author: Massena
+    updated: 2025-08-21
+    status: playable
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4240-last-teh-moon-show-massena-jeux-add-ins.html
+    remarks:
+      - cannot restart a game, same on real hardware
+      - need to properly handle game exit
+
+  - name: Chaos Drop
+    author: Lephe
+    updated: 2025-08-21
+    status: ingame
+    model: fxcg50
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/chaos-drop
+    remarks:
+      - too many NULL page write warning
+      - too slow
