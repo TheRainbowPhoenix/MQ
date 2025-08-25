@@ -42,9 +42,19 @@ bool IconButton(int iconID, char const *tooltip, bool disabled)
     bool b = ImGui::Button(str, ImVec2(20, 20));
     if(disabled)
         ImGui::EndDisabled();
-    ImGui::SetItemTooltip(tooltip);
+    ImGui::SetItemTooltip("%s", tooltip);
     ImGui::PopStyleVar();
     return b;
+}
+
+void TextMono(char const *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    ImGui::PushFont(fontMono);
+    ImGui::TextV(fmt, args);
+    ImGui::PopFont();
+    va_end(args);
 }
 
 } /* namespace ImGui */
@@ -345,7 +355,7 @@ static void RenderHexViewer(HexViewer &HV)
     for(int i = 0; i < lines; i++) {
         ImVec2 p(TL.x, TL.y + i * lineHeight), q = p;
 
-        sprintf(str, "%0*lx:", std::min(HV.AddressBits / 4, 16), addr);
+        sprintf(str, "%0*" PRIx64 ":", std::min(HV.AddressBits / 4, 16), addr);
         drawList->AddText(p, fg, str);
 
         p.x += addressPixels + HV.MajorSpacing;
@@ -471,7 +481,7 @@ void Buffer::reset()
     for(int i = 0; i < this->capacity; i++)
         free(this->lines[i]);
     delete[] this->lines;
-    memset(this, 0, sizeof *this);
+    memset((void *)this, 0, sizeof *this);
 }
 
 Line *Buffer::getNthLine(int nth) const
@@ -631,7 +641,7 @@ static float RenderLine(float x, float y, RichText::Line *L,
 {
     char const *p = L->data;
     char const *endline = p + L->size;
-    int line_offset = 0;
+    // int line_offset = 0;
     int line_number = 0;
     uint columns = std::max(view.columns, 1u);
 
@@ -648,7 +658,7 @@ static float RenderLine(float x, float y, RichText::Line *L,
         }
 
         p += len;
-        line_offset += len;
+        // line_offset += len;
         line_number++;
     }
 

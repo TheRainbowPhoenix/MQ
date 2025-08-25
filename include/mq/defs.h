@@ -30,7 +30,7 @@
 
 MQ_START_DEFS
 
-#include <stdint.h>
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdbool.h>
 
