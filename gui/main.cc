@@ -371,6 +371,47 @@ static void render(void)
     }
     ImGui::End();
 
+    if(ImGui::Begin("Record", nullptr)) {
+        ImGui::SeparatorTextD("Video recorder");
+        // calculate at runtime the width of all button
+        // trick stolen from `/imgui/imgui_widgets.cpp#L5665-L5666`
+        ImGui::TextWrapped(
+            "You can start recording the virtual screen by selecting an "
+            "addin and then pressing start."
+        );
+        ImGui::Spacing();
+        const ImGuiStyle& style = ImGui::GetStyle();
+        auto w_button  = ImGui::GetContentRegionAvail().x;
+        w_button -= (style.ItemInnerSpacing.x * 2);
+        w_button /= 3;
+        ImGui::BeginDisabled();
+        ImGui::Button("Start", ImVec2(w_button, 0));
+        ImGui::EndDisabled();
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        //ImGui::BeginDisabled();
+        ImGui::Button("Pause", ImVec2(w_button, 0));
+        //ImGui::EndDisabled();
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        //ImGui::BeginDisabled();
+        ImGui::Button("Stop", ImVec2(w_button, 0));
+        //ImGui::EndDisabled();
+        ImGui::Spacing();
+        //auto status = "No addin selected";
+        //auto status = "Press start to run and record";
+        //auto w_widget = ImGui::GetContentRegionAvail().x;
+        //auto w_text = ImGui::CalcTextSize(status).x;
+        //ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
+        //ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), status);
+        //ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), status);
+        ImGui::TextDisabled("Start time: xx:xx:xx");
+        ImGui::TextDisabled("Elapsed: xxs");
+        ImGui::TextDisabled("Nb. frames: xxx");
+        ImGui::TextDisabled("Profile: xxxx");
+        ImGui::TextDisabled("Output: /moc/moc/addin-date.webp");
+        ImGui::TextDisabled("Status: recording");
+    }
+    ImGui::End();
+
     if(ImGui::Begin("Messages", nullptr)) {
         static RichText::View view = {
             .font = fontMono,
@@ -519,6 +560,7 @@ static void render(void)
         ImGui::DockBuilderDockWindow("Display", dock);
         ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
+        ImGui::DockBuilderDockWindow("Record", dock_left_top);
         ImGui::DockBuilderDockWindow("Messages", dock_left_top_right);
         ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Interrupts", dock_left_top_right);
