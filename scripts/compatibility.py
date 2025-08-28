@@ -94,7 +94,7 @@ def _compat_load(root: Path) -> CompatInfo:
                 bad += f"yaml: [{i}]: {addin['name']}: unknown status\n"
                 continue
             if addin['model'] not in CompatModels:
-                bad += f"yaml: [{i}]: {addin['name']}: unknown model"
+                bad += f"yaml: [{i}]: {addin['name']}: unknown model\n"
                 continue
             if not re.match(
                 pattern = r'^202\d-[01]\d-[0-3]\d$',
