@@ -83,13 +83,13 @@ Profiling TODOs:
 This section is generated automatically based on [this YAML summary](docs/compatibility.yaml).
 
 <!-- compat table start -->
-Total programs: `all(39)`:  `fxcg50(21)` `fx9860g_sh4(9)` `fxcg20(6)` `fx9860g_sh3(3)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g3(0)`
+Total programs: `all(40)`:  `fxcg50(21)` `fx9860g_sh4(10)` `fxcg20(6)` `fx9860g_sh3(3)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g3(0)`
 
-<code>**🟢 Playable** (17.95%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
-<code>**🟠 Ingame** (43.59%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
-<code>**🟤 Intro** (5.13%)</code> - Games that display image but don't make it past the menus</br>
-<code>**🔴 Loadable** (5.13%)</code> - Games that display a black screen with a framerate on the window's title</br>
-<code>**⚫ Nothing** (28.21%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
+<code>**🟢 Playable** (17.50%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
+<code>**🟠 Ingame** (45.00%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
+<code>**🟤 Intro** (5.00%)</code> - Games that display image but don't make it past the menus</br>
+<code>**🔴 Loadable** (5.00%)</code> - Games that display a black screen with a framerate on the window's title</br>
+<code>**⚫ Nothing** (27.50%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
 
 
 | Addin | Status | Models | Updated | Notes |
@@ -118,6 +118,7 @@ Total programs: `all(39)`:  `fxcg50(21)` `fx9860g_sh4(9)` `fxcg20(6)` `fx9860g_s
 | [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html) by PierrotLL | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast |
 | [2048 delux](https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html) by Kirafi | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast</br>- time is way to fast</br>- second party freeze the program (but the emulator steel work) |
 | [Mipjabok](https://www.planet-casio.com/Fr/programmes/programme2303-last-mipjabok-louloux-jeux-add-ins.html) by Louloux | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast |
+| [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-29 | - libprof tests freeze (no crash)</br>- missing instruction `macw` in `CPU parallelism` |
 | [Demineur winXP](https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html) by Smashmaster | <code>🟤 Intro</code> | `fxcg50` | 2025-08-21 | - fxcg50 port</br>- Slow(?)</br>- First game work, but second crash |
 | [Mario land ce](https://www.planet-casio.com/Fr/programmes/programme1064-last-mario-land-ce-bebe-vador-jeux-add-ins.html) by Bebe-vador | <code>🟤 Intro</code> | `fx9860g_sh3` | 2025-08-27 | - first frame of the game</br>- missing support for `%3ed` `Interrupt_SetOrClrStatusFlags()` |
 | [Cgsnake](https://www.planet-casio.com/Fr/programmes/programme1902-last-cgsnake-eiyeron-jeux-add-ins.html) by Eiyeron | <code>🔴 Loadable</code> | `fxcg20` | 2025-08-21 | - Prizm</br>- Do not crash, just display nothing |

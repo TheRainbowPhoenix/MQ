@@ -90,9 +90,11 @@ static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
     // TODO[machine]: XYRAM @ 0xe5000000, repeat for 64k, block repeats for 4M
 }
 
-static void mq_machine_setupPeripheralModules_sh7305(mqMachine *mach)
-{
-    mq_cpg_setup(mach);
+static void mq_machine_setupPeripheralModules_sh7305(
+    mqMachine *mach,
+    int initializeKind
+) {
+    mq_cpg_setup(mach, initializeKind);
 
     mq_intc_setup(mach);
 
@@ -152,7 +154,10 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_mmu_map(mach, 0x08100000, layout_uram_p1, 55, 0x1000,  8);
         mq_mmu_bind(mach);
 
-        mq_machine_setupPeripheralModules_sh7305(mach);
+        mq_machine_setupPeripheralModules_sh7305(
+            mach,
+            MQ_MACHINE_INITIALIZE_ADDIN_FX
+        );
 
         mq_t6k11_setup(mach);
         mq_casiowin_setup(mach, MQ_CASIOWIN_FX205);
@@ -196,7 +201,10 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_mmu_map(mach, 0x08100000, layout_uram_p1, 55,  0x10000, 8);
         mq_mmu_bind(mach);
 
-        mq_machine_setupPeripheralModules_sh7305(mach);
+        mq_machine_setupPeripheralModules_sh7305(
+            mach,
+            MQ_MACHINE_INITIALIZE_ADDIN_CG
+        );
 
         mq_r61524_setup(mach);
         mq_casiowin_setup(mach, MQ_CASIOWIN_CG380);

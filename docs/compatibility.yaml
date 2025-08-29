@@ -417,3 +417,14 @@ addins:
     remarks:
       - missing syscall `%24c Keyboard_IsSpecialKeyDown()`
       - need SH3 timer support
+
+  - name: gintctl
+    author: Lephe
+    updated: 2025-08-29
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/gintctl
+    remarks:
+      - libprof tests freeze (no crash)
+      - missing instruction `macw` in `CPU parallelism`
