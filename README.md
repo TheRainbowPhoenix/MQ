@@ -83,13 +83,13 @@ Profiling TODOs:
 This section is generated automatically based on [this YAML summary](docs/compatibility.yaml).
 
 <!-- compat table start -->
-Total programs: `all(27)`:  `fxcg50(21)` `fxcg20(6)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g_sh4(0)` `fx9860g_sh3(0)` `fx9860g3(0)`
+Total programs: `all(40)`:  `fxcg50(21)` `fx9860g_sh4(10)` `fxcg20(6)` `fx9860g_sh3(3)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g3(0)`
 
-<code>**🟢 Playable** (25.93%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
-<code>**🟠 Ingame** (40.74%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
-<code>**🟤 Intro** (3.70%)</code> - Games that display image but don't make it past the menus</br>
-<code>**🔴 Loadable** (7.41%)</code> - Games that display a black screen with a framerate on the window's title</br>
-<code>**⚫ Nothing** (22.22%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
+<code>**🟢 Playable** (17.50%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
+<code>**🟠 Ingame** (45.00%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
+<code>**🟤 Intro** (5.00%)</code> - Games that display image but don't make it past the menus</br>
+<code>**🔴 Loadable** (5.00%)</code> - Games that display a black screen with a framerate on the window's title</br>
+<code>**⚫ Nothing** (27.50%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
 
 
 | Addin | Status | Models | Updated | Notes |
@@ -112,7 +112,15 @@ Total programs: `all(27)`:  `fxcg50(21)` `fxcg20(6)` `fxcp400_2.01.2(0)` `fxcg10
 | [Mario 3D](https://www.planet-casio.com/Fr/programmes/programme4411-last-mario-3d-games-jeux-add-ins.html) by Games | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - Maybe graphical glitch in middle of the screen(?) |
 | [Frozen Frenzy](https://www.planet-casio.com/Fr/programmes/programme4192-last-frozen-frenzy-massena-jeux-add-ins.html) by Massena | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - too fast |
 | [Chaos Drop](https://git.planet-casio.com/Lephenixnoir/chaos-drop) by Lephe | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - too many NULL page write warning</br>- too slow |
+| [Geometry Dash](https://www.planet-casio.com/Fr/programmes/programme3115-last-geometry-dash-fife86-jeux-add-ins.html) by Fife86 | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-27 | - too fast |
+| [Angry Bird](https://www.planet-casio.com/Fr/programmes/programme1943-last-angry-birds-louloux-jeux-add-ins.html) by LouLoux | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-27 | - too fast |
+| [Evasion](https://www.planet-casio.com/Fr/programmes/programme2082-last-evasion-surv-dodormeur-jeux-add-ins.html) by Dodormeur | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast</br>- version Graph35+EII display nothing |
+| [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html) by PierrotLL | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast |
+| [2048 delux](https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html) by Kirafi | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast</br>- time is way to fast</br>- second party freeze the program (but the emulator steel work) |
+| [Mipjabok](https://www.planet-casio.com/Fr/programmes/programme2303-last-mipjabok-louloux-jeux-add-ins.html) by Louloux | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast |
+| [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-29 | - libprof tests freeze (no crash)</br>- missing instruction `macw` in `CPU parallelism` |
 | [Demineur winXP](https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html) by Smashmaster | <code>🟤 Intro</code> | `fxcg50` | 2025-08-21 | - fxcg50 port</br>- Slow(?)</br>- First game work, but second crash |
+| [Mario land ce](https://www.planet-casio.com/Fr/programmes/programme1064-last-mario-land-ce-bebe-vador-jeux-add-ins.html) by Bebe-vador | <code>🟤 Intro</code> | `fx9860g_sh3` | 2025-08-27 | - first frame of the game</br>- missing support for `%3ed` `Interrupt_SetOrClrStatusFlags()` |
 | [Cgsnake](https://www.planet-casio.com/Fr/programmes/programme1902-last-cgsnake-eiyeron-jeux-add-ins.html) by Eiyeron | <code>🔴 Loadable</code> | `fxcg20` | 2025-08-21 | - Prizm</br>- Do not crash, just display nothing |
 | [Life game cg-20](https://www.planet-casio.com/Fr/programmes/programme1853-last-life-game-cg-20-smashmaster-jeux-add-ins.html) by Smashmaster | <code>🔴 Loadable</code> | `fxcg20` | 2025-08-21 | - Prizm</br>- black screen</br>- Use PRIZM VRAM area |
 | [Sudoku solver](https://www.planet-casio.com/Fr/programmes/programme2446-last-sudoku-solver-lancelot-jeux-add-ins.html) by Lancelot | <code>⚫ Nothing</code> | `fxcg20` | 2025-08-21 | - Prizm</br>- missing `%d39` syscall support |
@@ -121,5 +129,10 @@ Total programs: `all(27)`:  `fxcg50(21)` `fxcg20(6)` `fxcp400_2.01.2(0)` `fxcg10
 | [Obliterate](https://www.planet-casio.com/Fr/programmes/programme2341-last-obliterate-kermmartian-jeux-add-ins.html) by planetcasio | <code>⚫ Nothing</code> | `fxcg20` | 2025-08-21 | - Prizm</br>- missing support of `%12b` syscall |
 | [Tetrizm](https://www.cemetech.net/downloads/files/659/x659) by Planetcasio | <code>⚫ Nothing</code> | `fxcg50` | 2025-08-21 | - CG50 port</br>- missing support for `%12b` to boot |
 | [OpenJazz](https://www.planet-casio.com/Fr/programmes/programme2390-last-openjazz-jackrabbit-programmern-jeux-add-ins.html) by Programmern | <code>⚫ Nothing</code> | `fxcg50` | 2025-08-21 | - fxcg50 official port(?)</br>- missing syscall `%921 EnableColor()` syscall to boot</br>- missing syscall `%2a3 FrameColor()` syscall to boot</br>- missing syscall `%18f9 PrintXY()` syscall to boot |
+| [FlappyBird](https://www.planet-casio.com/Fr/programmes/programme2424-last-flappy-bird-dark-storm-jeux-add-ins.html) by Dark storm | <code>⚫ Nothing</code> | `fx9860g_sh4` | 2025-08-27 | - missing %90F GetKey() |
+| [Doodle jump](https://www.planet-casio.com/Fr/programmes/programme1746-last-doodle-jump-kevkevvtt-jeux-add-ins.html) by Kevkevvtt | <code>⚫ Nothing</code> | `fx9860g_sh3` | 2025-08-27 | - SH3 with RevolutionFX</br>- execution crash |
+| [OrtonSH4](https://www.planet-casio.com/Fr/programmes/programme1455-1-orton-pierrotll-jeux-add-ins.html) by PierrotLL | <code>⚫ Nothing</code> | `fx9860g_sh4` | 2025-08-28 | - missing syscall `%90F GetKey()` support to boot |
+| [Hard game](https://www.planet-casio.com/Fr/programmes/programme1456-1-hard-game-pierrotll-jeux-add-ins.html) by PierrotLL | <code>⚫ Nothing</code> | `fx9860g_sh4` | 2025-08-28 | - missing syscall `%030 Bdisp_DrawLineVRAM()` |
+| [Ball game](https://www.planet-casio.com/Fr/programmes/programme1397-1-ball-game-pierrotll-jeux-add-ins.html) by PierrotLL | <code>⚫ Nothing</code> | `fx9860g_sh3` | 2025-08-28 | - missing syscall `%24c Keyboard_IsSpecialKeyDown()`</br>- need SH3 timer support |
 
 <!-- compat table end -->

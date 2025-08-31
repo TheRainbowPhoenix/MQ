@@ -1,6 +1,7 @@
 __pycache__
 /build*
 /*.g1a
+/*.G1A
 /*.g3a
 /*.tar
 /*.sublime-*

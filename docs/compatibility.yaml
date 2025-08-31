@@ -291,3 +291,140 @@ addins:
     remarks:
       - too many NULL page write warning
       - too slow
+
+  - name: Geometry Dash
+    author: Fife86
+    updated: 2025-08-27
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme3115-last-geometry-dash-fife86-jeux-add-ins.html
+    remarks:
+      - too fast
+
+  - name: FlappyBird
+    author: Dark storm
+    updated: 2025-08-27
+    status: nothing
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2424-last-flappy-bird-dark-storm-jeux-add-ins.html
+    remarks:
+      - missing %90F GetKey()
+
+  - name: Angry Bird
+    author: LouLoux
+    updated: 2025-08-27
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1943-last-angry-birds-louloux-jeux-add-ins.html
+    remarks:
+      - too fast
+
+  - name: Mario land ce
+    author: Bebe-vador
+    updated: 2025-08-27
+    status: intro
+    model: fx9860g_sh3
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1064-last-mario-land-ce-bebe-vador-jeux-add-ins.html
+    remarks:
+      - first frame of the game
+      - missing support for `%3ed` `Interrupt_SetOrClrStatusFlags()`
+
+  - name: Doodle jump
+    author: Kevkevvtt
+    updated: 2025-08-27
+    status: nothing
+    model: fx9860g_sh3
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1746-last-doodle-jump-kevkevvtt-jeux-add-ins.html
+    remarks:
+      - SH3 with RevolutionFX
+      - execution crash
+
+  - name: Evasion
+    author: Dodormeur
+    updated: 2025-08-28
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2082-last-evasion-surv-dodormeur-jeux-add-ins.html
+    remarks:
+      - too fast
+      - version Graph35+EII display nothing
+
+  - name: Gravity Duck
+    author: PierrotLL
+    updated: 2025-08-28
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html
+    remarks:
+      - too fast
+
+  - name: 2048 delux
+    author: Kirafi
+    updated: 2025-08-28
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html
+    remarks:
+      - too fast
+      - time is way to fast
+      - second party freeze the program (but the emulator steel work)
+
+  - name: Mipjabok
+    author: Louloux
+    updated: 2025-08-28
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2303-last-mipjabok-louloux-jeux-add-ins.html
+    remarks:
+      - too fast
+
+  - name: OrtonSH4
+    author: PierrotLL
+    updated: 2025-08-28
+    status: nothing
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1455-1-orton-pierrotll-jeux-add-ins.html
+    remarks:
+      - missing syscall `%90F GetKey()` support to boot
+
+  - name: Hard game
+    author: PierrotLL
+    updated: 2025-08-28
+    status: nothing
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1456-1-hard-game-pierrotll-jeux-add-ins.html
+    remarks:
+      - missing syscall `%030 Bdisp_DrawLineVRAM()`
+
+  - name: Ball game
+    author: PierrotLL
+    updated: 2025-08-28
+    status: nothing
+    model: fx9860g_sh3
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme1397-1-ball-game-pierrotll-jeux-add-ins.html
+    remarks:
+      - missing syscall `%24c Keyboard_IsSpecialKeyDown()`
+      - need SH3 timer support
+
+  - name: gintctl
+    author: Lephe
+    updated: 2025-08-29
+    status: ingame
+    model: fx9860g_sh4
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/gintctl
+    remarks:
+      - libprof tests freeze (no crash)
+      - missing instruction `macw` in `CPU parallelism`
