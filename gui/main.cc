@@ -659,9 +659,11 @@ static int update(void)
         }
     }
 
+    bool fpslimiter = false;
     if(input.mq_initialize_addin_fx) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
         render_needed = std::max(render_needed, 1);
+        fpslimiter = true;
     }
     if(input.mq_initialize_addin_cg) {
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
@@ -692,6 +694,7 @@ static int update(void)
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
         // printf("ts_start=%ld\n", ts_start.tv_nsec);
 
+        int cycles_elapsed = 0;
         while(input.mq_cycles != 0 /* negative is infinity */) {
             struct timespec ts_current;
             clock_gettime(CLOCK_MONOTONIC, &ts_current);
@@ -700,6 +703,8 @@ static int update(void)
             ns_elapsed += 1'000'000'000ull * s_elapsed;
             // printf("ts_current=%ld ns_elapsed=%ld\n", ts_current.tv_nsec, ns_elapsed);
             if(ns_elapsed >= 12'000'000)
+                break;
+            if(fpslimiter && cycles_elapsed >= 500'000)
                 break;
 
             int cycles = std::min(input.mq_cycles, 100000);
@@ -713,6 +718,7 @@ static int update(void)
                 input.mq_cycles -= cycles;
             }
             mq_machine_cycle(mach, cycles);
+            cycles_elapsed += cycles;
         }
 
         /* Limit the number of cycles for each GUI frame to not lock the GUI.

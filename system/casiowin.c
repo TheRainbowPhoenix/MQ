@@ -243,6 +243,26 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mq_memory_write(mach, mach->memory, mach->cpu.r[7], 2, 0x0000);
         return;
 
+    case 0x028: { /* Bdisp_PutDisp_DD() */
+        if(mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8,
+                    128, 64)) {
+            u8 *src = mq_memory_access(
+                mach->memory,
+                Casiowin->dataVramAddresses[0]
+            );
+            u8 *dst = mach->display->data;
+            for(int p = 0; p < 1024; p++) {
+                u8 value = *(u8*)((uintptr_t)(src++) ^ 3);
+                for(int i = 0; i < 8; i++) {
+                    *dst++ = ~((i8)value >> 7);
+                    value <<= 1;
+                }
+            }
+            mq_display_setDirty(mach->display, true);
+        }
+        return;
+    }
+
     case 0x0030: /* Bdisp_DrawLineVRAM() */
         mq_log(MQ_LOG_ERROR, "unsupported syscall %%030 Bdisp_DrawLineVRAM()");
         mach->stuck = true;
@@ -274,6 +294,11 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     // case 0x014d: /* Bdisp_AreaReverseVRAM() */
     //     return;
+
+    case 0x0247: /* Keyboard_GetKeyWait() */
+        mq_log(MQ_LOG_ERROR, "unhandled Keyboard_GetKeyWait(), return 0");
+        cpu->r[0] = 0;
+        return;
 
     case 0x024c: /* Keyboard_IsSpecialKeyDown */
         mq_log(

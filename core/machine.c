@@ -18,6 +18,7 @@
 #include <mq/modules/r61524.h>
 #include <mq/modules/t6k11.h>
 #include <mq/modules/tmu.h>
+#include <mq/modules/rtc.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -105,6 +106,8 @@ static void mq_machine_setupPeripheralModules_sh7305(
     mq_cmod_setup(mach);
 
     mq_tmu_setup(mach);
+
+    mq_rtc_setup(mach, initializeKind);
 }
 
 void mq_machine_initialize(mqMachine *mach, int initializeKind)
