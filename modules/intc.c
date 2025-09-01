@@ -38,9 +38,9 @@ mqINTC_InterruptInfo interrupts[MQ_INT_NUM] = {
     {  4 /* IPRE */,  4,  2, 0x01, 0x900 },  // MQ_INT_Cmod_TUNI3
     {  9 /* IPRJ */, 12,  6, 0x08, 0x9e0 },  // MQ_INT_Cmod_TUNI0
     {  5 /* IPRF */,  4,  9, 0x02, 0xa20 },  // MQ_INT_USB_USI
-    { 10 /* IPRK */, 12, 10, 0x04, 0xa80 },  // MQ_INT_RTC_ATI
-    { 10 /* IPRK */, 12, 10, 0x02, 0xaa0 },  // MQ_INT_RTC_PRI
-    { 10 /* IPRK */, 12, 10, 0x01, 0xac0 },  // MQ_INT_RTC_CUI
+    { 10 /* IPRK */, 12, 10, 0x04, 0xa80 },  // MQ_INT_RTC_CUI
+    { 10 /* IPRK */, 12, 10, 0x02, 0xaa0 },  // MQ_INT_RTC_ATI
+    { 10 /* IPRK */, 12, 10, 0x01, 0xac0 },  // MQ_INT_RTC_PRI
     { 10 /* IPRK */,  8, 10, 0x10, 0xb00 },  // MQ_INT_SDC_7a
     { 10 /* IPRK */,  8, 10, 0x20, 0xb20 },  // MQ_INT_SDC_7b
     {  5 /* IPRF */,  8,  5, 0x10, 0xb80 },  // MQ_INT_DMA_DEI4

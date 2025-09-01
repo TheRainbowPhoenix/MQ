@@ -67,8 +67,51 @@ static int int16(uint16_t bcd)
 
 static void rtc_interrupt_refresh(mqMachine *mach, mqRTC *RTC)
 {
-    (void)mach;
-    (void)RTC;
+    int alarm_match;
+    int alarm_count;
+
+    // handle carry interrupt
+    // - the carry flag (CF) is handled in `mq_rtc_process()`
+    if((RTC->RCR1 & 0x10) && (RTC->RCR1 & 0x80))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, true);
+
+    // handle alarm flag and interrupt
+    // - we need to check all register before raising interrupt and flag
+    // - assume that all R*CNT register are "valid"
+    alarm_count = 0;
+    alarm_match = 0;
+    if(RTC->RSECAR & 0x80) {
+        alarm_match += ((RTC->RSECAR & 0x7f) == RTC->RSECCNT);
+        alarm_count += 1;
+    }
+    if(RTC->RMINAR & 0x80) {
+        alarm_match += ((RTC->RMINAR & 0x7f) == RTC->RMINCNT);
+        alarm_count += 1;
+    }
+    if(RTC->RHRAR & 0x80) {
+        alarm_match += ((RTC->RHRAR & 0x3f) == RTC->RHRCNT);
+        alarm_count += 1;
+    }
+    if(RTC->RWKAR & 0x80) {
+        alarm_match += ((RTC->RSECAR & 0x03) == RTC->RWKCNT);
+        alarm_count += 1;
+    }
+    if(RTC->RDAYAR & 0x80) {
+        alarm_match += ((RTC->RDAYAR & 0x3f) == RTC->RDAYCNT);
+        alarm_count += 1;
+    }
+    if(RTC->RMONAR & 0x80) {
+        alarm_match += ((RTC->RMONAR & 0x1f) == RTC->RMONCNT);
+        alarm_count += 1;
+    }
+    if(RTC->RCR3 & 0x80) {
+        alarm_match += (RTC->RYRAR == RTC->RYRCNT);
+        alarm_count += 1;
+    }
+    if((alarm_count > 0) && (alarm_match == alarm_count))
+        RTC->RCR1 |= 0x01;
+    if((RTC->RCR1 & 0x08) && (RTC->RCR1 & 0x01))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, true);
 }
 
 //==================== REGS ===========//
@@ -258,14 +301,19 @@ static void write_RCR1(struct mqMMIO *io, u32 addr, u32 value, int size)
     mqRTC *RTC = mach->modules[moduleID];
     (void)addr;
     (void)size;
-    (void)value;
 
-    // do not handle flag and interrupt here, move to the common refresh
-    // function
+    u8 old = RTC->RCR1;
     RTC->RCR1 = value & 0x99;
 
-    // force refresh the whole module to handle potential interruption
-    // rtc_core_refresh(RTC);
+    u8 diff = RTC->RCR1 ^ old;
+    if((diff & 0x80) && (old & 0x80))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, false);
+    if((diff & 0x10) && (old & 0x10))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, false);
+    if((diff & 0x08) && (old & 0x08))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, false);
+    if((diff & 0x01) && (old & 0x01))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, false);
 }
 
 static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
@@ -286,9 +334,8 @@ static void write_RCR3(struct mqMMIO *io, u32 addr, u32 value, int size)
     (void)addr;
     (void)size;
 
-    // same as RCR1, handle interruption in the refresh function
     RTC->RCR3 = value & 0x80;
-    // rtc_core_refresh(RTC);
+    rtc_interrupt_refresh(mach, RTC);
 }
 
 //=====================================//
@@ -338,7 +385,7 @@ static void mq_rtc_process(mqMachine *mach, int cyclesElapsed)
         carry = true;
     }
     if(!carry) {
-        rtc_interrupt_refresh(mach, RTC);
+        //rtc_interrupt_refresh(mach, RTC);
         return;
     }
     // seconds (0 to 59)
