@@ -63,6 +63,14 @@ static int int16(uint16_t bcd)
         + 1000 * (bcd >> 12);
 }
 
+// =================== Interrupts =======//
+
+static void rtc_interrupt_refresh(mqMachine *mach, mqRTC *RTC)
+{
+    (void)mach;
+    (void)RTC;
+}
+
 //==================== REGS ===========//
 
 static void write_RSECCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
@@ -285,20 +293,179 @@ static void write_RCR3(struct mqMMIO *io, u32 addr, u32 value, int size)
 
 //=====================================//
 
+// note concerning the hardware behaviour
+//   if a register, for example RMINCNT, have an invalid data like 0x0f,
+//   then the register will be corrected only when the carry occur. In our
+//   case the RMINCNT will remain 0x0f until the RSECCNT carry which in this
+//   case will be converted into 0x10. Some other example:
+//
+//     RMINCNT 0x0f -> RSECCNT Carry -> 0x10
+//     RMINCNT 0x5f -> RSECCNT Carry -> 0x00 + Carry
+//     RMINCNT 0x7f -> RSECCNT Carry -> 0x00 + Carry
+//
+//  another special case is for RDAYCNT behaviour. This register must hold
+//  number between 01 and 31, but if you set 0 and a RMINCNT carry occur,
+//  then the register will set 01. Some other example:
+//
+//    RDAYCNT 0x00 -> RMINCNT Carry -> 0x01
+//    RDAYCNT 0x31 -> RMINCNT Carry -> 0x01
+//    RDAYCNT 0x30 -> RMINCNT Carry -> 0x11 (RMONCNT 0x00 -> invalid)
+//    RDAYCNT 0x28 -> RMINCNT Carry -> 0x01 (RYRCNT 0x1900 -> no leap year)
+//    RDAYCNT 0x28 -> RMINCNT Carry -> 0x29 (RYRCNT 0x2020 -> leap year)
 static void mq_rtc_process(mqMachine *mach, int cyclesElapsed)
 {
     mqRTC *RTC = mach->modules[moduleID];
+    bool carry;
+    u8 month;
+    u8 year;
+    u8 day;
+    u8 ten;
+    u8 sec;
+
     (void)cyclesElapsed;
 
     u64 ticks = mq_timer_update(&RTC->internalTimer);
     if (ticks == 0)
         return;
+    // 64Hz
+    // - add the Carry Flag (CF)
+    // - reset the register
+    carry = false;
     RTC->R64CNT += ticks;
     if(RTC->R64CNT >= 128) {
         RTC->R64CNT = 0;
-        RTC->RSECCNT = bcd8(int8(RTC->RSECCNT) + 1);
         RTC->RCR1 |= 0x80;
+        carry = true;
     }
+    if(!carry) {
+        rtc_interrupt_refresh(mach, RTC);
+        return;
+    }
+    // seconds (0 to 59)
+    // - handle 60+ seconds overflow
+    carry = false;
+    ten = ((RTC->RSECCNT >> 4) & 0x7);
+    sec = ((RTC->RSECCNT >> 0) & 0xf) + 1;
+    if(sec >= 10) {
+        ten += 1;
+        sec = 0;
+    }
+    if(ten >= 6) {
+        ten = 0;
+        sec = 0;
+        carry = true;
+    }
+    RTC->RSECCNT = (ten << 4) | sec;
+    if(!carry) {
+        rtc_interrupt_refresh(mach, RTC);
+        return;
+    }
+    // minute (00 to 59)
+    // - handle 60+ minutes overflow
+    carry = false;
+    ten = ((RTC->RMINCNT >> 4) & 0x7);
+    sec = ((RTC->RMINCNT >> 0) & 0xf) + 1;
+    if(sec >= 10) {
+        ten += 1;
+        sec = 0;
+    }
+    if(ten >= 6) {
+        ten = 0;
+        sec = 0;
+        carry = true;
+    }
+    RTC->RMINCNT = (ten << 4) | sec;
+    if(!carry) {
+        rtc_interrupt_refresh(mach, RTC);
+        return;
+    }
+    // hour (00 to 23)
+    // - handle 24+ hours overflow
+    carry = false;
+    ten = ((RTC->RHRCNT >> 4) & 0x3);
+    sec = ((RTC->RHRCNT >> 0) & 0xf) + 1;
+    if(sec >= 10) {
+        ten += 1;
+        sec = 0;
+    }
+    if(ten >= 3 || (ten == 2 && sec >= 4)) {
+        ten = 0;
+        sec = 0;
+        carry = true;
+    }
+    RTC->RHRCNT = (ten << 4) | sec;
+    if(!carry) {
+        rtc_interrupt_refresh(mach, RTC);
+        return;
+    }
+    // day (01 to 31)
+    // notes
+    // - special handle for February that can be 28 or 29 with leap years
+    // - handle month that have 31 days
+    // - handle month that have 30 days
+    carry = false;
+    ten = ((RTC->RDAYCNT >> 4) & 0x3);
+    sec = ((RTC->RDAYCNT >> 0) & 0xf) + 1;
+    if(sec >= 10) {
+        ten += 1;
+        sec = 1;
+    }
+    day   = ten * 10 + sec;
+    month = bcd8(RTC->RMONCNT);
+    year  = bcd16(RTC->RYRCNT);
+    if(month == 2) {
+        if ((year % 4) == 0 && (year % 100) == 0 && (year % 400) == 0) {
+            carry = (day > 29);
+        } else {
+            carry = (day > 28);
+        }
+    } else if(
+        month == 2 || month == 4 ||
+        month == 6 || month == 9 ||
+        month == 11
+    ) {
+        carry = (day > 30);
+    } else {
+        carry = (day > 31);
+    }
+    if(carry) {
+        ten = 0;
+        sec = 1;
+    }
+    RTC->RDAYCNT = (ten << 4) | sec;
+    if(!carry) {
+        rtc_interrupt_refresh(mach, RTC);
+        return;
+    }
+    // day of week (0 to 6)
+    // - do not reset the RDAYCNT carry since it's also used by RMONCNT
+    // - no carry is performed here
+    sec = (RTC->RWKCNT & 0x03) + 1;
+    if(sec >= 7)
+        sec = 0;
+    RTC->RWKCNT = sec;
+    // month (01 to 12)
+    // - handle 13+ months
+    carry = false;
+    ten = ((RTC->RMONCNT >> 4) & 0x1);
+    sec = ((RTC->RMONCNT >> 0) & 0xf) + 1;
+    if(sec >= 10) {
+        ten += 1;
+        sec = 1;
+    }
+    if (ten >= 2 || (ten == 1 && sec >= 3)) {
+        ten = 0;
+        sec = 1;
+        carry = true;
+    }
+    RTC->RMONCNT = (ten << 4) | sec;
+    // year
+    // - no carry is generated
+    // - no check is performed
+    if(carry)
+        RTC->RYRCNT = bcd16(int16(RTC->RYRCNT) + 1);
+    // refresh interrupt status
+    rtc_interrupt_refresh(mach, RTC);
 }
 
 bool mq_rtc_setup(mqMachine *mach, int initializeKind)
