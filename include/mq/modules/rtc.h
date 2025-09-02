@@ -37,7 +37,10 @@ struct mqRTC {
     u16 RWTCNT;
     u16 RWTCSR;
 
-    mqTimer internalTimer;
+    mqTimer internalTimer_256HZ;
+    u16 R256_cnt;
+    u16 PES_cnt;
+    u16 PES_max;
 };
 
 typedef struct mqRTC mqRTC;

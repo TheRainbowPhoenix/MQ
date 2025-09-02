@@ -12,7 +12,7 @@
 
 //================= MODULES =================//
 
-#define RESOLUTION_NS_128HZ (1000000000ull / 128ull)
+#define RESOLUTION_NS_256HZ (1000000000ull / 256ull)
 
 static int moduleID = -1;
 static int processID = -1;
@@ -457,16 +457,40 @@ static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
     (void)addr;
     (void)size;
 
+    u8 old = RTC->RCR2;
     RTC->RCR2 = (value & 0xf7) | 0x08;
+    u8 diff = RTC->RCR2 ^ old;
+
+    // START bit
     if(RTC->RCR2 & 0x02) {
         RTC->R64CNT = 0x00;
         RTC->RCR2 ^= 0x02;
     }
+    // ADJ bit
     if(RTC->RCR2 & 0x04) {
-        mq_log(MQ_LOG_ERROR, "ADJ REQUEST");
         RTC->RSECCNT = (bcd8(RTC->RSECCNT) < 30) ? 0x00 : 0x7f;
         rtc_refresh_counters(mach, RTC);
         RTC->RCR2 ^= 0x04;
+    }
+    // // PEF bit
+    if((diff & 0x80) && (old & 0x80))
+        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, false);
+    // PES bit
+    // - use a hack to sync our next interruption with the timer
+    if(diff & 0x70) {
+        u16 conf_max[8] = {
+            0xffff,
+            256/256,
+            256/64,
+            256/16,
+            256/4,
+            256/2,
+            256*1,
+            256*2,
+        };
+        u8 select = ((RTC->RCR2 >> 4) & 0x7);
+        RTC->PES_max = conf_max[select];
+        RTC->PES_cnt = RTC->R256_cnt % RTC->PES_max;
     }
 }
 
@@ -486,21 +510,41 @@ static void write_RCR3(struct mqMMIO *io, u32 addr, u32 value, int size)
 static void mq_rtc_process(mqMachine *mach, int cyclesElapsed)
 {
     mqRTC *RTC = mach->modules[moduleID];
+    u64 ticks;
 
     (void)cyclesElapsed;
-
-    u64 ticks = mq_timer_update(&RTC->internalTimer);
+    // get the 256HZ timer ticks
+    ticks = mq_timer_update(&RTC->internalTimer_256HZ);
     if (ticks == 0)
         return;
 
-    // 64Hz
+    // handle periodic interrupt if requested
+    // - if we have missed multiple ticks, try to catch
+    // - todo: work when RCR1.START=0??
+    // - generate the interruption here to avoid potential sync error with
+    //     R*CNT registers. If we invoke `rtc_refresh_interrupts()`, all
+    //     potential alarm and carry interrupt can occur. But, alarm and
+    //     carry must be sync with the R64CNT carry.
+    if(RTC->RCR2 & 0x70) {
+        RTC->PES_cnt += ticks;
+        if(RTC->PES_cnt >= RTC->PES_max) {
+            RTC->RCR2 |= 0x80;
+            RTC->PES_cnt = 0;
+            mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, true);
+        }
+    }
+
+    // 64Hz counter
+    // - convert 256HZ ticks into 128HZ ticks
     // - add the Carry Flag (CF) only if RCR2.START=1
     // - reset the register
     // - handle the RCR2.START bit
     bool carry = false;
-    RTC->R64CNT += ticks;
+    RTC->R256_cnt += ticks;
+    RTC->R64CNT = RTC->R256_cnt / 2;
     if(RTC->R64CNT >= 128) {
         RTC->R64CNT = 0;
+        RTC->R256_cnt = 0;
         carry = true;
     }
     if(!carry)
@@ -532,13 +576,14 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     // Note that the cg device does not reset the peripheral. So, stick
     // with the mono config for now
     (void)initializeKind;
+    RTC->RCR2    = 0x09;
     RTC->RWKCNT  = bcd8(0);
     RTC->RDAYCNT = bcd8(1);
     RTC->RMONCNT = bcd8(11);
     RTC->RYRCNT  = bcd16(2010);
 
-    mq_timer_reset(&RTC->internalTimer, RESOLUTION_NS_128HZ);
-    mq_timer_start(&RTC->internalTimer);
+    mq_timer_reset(&RTC->internalTimer_256HZ, RESOLUTION_NS_256HZ);
+    mq_timer_start(&RTC->internalTimer_256HZ);
     mach->processes[processID] = mq_rtc_process;
 
     bool ok = true;
