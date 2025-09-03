@@ -32,9 +32,9 @@ enum mqInt {
     MQ_INT_Cmod_TUNI3,      // 6a, IPRE & 00f0, IMR2  & 01, 0x900
     MQ_INT_Cmod_TUNI0,      // 71, IPRJ & f000, IMR6  & 08, 0x9e0
     MQ_INT_USB_USI,         // 73, IPRF & 00f0, IMR9  & 02, 0xa20
-    MQ_INT_RTC_ATI,         // 76, IPRK & f000, IMR10 & 04, 0xa80
+    MQ_INT_RTC_ATI,         // 76, IPRK & f000, IMR10 & 01, 0xa80
     MQ_INT_RTC_PRI,         // 77, IPRK & f000, IMR10 & 02, 0xaa0
-    MQ_INT_RTC_CUI,         // 78, IPRK & f000, IMR10 & 01, 0xac0
+    MQ_INT_RTC_CUI,         // 78, IPRK & f000, IMR10 & 04, 0xac0
     MQ_INT_SDC_7a,          // 7a, IPRK & 0f00, IMR10 & 10, 0xb00
     MQ_INT_SDC_7b,          // 7b, IPRK & 0f00, IMR10 & 20, 0xb20
     MQ_INT_DMA_DEI4,        // 7e, IPRF & 0f00, IMR5  & 10, 0xb80
