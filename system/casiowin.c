@@ -268,6 +268,11 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mach->stuck = true;
         return;
 
+    case 0x0039: /* RTC_Reset() */
+        if(mq_casiowin_rtc_reset(mach, cpu->r[4]) < 0)
+            mq_log(MQ_LOG_ERROR, "RTC_Reset(): internal error");
+        return;
+
     case 0x003b: /* RTC_GetTicks() */
         if(mq_casiowin_rtc_getticks(mach, &cpu->r[0]) < 0)
             mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
@@ -478,11 +483,14 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mach->stuck = true;
         return;
 
-    case 0x02c1: { /* RTC_GetTicks() */
+    case 0x02bf: /* RTC_Reset() */
+        if(mq_casiowin_rtc_reset(mach, cpu->r[4]) < 0)
+            mq_log(MQ_LOG_ERROR, "RTC_GetReset(): internal error");
+        return;
+    case 0x02c1: /* RTC_GetTicks() */
         if(mq_casiowin_rtc_getticks(mach, &cpu->r[0]) < 0)
             mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
         return;
-    }
 
     case 0x0921: /* EnableColors() */
         mq_log(MQ_LOG_ERROR, "syscall %921 EnableColor() ignored");

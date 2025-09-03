@@ -135,5 +135,8 @@ void mq_casiowin_mono_RestoreDisp(mqMachine *mach, int id);
 /* RTC_GetTicks() - get RTC ticks */
 int mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret);
 
+/* RTC_Reset() - reset the RTC */
+int mq_casiowin_rtc_reset(mqMachine *mach, u32 mode);
+
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */

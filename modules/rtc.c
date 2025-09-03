@@ -485,7 +485,7 @@ static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
     RTC->RCR2 = (value & 0xf7) | 0x08;
     u8 diff = RTC->RCR2 ^ old;
 
-    // START bit
+    // RESET bit
     if(RTC->RCR2 & 0x02) {
         RTC->R64CNT = 0x00;
         RTC->RCR2 ^= 0x02;
