@@ -12,16 +12,15 @@ addins:
 
   - name: Gravity Duck
     author: PierrotLL
-    status: ingame
-    updated: 2025-08-21
+    status: playable
+    updated: 2025-09-03
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1856-1-gravityduck-pierrotll-jeux-add-ins.html
     remarks:
       - No save
       - Lots of NULL accesses; some are bugs from original program.
-      - IIRC crashes upon death in the later levels.
-      - Syscall-based.
+      - Syscall-based
 
   - name: Duet
     author: Yatis and Lephe
@@ -44,15 +43,25 @@ addins:
     remarks:
       - Playable
 
+  - name: HorlogeSH4
+    author: Lephe
+    status: intro
+    updated: 2025-09-03
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2606-1-horloge-sh4-lephenixnoir-utilitaires-add-ins.html
+    remarks:
+      - frame not displayed entierly
+
   - name: Cube Field
     author: PierrotLL
-    status: ingame
-    updated: 2025-08-21
+    status: playable
+    updated: 2025-09-03
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1906-1-cubefield-pierrotll-jeux-add-ins.html
     remarks:
-      - Way too fast
+      - Perfect
 
   - name: OutRun
     author: SlyvTT
@@ -62,7 +71,7 @@ addins:
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html
     remarks:
-      - Upon first turn, suddenly slows down and background blinks.
+      - seem work?
 
   - name: Demineur winXP
     author: Smashmaster
@@ -294,13 +303,13 @@ addins:
 
   - name: Geometry Dash
     author: Fife86
-    updated: 2025-08-27
-    status: ingame
+    updated: 2025-09-03
+    status: playable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme3115-last-geometry-dash-fife86-jeux-add-ins.html
     remarks:
-      - too fast
+      - Perfect
 
   - name: FlappyBird
     author: Dark storm
@@ -346,36 +355,34 @@ addins:
 
   - name: Evasion
     author: Dodormeur
-    updated: 2025-08-28
+    updated: 2025-09-03
     status: ingame
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2082-last-evasion-surv-dodormeur-jeux-add-ins.html
     remarks:
-      - too fast
+      - missing syscall `%8FE PopupWin`
       - version Graph35+EII display nothing
 
   - name: Gravity Duck
     author: PierrotLL
     updated: 2025-08-28
-    status: ingame
+    status: playable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html
     remarks:
-      - too fast
+      - Perfect
 
   - name: 2048 delux
     author: Kirafi
-    updated: 2025-08-28
-    status: ingame
+    updated: 2025-09-03
+    status: playable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html
     remarks:
-      - too fast
-      - time is way to fast
-      - second party freeze the program (but the emulator steel work)
+      - Perfect
 
   - name: Mipjabok
     author: Louloux
@@ -428,3 +435,13 @@ addins:
     remarks:
       - libprof tests freeze (no crash)
       - missing instruction `macw` in `CPU parallelism`
+
+  - name: Destiny
+    author: Dodormeur
+    updated: 2025-09-03
+    status: playable
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2684-last-destiny-dodormeur-jeux-add-ins.html
+    remarks:
+      - not 100% tested
