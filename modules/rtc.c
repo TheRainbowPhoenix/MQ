@@ -10,7 +10,7 @@
 #include <mq/mq.h>
 #include <stdlib.h>
 
-//================= MODULES =================//
+//================================= MQ ======================================//
 
 #define RESOLUTION_NS_256HZ (1000000000ull / 256ull)
 
@@ -32,13 +32,7 @@ static void mq_rtc_cleanup(mqMachine *mach)
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_rtc_cleanup)
 
-
-mqRTC *mq_rtc_get(mqMachine *mach)
-{
-    return mach->modules ? mach->modules[moduleID] : NULL;
-}
-
-//===================== UTILS =============//
+//================================= UTILS ===================================//
 
 /* bcd8(), bcd16(): Convert integer to BCD (from gint) */
 static uint8_t bcd8(int integer)
@@ -52,18 +46,7 @@ static uint16_t bcd16(int integer)
     return (bcd8(integer / 100) << 8) | bcd8(integer % 100);
 }
 
-/* int8(), int16(): Convert BCD to integer */
-static int int8(uint8_t bcd)
-{
-    return (bcd & 0x0f) + 10 * (bcd >> 4);
-}
-static int int16(uint16_t bcd)
-{
-    return (bcd & 0xf) + 10 * ((bcd >> 4) & 0xf) + 100 * ((bcd >> 8) & 0xf)
-        + 1000 * (bcd >> 12);
-}
-
-// =================== Interrupts =======//
+//================================ CORE =====================================//
 
 static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
 {
@@ -76,8 +59,8 @@ static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
         mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, true);
 
     // handle alarm flag and interrupt
-    // - we need to check all register before raising interrupt and flag
-    // - assume that all R*CNT register are "valid"
+    // - we need to check all registers before raising interrupt and flag
+    // - assume that all R*CNT registers are "valid"
     alarm_count = 0;
     alarm_match = 0;
     if(RTC->RSECAR & 0x80) {
@@ -114,23 +97,23 @@ static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
         mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, true);
 }
 
-// note concerning the hardware behaviour
-//   if a register, for example RMINCNT, have an invalid data like 0x0f,
-//   then the register will be corrected only when the carry occur. In our
-//   case the RMINCNT will remain 0x0f until the RSECCNT carry which in this
-//   case will be converted into 0x10. Some other example:
+// note concerning the hardware behaviour:
+//   if a register, for example RMINCNT, has an invalid data like 0x0f,
+//   then the register will be corrected only when the carry occurs. Here,
+//   the RMINCNT will remain 0x0f until the RSECCNT carry which in this
+//   case will be converted into 0x10. Some other examples:
 //
 //     RMINCNT 0x0f -> RSECCNT Carry -> 0x10
 //     RMINCNT 0x5f -> RSECCNT Carry -> 0x00 + Carry
 //     RMINCNT 0x7f -> RSECCNT Carry -> 0x00 + Carry
 //
-//  another special case is for RDAYCNT behaviour. This register must hold
-//  number between 01 and 31, but if you set 0 and a RMINCNT carry occur,
-//  then the register will set 01. Some other example:
+//   another special case is for RDAYCNT behaviour. This register must hold
+//   a number between 01 and 31, but, if you set it as 0 and a RMINCNT carry
+//   occurs, then the register will be set as 01. Some other examples:
 //
 //    RDAYCNT 0x00 -> RMINCNT Carry -> 0x01
-//    RDAYCNT 0x31 -> RMINCNT Carry -> 0x01
-//    RDAYCNT 0x30 -> RMINCNT Carry -> 0x11 (RMONCNT 0x00 -> invalid)
+//    RDAYCNT 0x31 -> RMINCNT Carry -> 0x01 (RMONCNT 0x01 (January))
+//    RDAYCNT 0x30 -> RMINCNT Carry -> 0x31 (RMONCNT 0x00 -> invalid)
 //    RDAYCNT 0x28 -> RMINCNT Carry -> 0x01 (RYRCNT 0x1900 -> no leap year)
 //    RDAYCNT 0x28 -> RMINCNT Carry -> 0x29 (RYRCNT 0x2020 -> leap year)
 static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
@@ -142,8 +125,8 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
     u8 p1;
     u8 p2;
 
-    // seconds (0 to 59)
-    // - handle 60+ seconds overflow
+    // second (0 to 59)
+    // - handle 60+ second overflow
     carry = false;
     p1 = ((RTC->RSECCNT >> 4) & 0x7);
     p2 = ((RTC->RSECCNT >> 0) & 0xf);
@@ -162,7 +145,7 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
         return;
     }
     // minute (00 to 59)
-    // - handle 60+ minutes overflow
+    // - handle 60+ minute overflow
     carry = false;
     p1 = ((RTC->RMINCNT >> 4) & 0x7);
     p2 = ((RTC->RMINCNT >> 0) & 0xf) + 1;
@@ -181,7 +164,7 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
         return;
     }
     // hour (00 to 23)
-    // - handle 24+ hours overflow
+    // - handle 24+ hour overflow
     carry = false;
     p1 = ((RTC->RHRCNT >> 4) & 0x3);
     p2 = ((RTC->RHRCNT >> 0) & 0xf) + 1;
@@ -200,10 +183,9 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
         return;
     }
     // day (01 to 31)
-    // notes
     // - special handle for February that can be 28 or 29 with leap years
-    // - handle month that have 31 days
-    // - handle month that have 30 days
+    // - handle months that have 31 days
+    // - handle months that have 30 days
     carry = false;
     p1 = ((RTC->RDAYCNT >> 4) & 0x3);
     p2 = ((RTC->RDAYCNT >> 0) & 0xf) + 1;
@@ -239,14 +221,14 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
         return;
     }
     // day of week (0 to 6)
-    // - do not reset the RDAYCNT carry since it's also used by RMONCNT
+    // - do not reset the RDAYCNT carry since it is also used by RMONCNT
     // - no carry is performed here
     p2 = (RTC->RWKCNT & 0x03) + 1;
     if(p2 >= 7)
         p2 = 0;
     RTC->RWKCNT = p2;
     // month (01 to 12)
-    // - handle 13+ months
+    // - handle 13+ month overflow
     carry = false;
     p1 = ((RTC->RMONCNT >> 4) & 0x1);
     p2 = ((RTC->RMONCNT >> 0) & 0xf) + 1;
@@ -269,7 +251,59 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
     rtc_refresh_interrupts(mach, RTC);
 }
 
-//==================== REGS ===========//
+static void rtc_process(mqMachine *mach, int cyclesElapsed)
+{
+    mqRTC *RTC = mach->modules[moduleID];
+    u64 ticks;
+
+    (void)cyclesElapsed;
+
+    // get the 256Hz timer ticks
+    ticks = mq_timer_update(&RTC->internalTimer_256HZ);
+    if (ticks == 0)
+        return;
+
+    // handle periodic interrupt if requested
+    // - work even when RCR1.START=0
+    // - generate the interruption here to avoid potential sync errors with
+    //     R*CNT registers. If we invoke `rtc_refresh_interrupts()` now, all
+    //     potential alarm and carry interrupts can occur. But, alarm and
+    //     carry interrupts must be synced with the R64CNT carry.
+    if(RTC->RCR2 & 0x70) {
+        RTC->PES_cnt += ticks;
+        if(RTC->PES_cnt >= RTC->PES_max) {
+            RTC->RCR2 |= 0x80;
+            RTC->PES_cnt = 0;
+            mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, true);
+        }
+    }
+
+    // 64Hz counter
+    // - convert 256Hz ticks into 128Hz ticks
+    // - add the Carry Flag (CF) only if RCR2.START=1
+    // - handle the RCR2.START bit
+    bool carry = false;
+    RTC->R256_cnt += ticks;
+    RTC->R64CNT = RTC->R256_cnt / 2;
+    if(RTC->R64CNT >= 128) {
+        RTC->R64CNT = 0;
+        RTC->R256_cnt = 0;
+        carry = true;
+    }
+    if(!carry)
+        return;
+    if((RTC->RCR2 & 0x01) == 0)
+        return;
+    RTC->RCR1 |= 0x80;
+
+    // manually add the RSECCNT carry and request a complete refresh
+    u8 p1 = ((RTC->RSECCNT >> 4) & 0x7);
+    u8 p2 = ((RTC->RSECCNT >> 0) & 0xf) + 1;
+    RTC->RSECCNT = (p1 << 4) | p2;
+    rtc_refresh_counters(mach, RTC);
+}
+
+//================================ REGS =====================================//
 
 static void write_RSECCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
 {
@@ -280,10 +314,13 @@ static void write_RSECCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
 
     // on the real hardware, no verification is performed on the value.
     // You can write 0x7f and the register will not perform anything until
-    // a carry occur which will correct the value as a basic overflow:
+    // a R64CNT carry occurs which will correct the value with a basic
+    // overflow:
+    //
     //   RSECCNT 0x0f -> R64CNT Carry -> 0x10
     //   RSECCNT 0x7f -> R64CNT Carry -> 0x00 (and RMINCNT+1)
-    // this is valid for all other R*CNT registers
+    //
+    // this note is also valid for all other R*CNT registers
     RTC->RSECCNT = value & 0x7f;
 }
 
@@ -356,9 +393,10 @@ static void write_RSECAR(struct mqMMIO *io, u32 addr, u32 value, int size)
 
     // no check is performed on data validity on the real hardware even
     // when the ENB bit is set. Note that you can trigger the Alarm Flag
-    // (AF) with non-valid data like 0x7f if the RSECCNT also have 0x7f
-    // (which is possible only between carry update (two second for
-    // RSECCNT))
+    // (AF) with non-valid data like 0x7f if the RSECCNT also has 0x7f
+    // (which is possible only between two R64CNT carry updates (two seconds
+    // for RSECCNT))
+    // This note is also valid for all other R*AR registers
     RTC->RSECAR = value;
 }
 
@@ -434,11 +472,11 @@ static void write_RCR1(struct mqMMIO *io, u32 addr, u32 value, int size)
 
     // handle interruption clear
     // notes
-    //   if you enable alarm interrupt which must match the configuration
-    //   (e.g RSECAR == RSECCNT), the interrupt will never occurs. This is
-    //   because, on the real hardware, the RTC check alarm each time a
-    //   R64CNT carry appear. This is why we do not performs interruption
-    //   refresh here.
+    //   if you enable alarm interrupt which must match the current
+    //   configuration (e.g RSECAR == RSECCNT), the interrupt will never
+    //   occur. This is because, on the real hardware, the RTC alarm is
+    //   checked each time a R64CNT carry appears. This is why we do not
+    //   perform interruption refresh here.
     u8 diff = RTC->RCR1 ^ old;
     if((diff & 0x80) && (old & 0x80))
         mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, false);
@@ -472,11 +510,16 @@ static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
         rtc_refresh_counters(mach, RTC);
         RTC->RCR2 ^= 0x04;
     }
-    // // PEF bit
+    // PEF bit
     if((diff & 0x80) && (old & 0x80))
         mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, false);
     // PES bit
-    // - use a hack to sync our next interruption with the timer
+    // Note that the Periodic interrupt is synced to the R64CNT timing. To
+    // replicate this behaviour, we use an internal MQ timer that runs at
+    // 256Hz which is the lowest frequency at which a request can be
+    // performed and it is used to sync the R64CNT register (see
+    // `rtc_process()`). Then we simply adjust the current 256Hz timer info
+    // to our request and it does the trick
     if(diff & 0x70) {
         u16 conf_max[8] = {
             0xffff,
@@ -505,60 +548,7 @@ static void write_RCR3(struct mqMMIO *io, u32 addr, u32 value, int size)
     rtc_refresh_interrupts(mach, RTC);
 }
 
-//=====================================//
-
-static void mq_rtc_process(mqMachine *mach, int cyclesElapsed)
-{
-    mqRTC *RTC = mach->modules[moduleID];
-    u64 ticks;
-
-    (void)cyclesElapsed;
-    // get the 256HZ timer ticks
-    ticks = mq_timer_update(&RTC->internalTimer_256HZ);
-    if (ticks == 0)
-        return;
-
-    // handle periodic interrupt if requested
-    // - if we have missed multiple ticks, try to catch
-    // - todo: work when RCR1.START=0??
-    // - generate the interruption here to avoid potential sync error with
-    //     R*CNT registers. If we invoke `rtc_refresh_interrupts()`, all
-    //     potential alarm and carry interrupt can occur. But, alarm and
-    //     carry must be sync with the R64CNT carry.
-    if(RTC->RCR2 & 0x70) {
-        RTC->PES_cnt += ticks;
-        if(RTC->PES_cnt >= RTC->PES_max) {
-            RTC->RCR2 |= 0x80;
-            RTC->PES_cnt = 0;
-            mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, true);
-        }
-    }
-
-    // 64Hz counter
-    // - convert 256HZ ticks into 128HZ ticks
-    // - add the Carry Flag (CF) only if RCR2.START=1
-    // - reset the register
-    // - handle the RCR2.START bit
-    bool carry = false;
-    RTC->R256_cnt += ticks;
-    RTC->R64CNT = RTC->R256_cnt / 2;
-    if(RTC->R64CNT >= 128) {
-        RTC->R64CNT = 0;
-        RTC->R256_cnt = 0;
-        carry = true;
-    }
-    if(!carry)
-        return;
-    if((RTC->RCR2 & 0x01) == 0)
-        return;
-    RTC->RCR1 |= 0x80;
-
-    // manually add the RSECCNT carry and request a complet refresh
-    u8 p1 = ((RTC->RSECCNT >> 4) & 0x7);
-    u8 p2 = ((RTC->RSECCNT >> 0) & 0xf) + 1;
-    RTC->RSECCNT = (p1 << 4) | p2;
-    rtc_refresh_counters(mach, RTC);
-}
+//=========================== MODULE ========================================//
 
 bool mq_rtc_setup(mqMachine *mach, int initializeKind)
 {
@@ -571,8 +561,8 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     if(!RTC)
         return false;
 
-    // initialize with default value found when reset the device on fx
-    // device which set the date to Sunday, November 01 2010 at 00:00:00.
+    // initialize with default value found when reseting the device on fx
+    // device which sets the date to Sunday, November 01 2010 at 00:00:00.
     // Note that the cg device does not reset the peripheral. So, stick
     // with the mono config for now
     (void)initializeKind;
@@ -666,4 +656,9 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     else
         free(RTC);
     return ok;
+}
+
+mqRTC *mq_rtc_get(mqMachine *mach)
+{
+    return mach->modules ? mach->modules[moduleID] : NULL;
 }
