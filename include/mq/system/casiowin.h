@@ -133,13 +133,13 @@ void mq_casiowin_mono_RestoreDisp(mqMachine *mach, int id);
 //=== RTC functions =========================================================//
 
 /* RTC_GetTicks() - get RTC ticks */
-int mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret);
+bool mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret);
 
 /* RTC_Reset() - reset the RTC */
-int mq_casiowin_rtc_reset(mqMachine *mach, u32 mode);
+bool mq_casiowin_rtc_reset(mqMachine *mach, u32 mode);
 
 /* RTC_GetTime() - get time from RTC */
-int mq_casiowin_rtc_gettime(
+bool mq_casiowin_rtc_gettime(
     mqMachine *mach,
     u32 hour,
     u32 minutes,

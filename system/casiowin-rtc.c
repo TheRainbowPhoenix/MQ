@@ -7,33 +7,35 @@
 #include <mq/memory.h>
 #include <mq/modules/rtc.h>
 
-int mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret)
+bool mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret)
 {
     mqRTC *RTC = mq_rtc_get(mach);
-    if (RTC == NULL)
-        return -1;
+    if(!RTC)
+        return false;
+
     *ret  = 0;
     *ret += mq_rtc_int8(RTC->RMINCNT) * 0x1e00;
     *ret += mq_rtc_int8(RTC->RSECCNT) * 0x80;
     *ret += mq_rtc_int8(RTC->RHRCNT)  * 0x70800;
-    *ret += RTC->R64CNT;
-    return 0;
+    *ret += mq_rtc_getR64CNT(mach);
+    return true;
 }
 
-int mq_casiowin_rtc_reset(mqMachine *mach, u32 mode)
+bool mq_casiowin_rtc_reset(mqMachine *mach, u32 mode)
 {
     mqRTC *RTC = mq_rtc_get(mach);
-    if (RTC == NULL)
-        return -1;
+    if(!RTC)
+        return false;
 
     // [hack] Casio first request a reset of the RTC, but since we are in a
     // special case on which we cannot continue the emulation to wait that
     // the bit is handled, simulate the behaviour here.
     //
     // TODO: find a better way to handle register interaction outside emulation
-    // TODO: RTC->RCR2 |= 0x0a;
-    RTC->R64CNT = 0x00;
-    RTC->R256_cnt = 0;
+
+    /* OS does RTC->RCR2 |= 0x0a; call the equivalent API function directly. */
+    mq_rtc_resetDividerCircuit(mach);
+
     if(mode != 0) {
         RTC->RSECCNT = 0;
         RTC->RMINCNT = 0;
@@ -50,11 +52,11 @@ int mq_casiowin_rtc_reset(mqMachine *mach, u32 mode)
         RTC->RMONAR  = 0;
         RTC->RYRAR   = 0;
     }
-    RTC->RCR2 = (RTC->RCR2 & 0xfd) | 0x09;
-    return 0;
+    RTC->RCR2 |= 0x09;
+    return true;
 }
 
-int mq_casiowin_rtc_gettime(
+bool mq_casiowin_rtc_gettime(
     mqMachine *mach,
     u32 hour,
     u32 minutes,
@@ -62,11 +64,13 @@ int mq_casiowin_rtc_gettime(
     u32 millisecond
 ) {
     mqRTC *RTC = mq_rtc_get(mach);
-    if (RTC == NULL)
-        return -1;
-    mq_memory_write(mach, mach->memory, millisecond, 4, RTC->R64CNT * 7);
+    if(!RTC)
+        return false;
+
+    mq_memory_write(mach, mach->memory, millisecond, 4,
+        mq_rtc_getR64CNT(mach) * 7);
     mq_memory_write(mach, mach->memory, second, 4, RTC->RSECCNT);
     mq_memory_write(mach, mach->memory, minutes, 4, RTC->RMINCNT);
     mq_memory_write(mach, mach->memory, hour, 4, RTC->RHRCNT);
-    return 0;
+    return true;
 }

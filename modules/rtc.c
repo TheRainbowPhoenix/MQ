@@ -10,8 +10,6 @@
 #include <mq/mq.h>
 #include <stdlib.h>
 
-//=== MQ ====================================================================//
-
 #define RESOLUTION_NS_256HZ (1000000000ull / 256ull)
 
 static int moduleID = -1;
@@ -32,55 +30,91 @@ static void mq_rtc_cleanup(mqMachine *mach)
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_rtc_cleanup)
 
-//=== CORE ==================================================================//
+//=== Core ===================================================================//
 
-static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
+mqRTC *mq_rtc_get(mqMachine *mach)
 {
-    int alarm_match;
-    int alarm_count;
+    return mach->modules ? mach->modules[moduleID] : NULL;
+}
 
-    // handle carry interrupt
-    // - the carry flag (CF) is handled in `rtc_process()`
-    if((RTC->RCR1 & 0x10) && (RTC->RCR1 & 0x80))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, true);
+void mq_rtc_resetDividerCircuit(mqMachine *mach)
+{
+    mqRTC *RTC = mach->modules[moduleID];
+    RTC->R256_cnt = 0;
+}
 
-    // handle alarm flag and interrupt
-    // - we need to check all registers before raising interrupt and flag
-    // - assume that all R*CNT registers are "valid"
-    alarm_count = 0;
-    alarm_match = 0;
-    if(RTC->RSECAR & 0x80) {
-        alarm_match += ((RTC->RSECAR & 0x7f) == RTC->RSECCNT);
-        alarm_count += 1;
-    }
-    if(RTC->RMINAR & 0x80) {
-        alarm_match += ((RTC->RMINAR & 0x7f) == RTC->RMINCNT);
-        alarm_count += 1;
-    }
-    if(RTC->RHRAR & 0x80) {
-        alarm_match += ((RTC->RHRAR & 0x3f) == RTC->RHRCNT);
-        alarm_count += 1;
-    }
-    if(RTC->RWKAR & 0x80) {
-        alarm_match += ((RTC->RSECAR & 0x03) == RTC->RWKCNT);
-        alarm_count += 1;
-    }
-    if(RTC->RDAYAR & 0x80) {
-        alarm_match += ((RTC->RDAYAR & 0x3f) == RTC->RDAYCNT);
-        alarm_count += 1;
-    }
-    if(RTC->RMONAR & 0x80) {
-        alarm_match += ((RTC->RMONAR & 0x1f) == RTC->RMONCNT);
-        alarm_count += 1;
-    }
-    if(RTC->RCR3 & 0x80) {
-        alarm_match += (RTC->RYRAR == RTC->RYRCNT);
-        alarm_count += 1;
-    }
-    if((alarm_count > 0) && (alarm_match == alarm_count))
+u8 mq_rtc_getR64CNT(mqMachine *mach)
+{
+    mqRTC *RTC = mach->modules[moduleID];
+    return RTC->R256_cnt / 2;
+}
+
+static void updateAlarmFlag(mqRTC *RTC)
+{
+    bool matches = true;
+
+    /* Each counter XCNT is included in the test if XAR & 0x80 is set. Since
+       XCNT & 0x80 is always 0, XAR ^ XCNT has the 0x80 bit if the test is
+       enabled, and the difference in the low bits. The test fails if it's
+       enabled and has non-zero low bits, making it > 0x80. */
+    matches &= ((RTC->RSECAR ^ RTC->RSECCNT) <= 0x80);
+    matches &= ((RTC->RMINAR ^ RTC->RMINCNT) <= 0x80);
+    matches &= ((RTC->RHRAR  ^ RTC->RHRCNT)  <= 0x80);
+    matches &= ((RTC->RWKAR  ^ RTC->RWKCNT)  <= 0x80);
+    matches &= ((RTC->RDAYAR ^ RTC->RDAYCNT) <= 0x80);
+    matches &= ((RTC->RMONAR ^ RTC->RMONCNT) <= 0x80);
+    matches &= ((RTC->RCR3 & 0x80) == 0 || (RTC->RYRAR == RTC->RYRCNT));
+
+    if(matches)
         RTC->RCR1 |= 0x01;
-    if((RTC->RCR1 & 0x08) && (RTC->RCR1 & 0x01))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, true);
+}
+
+static void notifyINTC(mqMachine *mach, mqRTC *RTC)
+{
+    int alarmSignal = (RTC->RCR1 & 0x08) && (RTC->RCR1 & 0x01);
+    mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, alarmSignal);
+
+    int periodicSignal = (RTC->RCR2 & 0x80) != 0;
+    mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, periodicSignal);
+
+    int carrySignal = (RTC->RCR1 & 0x10) && (RTC->RCR1 & 0x80);
+    mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, carrySignal);
+}
+
+static bool modifyBCD2(u8 *value, int increment, int min, int max)
+{
+    u8 inputValue = *value + increment;
+    int tens = (inputValue >> 4) & 0xf;
+    int units = (inputValue & 0xf);
+
+    int units_max = (max <= 9) ? max : 10;
+
+    if(units >= units_max) {
+        units = 0;
+        tens++;
+    }
+
+    if(10 * tens + units >= max) {
+        *value = mq_rtc_bcd8(min);
+        return true;
+    }
+
+    *value = (tens << 4) | units;
+    return false;
+}
+
+static int daysInMonth(int year, int month)
+{
+    bool isLeapYear =
+        (year % 400) == 0 ||
+        ((year % 4) == 0 && (year % 100) != 0);
+
+    if(month == 2)
+        return 28 + isLeapYear;
+    else if(month == 4 || month == 6 || month == 9 || month == 11)
+        return 30;
+    else
+        return 31;
 }
 
 // note concerning the hardware behaviour:
@@ -102,202 +136,93 @@ static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
 //    RDAYCNT 0x30 -> RMINCNT Carry -> 0x31 (RMONCNT 0x00 -> invalid)
 //    RDAYCNT 0x28 -> RMINCNT Carry -> 0x01 (RYRCNT 0x1900 -> no leap year)
 //    RDAYCNT 0x28 -> RMINCNT Carry -> 0x29 (RYRCNT 0x2020 -> leap year)
-static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
+static void rtc_refresh_counters(
+    mqMachine *mach, mqRTC *RTC, int secondsIncrement)
 {
-    bool carry;
-    u8 year;
-    u8 day;
-    u8 month;
-    u8 p1;
-    u8 p2;
+    int maxDays =
+        daysInMonth(mq_rtc_int16(RTC->RYRCNT), mq_rtc_int8(RTC->RMONCNT));
 
     // second (0 to 59)
-    // - handle 60+ second overflow
-    carry = false;
-    p1 = ((RTC->RSECCNT >> 4) & 0x7);
-    p2 = ((RTC->RSECCNT >> 0) & 0xf);
-    if(p2 >= 10) {
-        p1 += 1;
-        p2 = 0;
-    }
-    if(p1 >= 6) {
-        p1 = 0;
-        p2 = 0;
-        carry = true;
-    }
-    RTC->RSECCNT = (p1 << 4) | p2;
-    if(!carry) {
-        rtc_refresh_interrupts(mach, RTC);
-        return;
-    }
+    if(!modifyBCD2(&RTC->RSECCNT, secondsIncrement, 0, 60))
+        goto end;
+
     // minute (00 to 59)
-    // - handle 60+ minute overflow
-    carry = false;
-    p1 = ((RTC->RMINCNT >> 4) & 0x7);
-    p2 = ((RTC->RMINCNT >> 0) & 0xf) + 1;
-    if(p2 >= 10) {
-        p1 += 1;
-        p2 = 0;
-    }
-    if(p1 >= 6) {
-        p1 = 0;
-        p2 = 0;
-        carry = true;
-    }
-    RTC->RMINCNT = (p1 << 4) | p2;
-    if(!carry) {
-        rtc_refresh_interrupts(mach, RTC);
-        return;
-    }
+    if(!modifyBCD2(&RTC->RMINCNT, +1, 0, 60))
+        goto end;
+
     // hour (00 to 23)
-    // - handle 24+ hour overflow
-    carry = false;
-    p1 = ((RTC->RHRCNT >> 4) & 0x3);
-    p2 = ((RTC->RHRCNT >> 0) & 0xf) + 1;
-    if(p2 >= 10) {
-        p1 += 1;
-        p2 = 0;
-    }
-    if(p1 >= 3 || (p1 == 2 && p2 >= 4)) {
-        p1 = 0;
-        p2 = 0;
-        carry = true;
-    }
-    RTC->RHRCNT = (p1 << 4) | p2;
-    if(!carry) {
-        rtc_refresh_interrupts(mach, RTC);
-        return;
-    }
+    if(!modifyBCD2(&RTC->RHRCNT, +1, 0, 24))
+        goto end;
+
     // day (01 to 31)
-    // - special handle for February that can be 28 or 29 with leap years
-    // - handle months that have 31 days
-    // - handle months that have 30 days
-    carry = false;
-    p1 = ((RTC->RDAYCNT >> 4) & 0x3);
-    p2 = ((RTC->RDAYCNT >> 0) & 0xf) + 1;
-    if(p2 >= 10) {
-        p1 += 1;
-        p2 = 1;
-    }
-    day   = p1 * 10 + p2;
-    month = mq_rtc_bcd8(RTC->RMONCNT);
-    year  = mq_rtc_bcd16(RTC->RYRCNT);
-    if(month == 2) {
-        if ((year % 4) == 0 && (year % 100) == 0 && (year % 400) == 0) {
-            carry = (day > 29);
-        } else {
-            carry = (day > 28);
-        }
-    } else if(
-        month == 2 || month == 4 ||
-        month == 6 || month == 9 ||
-        month == 11
-    ) {
-        carry = (day > 30);
-    } else {
-        carry = (day > 31);
-    }
-    if(carry) {
-        p1 = 0;
-        p2 = 1;
-    }
-    RTC->RDAYCNT = (p1 << 4) | p2;
-    if(!carry) {
-        rtc_refresh_interrupts(mach, RTC);
-        return;
-    }
+    if(!modifyBCD2(&RTC->RDAYCNT, +1, 1, maxDays + 1))
+        goto end;
+
     // day of week (0 to 6)
-    // - do not reset the RDAYCNT carry since it is also used by RMONCNT
-    // - no carry is performed here
-    p2 = (RTC->RWKCNT & 0x03) + 1;
-    if(p2 >= 7)
-        p2 = 0;
-    RTC->RWKCNT = p2;
+    // - carry is ignored, we propagate it only from DAY to MON
+    modifyBCD2(&RTC->RWKCNT, +1, 0, 7);
+
     // month (01 to 12)
-    // - handle 13+ month overflow
-    carry = false;
-    p1 = ((RTC->RMONCNT >> 4) & 0x1);
-    p2 = ((RTC->RMONCNT >> 0) & 0xf) + 1;
-    if(p2 >= 10) {
-        p1 += 1;
-        p2 = 1;
-    }
-    if (p1 >= 2 || (p1 == 1 && p2 >= 3)) {
-        p1 = 0;
-        p2 = 1;
-        carry = true;
-    }
-    RTC->RMONCNT = (p1 << 4) | p2;
+    if(!modifyBCD2(&RTC->RMONCNT, +1, 1, 13))
+        goto end;
+
     // year
     // - no carry is generated
     // - no check is performed
-    if(carry)
-        RTC->RYRCNT = mq_rtc_bcd16(mq_rtc_int16(RTC->RYRCNT) + 1);
+    RTC->RYRCNT = mq_rtc_bcd16(mq_rtc_int16(RTC->RYRCNT) + 1);
+
+end:
     // refresh interrupt status
-    rtc_refresh_interrupts(mach, RTC);
+    updateAlarmFlag(RTC);
+    notifyINTC(mach, RTC);
 }
 
 static void rtc_process(mqMachine *mach, int cyclesElapsed)
 {
     mqRTC *RTC = mach->modules[moduleID];
-    u64 ticks;
-
     (void)cyclesElapsed;
 
     // get the 256Hz timer ticks
-    ticks = mq_timer_update(&RTC->internalTimer_256HZ);
-    if (ticks == 0)
+    u64 ticks = mq_timer_update(&RTC->internalTimer_256HZ);
+    if(ticks == 0)
         return;
+
+    int oldPeriodCount = RTC->R256_cnt / RTC->PES_period;
+    RTC->R256_cnt += ticks;
+    int newPeriodCount = RTC->R256_cnt / RTC->PES_period;
 
     // handle periodic interrupt if requested
     // - work even when RCR1.START=0
-    // - generate the interruption here to avoid potential sync errors with
-    //     R*CNT registers. If we invoke `rtc_refresh_interrupts()` now, all
-    //     potential alarm and carry interrupts can occur. But, alarm and
-    //     carry interrupts must be synced with the R64CNT carry.
-    if(RTC->RCR2 & 0x70) {
-        RTC->PES_cnt += ticks;
-        if(RTC->PES_cnt >= RTC->PES_max) {
-            RTC->RCR2 |= 0x80;
-            RTC->PES_cnt = 0;
-            mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, true);
+    if(RTC->RCR2 & 0x70 && newPeriodCount > oldPeriodCount) {
+        if(newPeriodCount >= oldPeriodCount + 2) {
+            mq_log(MQ_LOG_WARNING, "RTC periodic triggerd x%d!",
+                newPeriodCount - oldPeriodCount);
         }
+        RTC->RCR2 |= 0x80;
     }
 
-    // 64Hz counter
-    // - convert 256Hz ticks into 128Hz ticks
-    // - add the Carry Flag (CF) only if RCR2.START=1
-    // - handle the RCR2.START bit
-    bool carry = false;
-    RTC->R256_cnt += ticks;
-    RTC->R64CNT = RTC->R256_cnt / 2;
-    if(RTC->R64CNT >= 128) {
-        RTC->R64CNT = 0;
-        RTC->R256_cnt = 0;
-        carry = true;
-    }
-    if(!carry)
-        return;
-    if((RTC->RCR2 & 0x01) == 0)
-        return;
-    RTC->RCR1 |= 0x80;
+    // carry from the internal 256 Hz counter propagates to RSECCNT
+    // - only if RCR2.START is enabled
+    bool carry = (RTC->R256_cnt >= 256);
+    RTC->R256_cnt %= 256;
 
-    // manually add the RSECCNT carry and request a complete refresh
-    u8 p1 = ((RTC->RSECCNT >> 4) & 0x7);
-    u8 p2 = ((RTC->RSECCNT >> 0) & 0xf) + 1;
-    RTC->RSECCNT = (p1 << 4) | p2;
-    rtc_refresh_counters(mach, RTC);
+    if(carry && (RTC->RCR2 & 0x01) /* START */) {
+        RTC->RCR1 |= 0x80;
+        rtc_refresh_counters(mach, RTC, +1);
+    }
+
+    notifyINTC(mach, RTC);
 }
 
-//=== REGS ==================================================================//
+//=== Registers ==============================================================//
 
-static void write_RSECCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static u32 read_R64CNT(mqMachine *mach)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
+    return mq_rtc_getR64CNT(mach);
+}
 
+static void write_RSECCNT(mqRTC *RTC, u32 value)
+{
     // on the real hardware, no verification is performed on the value.
     // You can write 0x7f and the register will not perform anything until
     // a R64CNT carry occurs which will correct the value with a basic
@@ -310,73 +235,38 @@ static void write_RSECCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
     RTC->RSECCNT = value & 0x7f;
 }
 
-static void write_RMINCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RMINCNT(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RMINCNT = value & 0x7f;
 }
 
-static void write_RHRCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RHRCNT(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RHRCNT = value & 0x3f;
 }
 
-static void write_RWKCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RWKCNT(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RWKCNT = value & 0x07;
 }
 
-static void write_RDAYCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RDAYCNT(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RDAYCNT = value & 0x3f;
 }
 
-static void write_RMONCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RMONCNT(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RMONCNT = value & 0x1f;
 }
 
-static void write_RYRCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RYRCNT(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RYRCNT = value;
 }
 
-static void write_RSECAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RSECAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     // no check is performed on data validity on the real hardware even
     // when the ENB bit is set. Note that you can trigger the Alarm Flag
     // (AF) with non-valid data like 0x7f if the RSECCNT also has 0x7f
@@ -386,120 +276,65 @@ static void write_RSECAR(struct mqMMIO *io, u32 addr, u32 value, int size)
     RTC->RSECAR = value;
 }
 
-static void write_RMINAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RMINAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RMINAR = value;
 }
 
-static void write_RHRAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RHRAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RHRAR = value & 0xbf;
 }
 
-static void write_RWKAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RWKAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RWKAR = value & 0x87;
 }
 
-static void write_RDAYAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RDAYAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RDAYAR = value & 0xbf;
 }
 
-static void write_RMONAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RMONAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RMONAR = value & 0x9f;
 }
 
-static void write_RYRAR(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RYRAR(mqRTC *RTC, u32 value)
 {
-    mqMachine *mach = io->userdata;
-    mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RYRAR = value;
 }
 
-static void write_RCR1(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RCR1(mqMachine *mach, u32 value)
 {
-    mqMachine *mach = io->userdata;
     mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
-    u8 old = RTC->RCR1;
     RTC->RCR1 = value & 0x99;
-
-    // handle interruption clear
-    // notes
-    //   if you enable alarm interrupt which must match the current
-    //   configuration (e.g RSECAR == RSECCNT), the interrupt will never
-    //   occur. This is because, on the real hardware, the RTC alarm is
-    //   checked each time a R64CNT carry appears. This is why we do not
-    //   perform interruption refresh here.
-    u8 diff = RTC->RCR1 ^ old;
-    if((diff & 0x80) && (old & 0x80))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, false);
-    if((diff & 0x10) && (old & 0x10))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, false);
-    if((diff & 0x08) && (old & 0x08))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, false);
-    if((diff & 0x01) && (old & 0x01))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_ATI, false);
+    notifyINTC(mach, RTC);
 }
 
-static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RCR2(mqMachine *mach, u32 value)
 {
-    mqMachine *mach = io->userdata;
     mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
 
     u8 old = RTC->RCR2;
-    RTC->RCR2 = (value & 0xf7) | 0x08;
-    u8 diff = RTC->RCR2 ^ old;
+    RTC->RCR2 = (value & 0xf1) | 0x08;
+
+    if(!(value & 0x08)) {
+        mq_log(MQ_LOG_WARNING, "Write to RCR2 with value %02x doesn't bit #3",
+            value);
+    }
 
     // RESET bit
-    if(RTC->RCR2 & 0x02) {
-        RTC->R64CNT = 0x00;
-        RTC->R256_cnt = 0;
-        RTC->RCR2 ^= 0x02;
-    }
+    if(value & 0x02)
+        mq_rtc_resetDividerCircuit(mach);
+
     // ADJ bit
-    if(RTC->RCR2 & 0x04) {
+    if(value & 0x04) {
         RTC->RSECCNT = (mq_rtc_bcd8(RTC->RSECCNT) < 30) ? 0x00 : 0x7f;
-        rtc_refresh_counters(mach, RTC);
-        RTC->RCR2 ^= 0x04;
+        rtc_refresh_counters(mach, RTC, +0);
     }
-    // PEF bit
-    if((diff & 0x80) && (old & 0x80))
-        mq_intc_setInterruptStatus(mach, MQ_INT_RTC_PRI, false);
+
     // PES bit
     // Note that the Periodic interrupt is synced to the R64CNT timing. To
     // replicate this behaviour, we use an internal MQ timer that runs at
@@ -507,35 +342,24 @@ static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
     // performed and it is used to sync the R64CNT register (see
     // `rtc_process()`). Then we simply adjust the current 256Hz timer info
     // to our request and it does the trick
-    if(diff & 0x70) {
-        u16 conf_max[8] = {
-            0xffff,
-            256/256,
-            256/64,
-            256/16,
-            256/4,
-            256/2,
-            256*1,
-            256*2,
-        };
+    if((RTC->RCR2 ^ old) & 0x70) {
+        u16 periodDurations[8] = { 0xffff, 1, 4, 16, 64, 128, 256, 512 };
         u8 select = ((RTC->RCR2 >> 4) & 0x7);
-        RTC->PES_max = conf_max[select];
-        RTC->PES_cnt = RTC->R256_cnt % RTC->PES_max;
+        RTC->PES_period = periodDurations[select];
     }
+
+    notifyINTC(mach, RTC);
 }
 
-static void write_RCR3(struct mqMMIO *io, u32 addr, u32 value, int size)
+static void write_RCR3(mqMachine *mach, u32 value)
 {
-    mqMachine *mach = io->userdata;
     mqRTC *RTC = mach->modules[moduleID];
-    (void)addr;
-    (void)size;
-
     RTC->RCR3 = value & 0x80;
-    rtc_refresh_interrupts(mach, RTC);
+    updateAlarmFlag(RTC);
+    notifyINTC(mach, RTC);
 }
 
-//=== MODULE ================================================================//
+//=== Module =================================================================//
 
 bool mq_rtc_setup(mqMachine *mach, int initializeKind)
 {
@@ -558,85 +382,53 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     RTC->RDAYCNT = mq_rtc_bcd8(1);
     RTC->RMONCNT = mq_rtc_bcd8(11);
     RTC->RYRCNT  = mq_rtc_bcd16(2010);
+    /* Keep PES_period initialized to a non-zero value */
+    RTC->PES_period = 0xffff;
 
     mq_timer_reset(&RTC->internalTimer_256HZ, RESOLUTION_NS_256HZ);
     mq_timer_start(&RTC->internalTimer_256HZ);
     mach->processes[processID] = rtc_process;
 
     bool ok = true;
-    int ioID;
 
-    ioID = mq_page_addIO(pg413, "R64CNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, NULL, &RTC->R64CNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fec0, 1, 0);
+    ok &= mq_page_mapRegister8(pg413, "R64CNT", 0xa413fec0,
+        read_R64CNT, NULL, NULL, mach);
+    ok &= mq_page_mapRegister8(pg413, "RSECCNT", 0xa413fec2, NULL,
+        write_RSECCNT, &RTC->RSECCNT, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RMINCNT", 0xa413fec4, NULL,
+        write_RMINCNT, &RTC->RMINCNT, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RHRCNT", 0xa413fec6, NULL,
+        write_RHRCNT, &RTC->RHRCNT, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RWKCNT", 0xa413fec8, NULL,
+        write_RWKCNT, &RTC->RWKCNT, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RDAYCNT", 0xa413feca, NULL,
+        write_RDAYCNT, &RTC->RDAYCNT, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RMONCNT", 0xa413fecc, NULL,
+        write_RMONCNT, &RTC->RMONCNT, RTC);
+    ok &= mq_page_mapRegister16(pg413, "RYRCRN", 0xa413fece, NULL,
+        write_RYRCNT, &RTC->RYRCNT, RTC);
 
-    ioID = mq_page_addIO(pg413, "RSECCNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RSECCNT, &RTC->RSECCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fec2, 1, 0);
+    ok &= mq_page_mapRegister8(pg413, "RSECAR", 0xa413fed0, NULL,
+        write_RSECAR, &RTC->RSECAR, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RMINAR", 0xa413fed2, NULL,
+        write_RMINAR, &RTC->RMINAR, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RHRAR", 0xa413fed4, NULL,
+        write_RHRAR, &RTC->RHRAR, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RWKAR", 0xa413fed6, NULL,
+        write_RWKAR, &RTC->RWKAR, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RDAYAR", 0xa413fed8, NULL,
+        write_RDAYAR, &RTC->RDAYAR, RTC);
+    ok &= mq_page_mapRegister8(pg413, "RMONAR", 0xa413feda, NULL,
+        write_RMONAR, &RTC->RMONAR, RTC);
+    ok &= mq_page_mapRegister16(pg413, "RYRAR", 0xa413fee0, NULL,
+        write_RYRAR, &RTC->RYRAR, RTC);
 
-    ioID = mq_page_addIO(pg413, "RMINCNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RMINCNT, &RTC->RMINCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fec4, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RHRCNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RHRCNT, &RTC->RHRCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fec6, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RWKCNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RWKCNT, &RTC->RWKCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fec8, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RDAYCNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RDAYCNT, &RTC->RDAYCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413feca, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RMONCNT", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RMONCNT, &RTC->RMONCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fecc, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RYRCNT", MQ_MMIO_SIZE_2 | MQ_MMIO_READU16,
-        NULL, write_RYRCNT, &RTC->RYRCNT, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fece, 2, 0);
-
-    ioID = mq_page_addIO(pg413, "RSECAR", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RSECAR, &RTC->RSECAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fed0, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RMINAR", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RMINAR, &RTC->RMINAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fed2, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RHRAR", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RHRAR, &RTC->RHRAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fed4, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RWKAR", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RWKAR, &RTC->RWKAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fed6, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RDAYAR", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RDAYAR, &RTC->RDAYAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fed8, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RMONAR", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RMONAR, &RTC->RMONAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413feda, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RCR1", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RCR1, &RTC->RCR1, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fedc, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RCR2", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RCR2, &RTC->RCR2, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fede, 1, 0);
-
-    ioID = mq_page_addIO(pg413, "RYRAR", MQ_MMIO_SIZE_2 | MQ_MMIO_READU16,
-        NULL, write_RYRAR, &RTC->RYRAR, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fee0, 2, 0);
-
-    ioID = mq_page_addIO(pg413, "RCR3", MQ_MMIO_SIZE_1 | MQ_MMIO_READU8,
-        NULL, write_RCR3, &RTC->RCR3, mach);
-    ok &= mq_page_mapIO(pg413, ioID, 0xa413fee4, 1, 0);
+    ok &= mq_page_mapRegister8(pg413, "RCR1", 0xa413fedc, NULL,
+        write_RCR1, &RTC->RCR1, mach);
+    ok &= mq_page_mapRegister8(pg413, "RCR2", 0xa413fede, NULL,
+        write_RCR2, &RTC->RCR2, mach);
+    ok &= mq_page_mapRegister8(pg413, "RCR3", 0xa413fee4, NULL,
+        write_RCR3, &RTC->RCR3, mach);
 
     if(ok)
         mach->modules[moduleID] = RTC;
@@ -645,12 +437,7 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     return ok;
 }
 
-mqRTC *mq_rtc_get(mqMachine *mach)
-{
-    return mach->modules ? mach->modules[moduleID] : NULL;
-}
-
-//=== UTILS ================================================================//
+//=== Utilities ==============================================================//
 
 u8 mq_rtc_bcd8(int integer)
 {

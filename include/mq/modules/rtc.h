@@ -16,7 +16,6 @@
 MQ_START_DEFS
 
 struct mqRTC {
-    u8 R64CNT;
     u8 RSECCNT;
     u8 RMINCNT;
     u8 RHRCNT;
@@ -38,9 +37,12 @@ struct mqRTC {
     u16 RWTCSR;
 
     mqTimer internalTimer_256HZ;
+    /* Internal 256-Hz counter, overflows every second. This defines both
+       R64CNT and the periodic interrupts (to keep them in sync). */
     u16 R256_cnt;
-    u16 PES_cnt;
-    u16 PES_max;
+    /* Number of 256 Hz ticks in a periodic interrupt (1...512). 0xffff when
+       the periodic interrupt is unused. */
+    u16 PES_period;
 };
 
 typedef struct mqRTC mqRTC;
@@ -50,6 +52,11 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind);
 
 /* Get the RTC module for a machine, NULL if there is none. */
 mqRTC *mq_rtc_get(mqMachine *mach);
+
+/* Reset the divider circuit. */
+void mq_rtc_resetDividerCircuit(mqMachine *mach);
+/* Get the current value of R64CNT, which is implicit in the structure. */
+u8 mq_rtc_getR64CNT(mqMachine *mach);
 
 /* convert int to BCD8 */
 u8 mq_rtc_bcd8(int data);
