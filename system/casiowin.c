@@ -269,9 +269,8 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x003b: /* RTC_GetTicks() */
-        // FIXME: GetTicks() more than trivial counter (also on CG!)
-        static int ticks = 0;
-        cpu->r[0] = ++ticks;
+        if(mq_casiowin_rtc_getticks(mach, &cpu->r[0]) < 0)
+            mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
         return;
 
     case 0x0135: /* GetVRAMAddress() */
@@ -480,9 +479,8 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x02c1: { /* RTC_GetTicks() */
-        // FIXME: GetTicks() more than trivial counter (also on FX!)
-        static int ticks = 0;
-        cpu->r[0] = ++ticks;
+        if(mq_casiowin_rtc_getticks(mach, &cpu->r[0]) < 0)
+            mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
         return;
     }
 

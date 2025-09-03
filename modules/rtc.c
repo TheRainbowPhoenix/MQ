@@ -10,7 +10,7 @@
 #include <mq/mq.h>
 #include <stdlib.h>
 
-//================================= MQ ======================================//
+//=== MQ ====================================================================//
 
 #define RESOLUTION_NS_256HZ (1000000000ull / 256ull)
 
@@ -32,21 +32,7 @@ static void mq_rtc_cleanup(mqMachine *mach)
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_rtc_cleanup)
 
-//================================= UTILS ===================================//
-
-/* bcd8(), bcd16(): Convert integer to BCD (from gint) */
-static uint8_t bcd8(int integer)
-{
-    integer %= 100;
-    return ((integer / 10) << 4) | (integer % 10);
-}
-static uint16_t bcd16(int integer)
-{
-    integer %= 10000;
-    return (bcd8(integer / 100) << 8) | bcd8(integer % 100);
-}
-
-//================================ CORE =====================================//
+//=== CORE ==================================================================//
 
 static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
 {
@@ -54,7 +40,7 @@ static void rtc_refresh_interrupts(mqMachine *mach, mqRTC *RTC)
     int alarm_count;
 
     // handle carry interrupt
-    // - the carry flag (CF) is handled in `mq_rtc_process()`
+    // - the carry flag (CF) is handled in `rtc_process()`
     if((RTC->RCR1 & 0x10) && (RTC->RCR1 & 0x80))
         mq_intc_setInterruptStatus(mach, MQ_INT_RTC_CUI, true);
 
@@ -194,8 +180,8 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
         p2 = 1;
     }
     day   = p1 * 10 + p2;
-    month = bcd8(RTC->RMONCNT);
-    year  = bcd16(RTC->RYRCNT);
+    month = mq_rtc_bcd8(RTC->RMONCNT);
+    year  = mq_rtc_bcd16(RTC->RYRCNT);
     if(month == 2) {
         if ((year % 4) == 0 && (year % 100) == 0 && (year % 400) == 0) {
             carry = (day > 29);
@@ -246,7 +232,7 @@ static void rtc_refresh_counters(mqMachine *mach, mqRTC *RTC)
     // - no carry is generated
     // - no check is performed
     if(carry)
-        RTC->RYRCNT = bcd16(int16(RTC->RYRCNT) + 1);
+        RTC->RYRCNT = mq_rtc_bcd16(mq_rtc_int16(RTC->RYRCNT) + 1);
     // refresh interrupt status
     rtc_refresh_interrupts(mach, RTC);
 }
@@ -303,7 +289,7 @@ static void rtc_process(mqMachine *mach, int cyclesElapsed)
     rtc_refresh_counters(mach, RTC);
 }
 
-//================================ REGS =====================================//
+//=== REGS ==================================================================//
 
 static void write_RSECCNT(struct mqMMIO *io, u32 addr, u32 value, int size)
 {
@@ -506,7 +492,7 @@ static void write_RCR2(struct mqMMIO *io, u32 addr, u32 value, int size)
     }
     // ADJ bit
     if(RTC->RCR2 & 0x04) {
-        RTC->RSECCNT = (bcd8(RTC->RSECCNT) < 30) ? 0x00 : 0x7f;
+        RTC->RSECCNT = (mq_rtc_bcd8(RTC->RSECCNT) < 30) ? 0x00 : 0x7f;
         rtc_refresh_counters(mach, RTC);
         RTC->RCR2 ^= 0x04;
     }
@@ -548,7 +534,7 @@ static void write_RCR3(struct mqMMIO *io, u32 addr, u32 value, int size)
     rtc_refresh_interrupts(mach, RTC);
 }
 
-//=========================== MODULE ========================================//
+//=== MODULE ================================================================//
 
 bool mq_rtc_setup(mqMachine *mach, int initializeKind)
 {
@@ -567,14 +553,14 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     // with the mono config for now
     (void)initializeKind;
     RTC->RCR2    = 0x09;
-    RTC->RWKCNT  = bcd8(0);
-    RTC->RDAYCNT = bcd8(1);
-    RTC->RMONCNT = bcd8(11);
-    RTC->RYRCNT  = bcd16(2010);
+    RTC->RWKCNT  = mq_rtc_bcd8(0);
+    RTC->RDAYCNT = mq_rtc_bcd8(1);
+    RTC->RMONCNT = mq_rtc_bcd8(11);
+    RTC->RYRCNT  = mq_rtc_bcd16(2010);
 
     mq_timer_reset(&RTC->internalTimer_256HZ, RESOLUTION_NS_256HZ);
     mq_timer_start(&RTC->internalTimer_256HZ);
-    mach->processes[processID] = mq_rtc_process;
+    mach->processes[processID] = rtc_process;
 
     bool ok = true;
     int ioID;
@@ -661,4 +647,29 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
 mqRTC *mq_rtc_get(mqMachine *mach)
 {
     return mach->modules ? mach->modules[moduleID] : NULL;
+}
+
+//=== UTILS ================================================================//
+
+u8 mq_rtc_bcd8(int integer)
+{
+    integer %= 100;
+    return ((integer / 10) << 4) | (integer % 10);
+}
+
+u16 mq_rtc_bcd16(int integer)
+{
+    integer %= 10000;
+    return (mq_rtc_bcd8(integer / 100) << 8) | mq_rtc_bcd8(integer % 100);
+}
+
+int mq_rtc_int8(u8 bcd)
+{
+    return (bcd & 0x0f) + 10 * (bcd >> 4);
+}
+
+int mq_rtc_int16(u16 bcd)
+{
+    return (bcd & 0xf) + 10 * ((bcd >> 4) & 0xf) + 100 * ((bcd >> 8) & 0xf)
+        + 1000 * (bcd >> 12);
 }

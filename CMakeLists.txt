@@ -67,6 +67,7 @@ set(LIB_SOURCES
 
   system/casiowin.c
   system/casiowin-render-fx.c
+  system/casiowin-rtc.c
   system/heap.c)
 
 add_custom_command(OUTPUT "${AUTOGEN}/sh-isa.inc"

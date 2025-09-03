@@ -130,5 +130,10 @@ void mq_casiowin_mono_PrintXY(
 void mq_casiowin_mono_SaveDisp(mqMachine *mach, int id);
 void mq_casiowin_mono_RestoreDisp(mqMachine *mach, int id);
 
+//=== RTC functions =========================================================//
+
+/* RTC_GetTicks() - get RTC ticks */
+int mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret);
+
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */

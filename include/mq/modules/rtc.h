@@ -51,5 +51,17 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind);
 /* Get the RTC module for a machine, NULL if there is none. */
 mqRTC *mq_rtc_get(mqMachine *mach);
 
+/* convert int to BCD8 */
+u8 mq_rtc_bcd8(int data);
+
+/* convert int to BCD16 */
+u16 mq_rtc_bcd16(int integer);
+
+/* convert BCD8 to int */
+int mq_rtc_int8(u8 bcd);
+
+/* convert BCD16 to int */
+int mq_rtc_int16(u16 bcd);
+
 MQ_END_DEFS
 #endif /* MQ_MODULES_RTC_H */
