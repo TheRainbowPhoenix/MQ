@@ -4,9 +4,9 @@
 //   |:::o/010    License: MIT <https://opensource.org/licenses/MIT>         //
 //-- `---/101 ---------------------------------------------------------------//
 #include <mq/system/casiowin.h>
+#include <mq/memory.h>
 #include <mq/modules/rtc.h>
 
-/* RTC_GetTicks() - get RTC ticks */
 int mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret)
 {
     mqRTC *RTC = mq_rtc_get(mach);
@@ -51,5 +51,22 @@ int mq_casiowin_rtc_reset(mqMachine *mach, u32 mode)
         RTC->RYRAR   = 0;
     }
     RTC->RCR2 = (RTC->RCR2 & 0xfd) | 0x09;
+    return 0;
+}
+
+int mq_casiowin_rtc_gettime(
+    mqMachine *mach,
+    u32 hour,
+    u32 minutes,
+    u32 second,
+    u32 millisecond
+) {
+    mqRTC *RTC = mq_rtc_get(mach);
+    if (RTC == NULL)
+        return -1;
+    mq_memory_write(mach, mach->memory, millisecond, 4, RTC->R64CNT * 7);
+    mq_memory_write(mach, mach->memory, second, 4, RTC->RSECCNT);
+    mq_memory_write(mach, mach->memory, minutes, 4, RTC->RMINCNT);
+    mq_memory_write(mach, mach->memory, hour, 4, RTC->RHRCNT);
     return 0;
 }

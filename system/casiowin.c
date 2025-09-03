@@ -272,7 +272,11 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         if(mq_casiowin_rtc_reset(mach, cpu->r[4]) < 0)
             mq_log(MQ_LOG_ERROR, "RTC_Reset(): internal error");
         return;
-
+    case 0x003a: /* RTC_GetTime() */
+        if(mq_casiowin_rtc_gettime(mach,
+                    cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]) < 0)
+            mq_log(MQ_LOG_ERROR, "RTC_GetTime(): internal error");
+        return;
     case 0x003b: /* RTC_GetTicks() */
         if(mq_casiowin_rtc_getticks(mach, &cpu->r[0]) < 0)
             mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
@@ -486,6 +490,11 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     case 0x02bf: /* RTC_Reset() */
         if(mq_casiowin_rtc_reset(mach, cpu->r[4]) < 0)
             mq_log(MQ_LOG_ERROR, "RTC_GetReset(): internal error");
+        return;
+    case 0x02c0: /* RTC_GetTime() */
+        if(mq_casiowin_rtc_gettime(mach,
+                    cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]) < 0)
+            mq_log(MQ_LOG_ERROR, "RTC_GetTime(): internal error");
         return;
     case 0x02c1: /* RTC_GetTicks() */
         if(mq_casiowin_rtc_getticks(mach, &cpu->r[0]) < 0)

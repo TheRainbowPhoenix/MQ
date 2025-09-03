@@ -138,5 +138,14 @@ int mq_casiowin_rtc_getticks(mqMachine *mach, u32 *ret);
 /* RTC_Reset() - reset the RTC */
 int mq_casiowin_rtc_reset(mqMachine *mach, u32 mode);
 
+/* RTC_GetTime() - get time from RTC */
+int mq_casiowin_rtc_gettime(
+    mqMachine *mach,
+    u32 hour,
+    u32 minutes,
+    u32 second,
+    u32 millisecond
+);
+
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */
