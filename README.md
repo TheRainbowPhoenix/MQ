@@ -83,13 +83,13 @@ Profiling TODOs:
 This section is generated automatically based on [this YAML summary](docs/compatibility.yaml).
 
 <!-- compat table start -->
-Total programs: `all(42)`:  `fxcg50(21)` `fx9860g_sh4(12)` `fxcg20(6)` `fx9860g_sh3(3)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g3(0)`
+Total programs: `all(43)`:  `fxcg50(21)` `fx9860g_sh4(13)` `fxcg20(6)` `fx9860g_sh3(3)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g3(0)`
 
-<code>**🟢 Playable** (30.95%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
-<code>**🟠 Ingame** (30.95%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
-<code>**🟤 Intro** (7.14%)</code> - Games that display image but don't make it past the menus</br>
-<code>**🔴 Loadable** (4.76%)</code> - Games that display a black screen with a framerate on the window's title</br>
-<code>**⚫ Nothing** (26.19%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
+<code>**🟢 Playable** (32.56%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
+<code>**🟠 Ingame** (30.23%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
+<code>**🟤 Intro** (6.98%)</code> - Games that display image but don't make it past the menus</br>
+<code>**🔴 Loadable** (4.65%)</code> - Games that display a black screen with a framerate on the window's title</br>
+<code>**⚫ Nothing** (25.58%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
 
 
 | Addin | Status | Models | Updated | Notes |
@@ -107,6 +107,7 @@ Total programs: `all(42)`:  `fxcg50(21)` `fx9860g_sh4(12)` `fxcg20(6)` `fx9860g_
 | [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html) by PierrotLL | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-08-28 | - Perfect |
 | [2048 delux](https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html) by Kirafi | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - Perfect |
 | [Destiny](https://www.planet-casio.com/Fr/programmes/programme2684-last-destiny-dodormeur-jeux-add-ins.html) by Dodormeur | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - not 100% tested |
+| [Bomberman](https://www.planet-casio.com/Fr/programmes/programme2242-1-bomberman-dodormeur-jeux-add-ins.html) by Dodormeur | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - seem fully playable(?) |
 | [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - Most things work</br>- This is used to test hardware features |
 | [Duet](https://www.planet-casio.com/Fr/programmes/programme4173-1-duet-yatis-lephe-jeux-add-ins.html) by Yatis and Lephe | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - No save</br>- more slow than circuit10's emulator. |
 | [OutRun](https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html) by SlyvTT | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - seem work? |

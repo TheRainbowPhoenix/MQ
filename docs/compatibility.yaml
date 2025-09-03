@@ -445,3 +445,13 @@ addins:
       - https://www.planet-casio.com/Fr/programmes/programme2684-last-destiny-dodormeur-jeux-add-ins.html
     remarks:
       - not 100% tested
+
+  - name: Bomberman
+    author: Dodormeur
+    updated: 2025-09-03
+    status: playable
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2242-1-bomberman-dodormeur-jeux-add-ins.html
+    remarks:
+      - seem fully playable(?)
