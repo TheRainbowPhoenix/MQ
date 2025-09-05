@@ -76,7 +76,7 @@ static u32 read_PRR(MQ_UNUSED void *userdata)
 
 static void write_CPUOPM(mqCpu *cpu, u32 value)
 {
-    cpu->CPUOPM = (value & 0x00000008) | 0x00000320;
+    cpu->CPUOPM = (value & 0x00000008) | 0x00000300;
 }
 
 bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)

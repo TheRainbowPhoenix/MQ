@@ -80,7 +80,7 @@ static void write_LSTATUS(struct mqCPG *CPG, u32 value)
     CPG->LSTATUS = value;
 }
 
-bool mq_cpg_setup(mqMachine *mach)
+bool mq_cpg_setup(mqMachine *mach, int initializeKind)
 {
     mqPage *pg = mq_memory_getPagePrealloc(mach->memory, 0xa4150000, 0x64, 10);
     if(!pg)
@@ -90,17 +90,33 @@ bool mq_cpg_setup(mqMachine *mach)
     if(!CPG)
         return false;
 
-    /* Start with a fixed fx-CG 50 configuration (from OS 3.80) */
-    CPG->FRQCR      = 0x0f011112;
-    CPG->FSICLKCR   = 0x00000057;
-    CPG->DDCLKCR    = 0x00000198;
-    CPG->USBCLKCR   = 0x00000100;
-    CPG->PLLCR      = 0x00005000;
-    CPG->PLL2CR     = 0x00000000;
-    CPG->SPUCLKCR   = 0x00000003;
-    CPG->SSCGCR     = 0x10000000;
-    CPG->FLLFRQ     = 0x00004384;
-    CPG->LSTATUS    = 0x00000000;
+    if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
+        /* fixed fx-CG 50 configuration (from OS 3.80) */
+        CPG->FRQCR      = 0x0f011112;
+        CPG->FSICLKCR   = 0x00000057;
+        CPG->DDCLKCR    = 0x00000198;
+        CPG->USBCLKCR   = 0x00000100;
+        CPG->PLLCR      = 0x00005000;
+        CPG->PLL2CR     = 0x00000000;
+        CPG->SPUCLKCR   = 0x00000003;
+        CPG->SSCGCR     = 0x10000000;
+        CPG->FLLFRQ     = 0x00004384;
+        CPG->LSTATUS    = 0x00000000;
+    } else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
+        /* fixed Graph35+E configuration (OS 02.05) */
+        CPG->FRQCR      = 0x0f212213;
+        CPG->FSICLKCR   = 0x00000157;
+        CPG->DDCLKCR    = 0x00000198;
+        CPG->USBCLKCR   = 0x00000100;
+        CPG->PLLCR      = 0x00005000;
+        CPG->PLL2CR     = 0x00000000;
+        CPG->SPUCLKCR   = 0x00000103;
+        CPG->SSCGCR     = 0x00000000;
+        CPG->FLLFRQ     = 0x00004384;
+        CPG->LSTATUS    = 0x00000000;
+    } else {
+        mq_log(MQ_LOG_ERROR, "CPG: Unknown initialization kind");
+    }
 
     bool ok = true;
     ok &= mq_page_mapRegister32(pg, "FRQCR",    0xa4150000,

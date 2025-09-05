@@ -31,7 +31,7 @@ static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
     if(!kbd)
         return 0;
 
-    /* KIUDATA can be read with byte and word accesses (at least). It reads
+    /* KIUDATA can be read with byte, word, double-word accesses. It reads
        like standard memory containing little-endian words, i.e. indices
          1, 0, 3, 2, 5, 4, ...
        So a byte access at KIUDATA+j returns data[j^1] and a word access at
@@ -50,6 +50,14 @@ static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
             value |= (0x0001 << key->col);
         else if(size == 2 && key->row == j+1)
             value |= (0x0100 << key->col);
+        else if(size == 4 && key->row == j)
+            value |= (0x00010000 << key->col);
+        else if(size == 4 && key->row == j+1)
+            value |= (0x01000000 << key->col);
+        else if(size == 4 && key->row == j+2)
+            value |= (0x00000001 << key->col);
+        else if(size == 4 && key->row == j+3)
+            value |= (0x00000100 << key->col);
     }
 
     // mq_log(MQ_LOG_WARNING, "[KIUDATA @ %08x/%d -> %04x", addr, size, value);
@@ -67,7 +75,8 @@ bool mq_keysc_setup(mqMachine *mach)
         return false;
 
     bool ok = true;
-    int ioID = mq_page_addIO(pg, "KIUDATA*", MQ_MMIO_SIZE_1 | MQ_MMIO_SIZE_2,
+    int ioID = mq_page_addIO(pg, "KIUDATA*",
+        MQ_MMIO_SIZE_1 | MQ_MMIO_SIZE_2 | MQ_MMIO_SIZE_4,
         read_KIUDATA, NULL, NULL, mach);
     ok &= mq_page_mapIO(pg, ioID, 0xa44b0000, 12, 1);
 

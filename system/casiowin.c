@@ -243,14 +243,56 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mq_memory_write(mach, mach->memory, mach->cpu.r[7], 2, 0x0000);
         return;
 
+    case 0x028: { /* Bdisp_PutDisp_DD() */
+        if(mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8,
+                    128, 64)) {
+            u8 *src = mq_memory_access(
+                mach->memory,
+                Casiowin->dataVramAddresses[0]
+            );
+            u8 *dst = mach->display->data;
+            for(int p = 0; p < 1024; p++) {
+                u8 value = *(u8*)((uintptr_t)(src++) ^ 3);
+                for(int i = 0; i < 8; i++) {
+                    *dst++ = ~((i8)value >> 7);
+                    value <<= 1;
+                }
+            }
+            mq_display_setDirty(mach->display, true);
+        }
+        return;
+    }
+
+    case 0x0030: /* Bdisp_DrawLineVRAM() */
+        mq_log(MQ_LOG_ERROR, "unsupported syscall %%030 Bdisp_DrawLineVRAM()");
+        mach->stuck = true;
+        return;
+
+    case 0x0039: /* RTC_Reset() */
+        if(!mq_casiowin_rtc_reset(mach, cpu->r[4]))
+            mq_log(MQ_LOG_ERROR, "RTC_Reset(): internal error");
+        return;
+    case 0x003a: /* RTC_GetTime() */
+        if(!mq_casiowin_rtc_gettime(mach,
+                    cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]))
+            mq_log(MQ_LOG_ERROR, "RTC_GetTime(): internal error");
+        return;
     case 0x003b: /* RTC_GetTicks() */
-        // FIXME: GetTicks() more than trivial counter (also on CG!)
-        static int ticks = 0;
-        cpu->r[0] = ++ticks;
+        if(!mq_casiowin_rtc_getticks(mach, &cpu->r[0]))
+            mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
         return;
 
     case 0x0135: /* GetVRAMAddress() */
         cpu->r[0] = Casiowin->dataVramAddresses[0];
+        return;
+
+    case 0x0143: /* Bdisp_AllClr_VRAM() */
+        u8 *dst = mq_memory_access(
+            mach->memory,
+            Casiowin->dataVramAddresses[0]
+        );
+        /* Since this is aligned, we can memset it */
+        memset(dst, 0xff, 128 * 64 * 1);
         return;
 
     case 0x0146: /* Bdisp_SetPoint_VRAM() */
@@ -260,6 +302,27 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     // case 0x014d: /* Bdisp_AreaReverseVRAM() */
     //     return;
+
+    case 0x0247: /* Keyboard_GetKeyWait() */
+        mq_log(MQ_LOG_ERROR, "unhandled Keyboard_GetKeyWait(), return 0");
+        cpu->r[0] = 0;
+        return;
+
+    case 0x024c: /* Keyboard_IsSpecialKeyDown */
+        mq_log(
+            MQ_LOG_ERROR,
+            "unsupported syscall %%24c Keyboard_IsSpecialKeyDown()"
+        );
+        mach->stuck = true;
+        return;
+
+    case 0x03ed: /* Interrupt_SetOrClrStatusFlagsy() */
+        mq_log(
+            MQ_LOG_ERROR,
+            "unsupported syscall %%3ed Interrupt_SetOrClrStatusFlags()"
+        );
+        mach->stuck = true;
+        return;
 
     case 0x03fa: /* Hmem_SetMMU() */
         cpu->r[0] = 0;
@@ -285,6 +348,9 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = -1;
         return;
     case 0x0439: /* Bfile_DeleteEntry() */
+        cpu->r[0] = -1;
+        return;
+    case 0x043b: /* Bfile_FindFirst */
         cpu->r[0] = -1;
         return;
 
@@ -319,6 +385,11 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     // case 0x090f: /* GetKey() */
     //     return;
 
+    case 0x090f: /* GetKey() */
+        mq_log(MQ_LOG_ERROR, "Unsupported syscall %%90F GetKey()");
+        mach->stuck = true;
+        return;
+
     case 0x09ad: /* PrintXY() */
         mq_casiowin_mono_PrintXY(mach,
             mach->cpu.r[4], mach->cpu.r[5], mach->cpu.r[6], mach->cpu.r[7]);
@@ -342,6 +413,16 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mq_casiowin_initHeap(mach);
         cpu->r[0] = mq_heap_realloc(cpu->r[4], cpu->r[5]);
         return;
+
+    case 0x0e6b: { /* calloc() */
+        mq_casiowin_initHeap(mach);
+        cpu->r[0] = mq_heap_malloc(cpu->r[4]);
+        if (cpu->r[0] != 0x00000000) {
+            for(u32 i = 0; i < cpu->r[4]; i++)
+                mq_memory_write(mach, mach->memory, cpu->r[0], 1, 0x00);
+        }
+        return;
+    }
 
     case 0x1032: /* Get keymap for keycode/matrix code conv. (since 1.05) */
         cpu->r[0] = Casiowin->rodataKeymapAddress;
@@ -406,12 +487,19 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mach->stuck = true;
         return;
 
-    case 0x02c1: { /* RTC_GetTicks() */
-        // FIXME: GetTicks() more than trivial counter (also on FX!)
-        static int ticks = 0;
-        cpu->r[0] = ++ticks;
+    case 0x02bf: /* RTC_Reset() */
+        if(!mq_casiowin_rtc_reset(mach, cpu->r[4]))
+            mq_log(MQ_LOG_ERROR, "RTC_GetReset(): internal error");
         return;
-    }
+    case 0x02c0: /* RTC_GetTime() */
+        if(!mq_casiowin_rtc_gettime(mach,
+                    cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]))
+            mq_log(MQ_LOG_ERROR, "RTC_GetTime(): internal error");
+        return;
+    case 0x02c1: /* RTC_GetTicks() */
+        if(!mq_casiowin_rtc_getticks(mach, &cpu->r[0]))
+            mq_log(MQ_LOG_ERROR, "RTC_GetTicks(): internal error");
+        return;
 
     case 0x0921: /* EnableColors() */
         mq_log(MQ_LOG_ERROR, "syscall %921 EnableColor() ignored");

@@ -25,6 +25,7 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -866,6 +867,8 @@ static void find_cwd_addins(std::vector<std::string> &addins)
         if(ext == ".g1a" || ext == ".G1A" || ext == ".g3a" || ext == ".G3A")
             addins.push_back(entry.path().filename());
     }
+
+    std::sort(addins.begin(), addins.end());
 }
 
 static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
