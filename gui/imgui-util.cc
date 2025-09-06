@@ -57,6 +57,26 @@ void TextMono(char const *fmt, ...)
     va_end(args);
 }
 
+void TextCenteredColor(char const *text, int color)
+{
+    auto w_widget = ImGui::GetContentRegionAvail().x;
+    auto w_text = ImGui::CalcTextSize(text).x;
+    ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
+    if (color == 0x00000000) {
+        ImGui::TextDisabled(text);
+    } else {
+        ImGui::TextColored(
+            ImVec4(
+                (color >> 16) & 0xff,
+                (color >>  8) & 0xff,
+                (color >>  0) & 0xff,
+                1.0f
+            ),
+            text
+        );
+    }
+}
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &st)

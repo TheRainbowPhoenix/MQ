@@ -24,6 +24,10 @@ namespace ImGui {
    right-aligned on the right side of the current drawing region. */
 void TextLR(char const *left, char const *fmt, ...);
 
+/* A full-line centered text with color and bold support 
+   (todo) maybe too specific? */
+void TextCenteredColor(char const *text, int color);
+
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
 

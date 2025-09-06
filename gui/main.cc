@@ -1,4 +1,5 @@
-#include "gui.h"
+#include "./gui.h"
+#include "./record.h"
 #include <mq/mq.h>
 #include <mq/machine.h>
 #include <mq/system/casiowin.h>
@@ -42,7 +43,6 @@ struct DelayedInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
     int mq_load_working_folder_addin = -1;
-    int mq_cycles = 0;
     bool mq_heap_init = false;
     bool mq_mmu_unbind = false;
     bool mq_mmu_bind = false;
@@ -53,6 +53,15 @@ struct DelayedInput {
     bool quit = false;
 };
 
+struct States {
+    int mq_cycles = 0;
+    mqRecord record = {
+        .start = false,
+        .error = nullptr,
+    };
+};
+
+struct States states;
 struct DelayedInput input;
 struct OpenFileBuffer inputFile;
 
@@ -180,17 +189,17 @@ static void render(void)
             ImGui::SameLine(0, 6);
 
             ImGui::BeginDisabled(!mach->initialized);
-            bool paused = input.mq_cycles == 0;
+            bool paused = states.mq_cycles == 0;
             bool stuck = mach->stuck;
 
             if(paused && ImGui::IconButton(0, "Run"))
-                input.mq_cycles = -1;
+                states.mq_cycles = -1;
             if(!paused && ImGui::IconButton(1, "Pause"))
-                input.mq_cycles = 0;
+                states.mq_cycles = 0;
             ImGui::SameLine(0, 6);
 
             if(ImGui::IconButton(2, "Step", !paused))
-                input.mq_cycles = 1;
+                states.mq_cycles = 1;
             ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
@@ -342,30 +351,30 @@ static void render(void)
             ImGui::Text("Cycle:");
             ImGui::SameLine();
             if(ImGui::Button("1"))
-                input.mq_cycles = 1;
+                states.mq_cycles = 1;
             ImGui::SameLine();
             if(ImGui::Button("10"))
-                input.mq_cycles = 10;
+                states.mq_cycles = 10;
             ImGui::SameLine();
             if(ImGui::Button("100"))
-                input.mq_cycles = 100;
+                states.mq_cycles = 100;
             ImGui::SameLine();
             if(ImGui::Button("1000"))
-                input.mq_cycles = 1000;
+                states.mq_cycles = 1000;
             ImGui::SameLine();
             if(ImGui::Button("10k"))
-                input.mq_cycles = 10000;
+                states.mq_cycles = 10000;
         }
         else {
             ImGui::Text("Machine is not initialized.");
         }
         if(mach->stuck) {
             ImGui::Text("Machine is stuck!");
-            input.mq_cycles = 0;
+            states.mq_cycles = 0;
         }
-        if(input.mq_cycles) {
-            if(input.mq_cycles > 0)
-                ImGui::Text("Cycles pending: %d", input.mq_cycles);
+        if(states.mq_cycles) {
+            if(states.mq_cycles > 0)
+                ImGui::Text("Cycles pending: %d", states.mq_cycles);
             else
                 ImGui::Text("Running...");
         }
@@ -385,31 +394,79 @@ static void render(void)
         auto w_button  = ImGui::GetContentRegionAvail().x;
         w_button -= (style.ItemInnerSpacing.x * 2);
         w_button /= 3;
-        ImGui::BeginDisabled();
-        ImGui::Button("Start", ImVec2(w_button, 0));
-        ImGui::EndDisabled();
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        //ImGui::BeginDisabled();
-        ImGui::Button("Pause", ImVec2(w_button, 0));
-        //ImGui::EndDisabled();
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        //ImGui::BeginDisabled();
-        ImGui::Button("Stop", ImVec2(w_button, 0));
-        //ImGui::EndDisabled();
-        ImGui::Spacing();
-        //auto status = "No addin selected";
-        //auto status = "Press start to run and record";
-        //auto w_widget = ImGui::GetContentRegionAvail().x;
-        //auto w_text = ImGui::CalcTextSize(status).x;
-        //ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
-        //ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), status);
-        //ImGui::TextColored(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), status);
-        ImGui::TextDisabled("Start time: xx:xx:xx");
-        ImGui::TextDisabled("Elapsed: xxs");
-        ImGui::TextDisabled("Nb. frames: xxx");
-        ImGui::TextDisabled("Profile: xxxx");
-        ImGui::TextDisabled("Output: /moc/moc/addin-date.webp");
-        ImGui::TextDisabled("Status: recording");
+        if(mach->initialized) {
+            if(!states.record.start) {
+                if(ImGui::Button("Start", ImVec2(w_button, 0))) {
+                    if(record_init(&states.record, mach) != 0) {
+                        mq_log(MQ_LOG_ERROR, "%s", states.record.error);
+                    } else {
+                        states.record.start = true;
+                        if(states.mq_cycles == 0)
+                            states.mq_cycles = -1;
+                    }
+                }
+                ImGui::SameLine(0, style.ItemInnerSpacing.x);
+                ImGui::BeginDisabled();
+                ImGui::Button("Pause", ImVec2(w_button, 0));
+                ImGui::EndDisabled();
+                ImGui::SameLine(0, style.ItemInnerSpacing.x);
+                ImGui::BeginDisabled();
+                ImGui::Button("Stop", ImVec2(w_button, 0));
+                ImGui::EndDisabled();
+                ImGui::Spacing();
+                const char *text = "Start recording and emulation";
+                if(states.mq_cycles != 0)
+                    text = "Start recording";
+                ImGui::TextCenteredColor(text, 0x00ffff);
+            } else {
+                ImGui::BeginDisabled();
+                ImGui::Button("Start", ImVec2(w_button, 0));
+                ImGui::EndDisabled();
+                ImGui::SameLine(0, style.ItemInnerSpacing.x);
+                ImGui::Button("Pause", ImVec2(w_button, 0));
+                ImGui::SameLine(0, style.ItemInnerSpacing.x);
+                if(ImGui::Button("Stop", ImVec2(w_button, 0))) {
+                    record_quit(&states.record);
+                    states.record.start = false;
+                }
+                if(states.record.start) {
+                    if(record_add_frame(&states.record, mach) != 0)
+                        mq_log(MQ_LOG_ERROR, "%s", states.record.error);
+                }
+                ImGui::Spacing();
+                ImGui::TextDisabled("Start time: xx:xx:xx");
+                ImGui::TextDisabled("Elapsed: xxs");
+                ImGui::TextDisabled("Nb. frames: xxx");
+                ImGui::TextDisabled("Profile: xxxx");
+                ImGui::TextDisabled("Output: /moc/moc/addin-date.webp");
+                ImGui::TextDisabled("Status: recording");
+                ImGui::Spacing();
+                if (states.mq_cycles == 0) {
+                    ImGui::TextCenteredColor("Paused", 0x00ff00);
+                } else {
+                    ImGui::TextCenteredColor("Recording", 0x00ff00);
+                }
+            }
+        } else {
+            ImGui::BeginDisabled();
+            ImGui::Button("Start", ImVec2(w_button, 0));
+            ImGui::EndDisabled();
+            ImGui::SameLine(0, style.ItemInnerSpacing.x);
+            ImGui::BeginDisabled();
+            ImGui::Button("Pause", ImVec2(w_button, 0));
+            ImGui::EndDisabled();
+            ImGui::SameLine(0, style.ItemInnerSpacing.x);
+            ImGui::BeginDisabled();
+            ImGui::Button("Stop", ImVec2(w_button, 0));
+            ImGui::EndDisabled();
+            ImGui::Spacing();
+            ImGui::TextCenteredColor("No addin selected", 0xff0000);
+            // auto status = "No addin selected";
+            // auto w_widget = ImGui::GetContentRegionAvail().x;
+            // auto w_text = ImGui::CalcTextSize(status).x;
+            // ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
+            // ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), status);
+        }
     }
     ImGui::End();
 
@@ -684,7 +741,6 @@ static int update(void)
     ZoneScopedN("update");
 
     SDL_Event e;
-    int cyclesLeft = 0;
 
     if(input.quit)
         return 1;
@@ -726,7 +782,7 @@ static int update(void)
         inputFile = OpenFileBuffer();
         render_needed = std::max(render_needed, 1);
     }
-    else if(input.mq_cycles) {
+    else if(states.mq_cycles) {
         ZoneScopedN("update mq");
 
         /* Cycle until we reach 12 milliseconds */
@@ -734,7 +790,7 @@ static int update(void)
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
         // printf("ts_start=%ld\n", ts_start.tv_nsec);
 
-        while(input.mq_cycles != 0 /* negative is infinity */) {
+        while(states.mq_cycles != 0 /* negative is infinity */) {
             struct timespec ts_current;
             clock_gettime(CLOCK_MONOTONIC, &ts_current);
             int64_t ns_elapsed = (ts_current.tv_nsec - ts_start.tv_nsec);
@@ -744,15 +800,15 @@ static int update(void)
             if(ns_elapsed >= 12'000'000)
                 break;
 
-            int cycles = std::min(input.mq_cycles, 100000);
+            int cycles = std::min(states.mq_cycles, 100000);
             if(cycles < 0) {
                 cycles = 100000;
-                cyclesLeft = -1;
-                // printf("input.mq_cycles=%d, cycles=%d\n", input.mq_cycles, cycles);
+                states.mq_cycles = -1;
+                // printf("states.mq_cycles=%d, cycles=%d\n", states.mq_cycles, cycles);
             }
             else {
-                // printf("input.mq_cycles=%d, cycles=%d\n", input.mq_cycles, cycles);
-                input.mq_cycles -= cycles;
+                // printf("states.mq_cycles=%d, cycles=%d\n", states.mq_cycles, cycles);
+                states.mq_cycles -= cycles;
             }
             mq_machine_cycle(mach, cycles);
         }
@@ -761,8 +817,8 @@ static int update(void)
            TODO: Proper "real-time" controls, e.g limit to 20 ms.
            I don't think I want threads here, too annoying to sync. */
 #if 0
-        int cycles = std::min(input.mq_cycles, 2000000);
-        cyclesLeft = input.mq_cycles - cycles;
+        int cycles = std::min(states.mq_cycles, 2000000);
+        cyclesLeft = states.mq_cycles - cycles;
         if(cycles < 0) {
             cycles = 2000000;
             cyclesLeft = -1;
@@ -793,7 +849,6 @@ static int update(void)
     }
 
     input = DelayedInput();
-    input.mq_cycles = cyclesLeft;
 
     return 0;
 }
@@ -950,6 +1005,7 @@ int main(void)
         mq_machine_destroy(mach);
         mach = nullptr;
     }
+    record_quit(&states.record);
     mq_quit();
     return rc;
 }
