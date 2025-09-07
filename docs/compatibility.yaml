@@ -45,13 +45,14 @@ addins:
 
   - name: HorlogeSH4
     author: Lephe
-    status: intro
+    status: ingame
     updated: 2025-09-03
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2606-1-horloge-sh4-lephenixnoir-utilitaires-add-ins.html
     remarks:
-      - frame not displayed entierly
+      - displays and works in real-time
+      - blocked by `%14d Bdisp_AreaReverseVRAM` in date/time edition menu
 
   - name: Cube Field
     author: PierrotLL

@@ -86,8 +86,8 @@ This section is generated automatically based on [this YAML summary](docs/compat
 Total programs: `all(43)`:  `fxcg50(21)` `fx9860g_sh4(13)` `fxcg20(6)` `fx9860g_sh3(3)` `fxcp400_2.01.2(0)` `fxcg100_2.00(0)` `fx9860g3(0)`
 
 <code>**🟢 Playable** (32.56%)</code> - Games that can be completed with playable performance and no game breaking glitches</br>
-<code>**🟠 Ingame** (30.23%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
-<code>**🟤 Intro** (6.98%)</code> - Games that display image but don't make it past the menus</br>
+<code>**🟠 Ingame** (32.56%)</code> - Games that either can't be finished, have serious glitches or have insufficient performance</br>
+<code>**🟤 Intro** (4.65%)</code> - Games that display image but don't make it past the menus</br>
 <code>**🔴 Loadable** (4.65%)</code> - Games that display a black screen with a framerate on the window's title</br>
 <code>**⚫ Nothing** (25.58%)</code> - Games that don't initialize properly, not loading at all and/or crashing the emulator</br>
 
@@ -104,12 +104,13 @@ Total programs: `all(43)`:  `fxcg50(21)` `fx9860g_sh4(13)` `fxcg20(6)` `fx9860g_
 | [Momento](https://git.sr.ht/~kikoodx/momento) by Kikoodx | <code>🟢 Playable</code> | `fxcg50` | 2025-08-21 | - Perfect(?) |
 | [Teh Moon Show](https://www.planet-casio.com/Fr/programmes/programme4240-last-teh-moon-show-massena-jeux-add-ins.html) by Massena | <code>🟢 Playable</code> | `fxcg50` | 2025-08-21 | - cannot restart a game, same on real hardware</br>- need to properly handle game exit |
 | [Geometry Dash](https://www.planet-casio.com/Fr/programmes/programme3115-last-geometry-dash-fife86-jeux-add-ins.html) by Fife86 | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - Perfect |
-| [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html) by PierrotLL | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-08-28 | - Perfect |
+| [Gravity Duck](https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html) by PierrotLL | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-08-28 | - incorrect black pixel lines at bottom right of screen |
 | [2048 delux](https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html) by Kirafi | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - Perfect |
 | [Destiny](https://www.planet-casio.com/Fr/programmes/programme2684-last-destiny-dodormeur-jeux-add-ins.html) by Dodormeur | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - not 100% tested |
 | [Bomberman](https://www.planet-casio.com/Fr/programmes/programme2242-1-bomberman-dodormeur-jeux-add-ins.html) by Dodormeur | <code>🟢 Playable</code> | `fx9860g_sh4` | 2025-09-03 | - seem fully playable(?) |
 | [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - Most things work</br>- This is used to test hardware features |
 | [Duet](https://www.planet-casio.com/Fr/programmes/programme4173-1-duet-yatis-lephe-jeux-add-ins.html) by Yatis and Lephe | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - No save</br>- more slow than circuit10's emulator. |
+| [HorlogeSH4](https://www.planet-casio.com/Fr/programmes/programme2606-1-horloge-sh4-lephenixnoir-utilitaires-add-ins.html) by Lephe | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-09-03 | - displays and works in real-time</br>- blocked by `%14d Bdisp_AreaReverseVRAM` in date/time edition menu |
 | [OutRun](https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html) by SlyvTT | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - seem work? |
 | [Sonic](https://www.planet-casio.com/Fr/programmes/programme1904-last-sonic-smashmaster-jeux-add-ins.html) by Smashmaster | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - fxcg50 port</br>- Too fast |
 | [Meta Ball](https://www.planet-casio.com/Fr/programmes/programme2344-last-meta-ball-lancelot-jeux-add-ins.html) by Lancelot | <code>🟠 Ingame</code> | `fxcg50` | 2025-08-21 | - fxcg50 port</br>- Too slow.</br>- Invalid write sometime |
@@ -121,7 +122,6 @@ Total programs: `all(43)`:  `fxcg50(21)` `fx9860g_sh4(13)` `fxcg20(6)` `fx9860g_
 | [Evasion](https://www.planet-casio.com/Fr/programmes/programme2082-last-evasion-surv-dodormeur-jeux-add-ins.html) by Dodormeur | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-09-03 | - missing syscall `%8FE PopupWin`</br>- version Graph35+EII display nothing |
 | [Mipjabok](https://www.planet-casio.com/Fr/programmes/programme2303-last-mipjabok-louloux-jeux-add-ins.html) by Louloux | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-28 | - too fast |
 | [gintctl](https://git.planet-casio.com/Lephenixnoir/gintctl) by Lephe | <code>🟠 Ingame</code> | `fx9860g_sh4` | 2025-08-29 | - libprof tests freeze (no crash)</br>- missing instruction `macw` in `CPU parallelism` |
-| [HorlogeSH4](https://www.planet-casio.com/Fr/programmes/programme2606-1-horloge-sh4-lephenixnoir-utilitaires-add-ins.html) by Lephe | <code>🟤 Intro</code> | `fx9860g_sh4` | 2025-09-03 | - frame not displayed entierly |
 | [Demineur winXP](https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html) by Smashmaster | <code>🟤 Intro</code> | `fxcg50` | 2025-08-21 | - fxcg50 port</br>- Slow(?)</br>- First game work, but second crash |
 | [Mario land ce](https://www.planet-casio.com/Fr/programmes/programme1064-last-mario-land-ce-bebe-vador-jeux-add-ins.html) by Bebe-vador | <code>🟤 Intro</code> | `fx9860g_sh3` | 2025-08-27 | - first frame of the game</br>- missing support for `%3ed` `Interrupt_SetOrClrStatusFlags()` |
 | [Cgsnake](https://www.planet-casio.com/Fr/programmes/programme1902-last-cgsnake-eiyeron-jeux-add-ins.html) by Eiyeron | <code>🔴 Loadable</code> | `fxcg20` | 2025-08-21 | - Prizm</br>- Do not crash, just display nothing |
