@@ -221,7 +221,9 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     /* Log except for syscalls that happen often */
     if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420 &&
-       syscallID != 0xc4f)
+       syscallID != 0xc4f && syscallID != 0x807 && syscallID != 0x808 &&
+       syscallID != 0x028 && syscallID != 0x03b && syscallID != 0x146 &&
+       syscallID != 0x247)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
@@ -482,9 +484,22 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     }
 
+    case 0x02a3: /* FrameColor() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2a3 FrameColor() ignored");
+        cpu->r[0] = 0;
+        return;
     case 0x02a8: /* DrawFrame() */
         mq_log(MQ_LOG_ERROR, "syscall %%2a8 DrawFrame() not supported");
         mach->stuck = true;
+        return;
+
+    case 0x02b7: /* EnableStatusArea() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2b7 EnableStatusArea() ignored");
+        cpu->r[0] = 0;
+        return;
+    case 0x02b8: /* DefineStatusAreaFlags() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2b8 DefineStatusAreaFlags() ignored");
+        cpu->r[0] = 0;
         return;
 
     case 0x02bf: /* RTC_Reset() */
@@ -502,16 +517,8 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0921: /* EnableColors() */
-        mq_log(MQ_LOG_ERROR, "syscall %921 EnableColor() ignored");
+        mq_log(MQ_LOG_ERROR, "syscall %%921 EnableColor() ignored");
         cpu->r[0] = 0;
-        return;
-    case 0x02a3: /* FrameColor() */
-        mq_log(MQ_LOG_ERROR, "syscall %2a3 FrameColor() ignored");
-        cpu->r[0] = 0;
-        return;
-    case 0x18f9: /* PrintXY() */
-        mq_log(MQ_LOG_ERROR, "syscall %18f9 PrintXY() ignored");
-        mach->stuck = true;
         return;
 
     case 0x1170: { /* itoa() */
@@ -531,6 +538,24 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
            the storage non-contiguous! */
         for(u32 i = 0; i < cpu->r[6]; i++)
             mq_memory_write(mach, mach->memory, cpu->r[4], 1, cpu->r[5]);
+        cpu->r[0] = 0;
+        return;
+
+    case 0x1562: /* MCSGetDLen2() */
+        cpu->r[0] = 0x40; // does not exist
+        return;
+
+    case 0x18f9: /* PrintXY() */
+        mq_log(MQ_LOG_ERROR, "syscall %%18f9 PrintXY() ignored");
+        cpu->r[0] = 0; //mach->stuck = true;
+        return;
+
+    case 0x1d77: /* DefineStatusMessage() */
+        mq_log(MQ_LOG_ERROR, "syscall %%1d77 DefineStatusMessage() ignored");
+        cpu->r[0] = 0;
+        return;
+    case 0x1d81: /* DisplayStatusArea() */
+        mq_log(MQ_LOG_ERROR, "syscall %%1d81 DisplayStatusArea() ignored");
         cpu->r[0] = 0;
         return;
 
