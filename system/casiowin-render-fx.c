@@ -142,7 +142,7 @@ void mq_casiowin_mono_Print(mqMachine *mach, u32 stringAddress, int max)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
 
-    while(Casiowin->BdispCursorX <= 2 && Casiowin->BdispCursorX < max - 1) {
+    while(Casiowin->BdispCursorX <= 21 && Casiowin->BdispCursorX < max - 1) {
         int codePoint = nextCodePoint(mach, &stringAddress);
         if(codePoint == 0)
             break;
@@ -163,7 +163,6 @@ void mq_casiowin_mono_PrintMini(
     mqMachine *mach, int x, int y, u32 stringAddress, int mode)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
-    mq_log(MQ_LOG_DEBUG, "Run syscall PrintMini: %08x", stringAddress);
 
     mode |= 0x10; // Values in 0-3 range seem to also work on the real device
 
