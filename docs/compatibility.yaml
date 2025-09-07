@@ -372,7 +372,7 @@ addins:
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html
     remarks:
-      - Perfect
+      - incorrect black pixel lines at bottom right of screen
 
   - name: 2048 delux
     author: Kirafi
