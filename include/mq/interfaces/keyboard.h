@@ -78,11 +78,14 @@ void mq_keyboard_initialize(mqKeyboard *kbd, enum mqKeyboardStandardLayout l);
 
 /* Check whether a key is pressed. */
 bool mq_keyboard_isKeyPressed(mqKeyboard *kbd, uint keyNumber);
-/* Set whether a key is pressed (from GUI code). */
-void mq_keyboard_setKeyPressed(mqKeyboard *kbd, uint keyNumber, bool pressed);
+/* Get the key number of a pressed key. If no keys are pressed, returns 0. If
+   multiple keys are pressed, returns a consistent but unspecified one. */
+int mq_keyboard_getPressedKey(mqKeyboard *kbd);
 
-/* Set whether all keys associated with a keycode is pressed (from GUI code),
-   if there are any. */
+/* Set whether a key is pressed. This should be called from GUI code. */
+void mq_keyboard_setKeyPressed(mqKeyboard *kbd, uint keyNumber, bool pressed);
+/* Set whether all keys associated with a standard keycode (if any) are
+   pressed. This should be called from GUI code. */
 void mq_keyboard_setKeycodePressed(
    mqKeyboard *kbd, enum mqKeyboardKeycode keycode, bool pressed);
 

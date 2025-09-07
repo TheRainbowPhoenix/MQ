@@ -107,6 +107,15 @@ bool mq_keyboard_isKeyPressed(mqKeyboard *kbd, uint keyNumber)
     return keyNumber < kbd->keyCount && (kbd->keyStatus[keyNumber] != 0);
 }
 
+int mq_keyboard_getPressedKey(mqKeyboard *kbd)
+{
+    for(uint keyNumber = 0; keyNumber < kbd->keyCount; keyNumber++) {
+        if(mq_keyboard_isKeyPressed(kbd, keyNumber))
+            return keyNumber;
+    }
+    return -1;
+}
+
 void mq_keyboard_setKeyPressed(mqKeyboard *kbd, uint keyNumber, bool pressed)
 {
     if(keyNumber >= kbd->keyCount)
