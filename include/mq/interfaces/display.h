@@ -15,7 +15,7 @@ MQ_START_DEFS
 enum mqDisplay_format {
     /* 8-bit luminance. This is used for mono (with grayscale). */
     MQ_DISPLAY_FORMAT_L8,
-    /* 16-bir RGB565. This is use for the modern color displays. */
+    /* 16-bit RGB565, host-endian. Used for the modern color displays. */
     MQ_DISPLAY_FORMAT_RGB565,
 };
 

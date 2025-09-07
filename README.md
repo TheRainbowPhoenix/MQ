@@ -24,7 +24,7 @@ Clone this repository recursively. Also install [Azur](https://git.planet-casio.
 % make -C build-linux
 ```
 
-Optimizations are enabled in all modes by default, as the emulator is almost unusable without. Debug mode just turns off LTO. To fully disable optimizatoins, add `-DMQ_DISABLE_OPTIMIZATIONS`.
+Optimizations are enabled in all modes by default, as the emulator is almost unusable without. Debug mode just turns off LTO. To fully disable optimizations, add `-DMQ_DISABLE_OPTIMIZATIONS`.
 
 Debug modes can enable profiling.
 - Select `-DMQ_PROFILING_GPROF` to profile with gprof; running the executable will produce `gmon.out` in the current folder.

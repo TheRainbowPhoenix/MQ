@@ -191,6 +191,10 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
         mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);
         mq_memory_createBlock(mach->memory, 0xac0f0000, 512 << 10, ostk);
+        /* Additional RAM not used by OS */
+        void *eram = mq_memory_allocBuffer(mach->memory, "ERAM", 2 << 20);
+        mq_memory_createBlock(mach->memory, 0x8c200000, 1 << 20, eram);
+        mq_memory_createBlock(mach->memory, 0xac200000, 1 << 20, eram);
 
         mach->display = mq_display_create();
         mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);

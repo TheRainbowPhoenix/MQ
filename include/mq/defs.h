@@ -85,6 +85,8 @@ void mq_logn(int name, char const *fmt, ...);
    - rateLimit < 0: the message shows all the time, with no limit. */
 void mq_logn_setRateLimit(int name, i16 rateLimit);
 
+// TODO: Remember initial rate limits and reset them
+
 /* Register one or more named message. This top-level macro works like this:
      MQ_LOG_REGISTER(lvalue NAME, char const *TAG, int LIMIT,
                      enum mq_log_priority PRIORITY, int COUNT)
