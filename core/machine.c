@@ -267,6 +267,15 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         }
     }
 
+    /* While blocked, just run background processes */
+    while(mach->internallyBlocked && cyclesRemaining >= mach->processTimer) {
+        cyclesRemaining -= mach->processTimer;
+        mach->processTimer = 0;
+        mq_machine_runProcesses(mach, mach->processFrequency);
+    }
+    if(mach->internallyBlocked)
+        goto endRun;
+
     while(cyclesRemaining > 4) {
         if(MQ_UNLIKELY(mach->stuck))
             break;
@@ -296,6 +305,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         cyclesRemaining--;
     }
 
+endRun:
     mq_timer_freeze();
     return (cyclesRequested - cyclesRemaining);
 }

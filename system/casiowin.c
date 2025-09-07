@@ -14,10 +14,12 @@
 #include <stdio.h>
 
 static int moduleID = -1;
+static int processID_bgsyscall = -1;
 
 static void inithook(void)
 {
     moduleID = mq_module_register();
+    processID_bgsyscall = mq_process_register();
 }
 MQ_HOOK_REGISTER(init, inithook)
 
@@ -157,6 +159,9 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     mqCasiowin *Casiowin = calloc(1, sizeof *Casiowin);
     if(!Casiowin)
         return false;
+    Casiowin->bgs = calloc(1, sizeof *Casiowin->bgs);
+    if(!Casiowin->bgs)
+        return false;
 
     Casiowin->info = mq_casiowin_getOSInfo(version);
     Casiowin->version = version;
@@ -214,6 +219,12 @@ static void mq_casiowin_cleanup(mqMachine *mach)
     mq_heap_reset();
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_casiowin_cleanup)
+
+static bool readStack32(mqMachine *mach, int offset, void *ptr)
+{
+    mqCpu *cpu = &mach->cpu;
+    return mq_memory_read32(mach, mach->memory, cpu->r[15] + offset, ptr);
+}
 
 static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 {
@@ -305,10 +316,20 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     // case 0x014d: /* Bdisp_AreaReverseVRAM() */
     //     return;
 
-    case 0x0247: /* Keyboard_GetKeyWait() */
-        mq_log(MQ_LOG_ERROR, "unhandled Keyboard_GetKeyWait(), return 0");
-        cpu->r[0] = 0;
+    case 0x0247: { /* Keyboard_GetKeyWait() */
+        struct mqCasiowin_GetKeyWaitArgs args = {
+            .ptr_i32_col = cpu->r[4],
+            .ptr_i32_row = cpu->r[5],
+            .waitType = cpu->r[6],
+            .timeout = cpu->r[7],
+        };
+        if(readStack32(mach, +0, &args.menu) &&
+           readStack32(mach, +4, &args.ptr_u16_key))
+            mq_casiowin_GetKeyWait(mach, args);
+        else
+            mach->stuck = true;
         return;
+    }
 
     case 0x024c: /* Keyboard_IsSpecialKeyDown */
         mq_log(
@@ -533,6 +554,21 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     }
 
+    case 0x12bf: { /* GetKeyWait_OS() */
+        struct mqCasiowin_GetKeyWaitArgs args = {
+            .ptr_i32_col = cpu->r[4],
+            .ptr_i32_row = cpu->r[5],
+            .waitType = cpu->r[6],
+            .timeout = cpu->r[7],
+        };
+        if(readStack32(mach, +0, &args.menu) &&
+           readStack32(mach, +4, &args.ptr_u16_key))
+            mq_casiowin_GetKeyWait(mach, args);
+        else
+            mach->stuck = true;
+        return;
+    }
+
     case 0x1511: /* memset() */
         /* We can't memset if it's not aligned, because the endianness makes
            the storage non-contiguous! */
@@ -629,6 +665,36 @@ bool mq_casiowin_initHeap(mqMachine *mach)
         return false;
 
     return mq_heap_init(start, start + size, buffer);
+}
+
+static void mq_casiowin_process_bgsyscall(mqMachine *mach, int cyclesElapsed)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    (void)cyclesElapsed;
+
+    bool done = Casiowin->bgsyscall(mach);
+    if(done) {
+        Casiowin->bgsyscall = NULL;
+        mach->processes[processID_bgsyscall] = NULL;
+        mach->internallyBlocked = false;
+    }
+}
+
+bool mq_casiowin_runBackgroundSyscall(
+    mqMachine *mach, mq_casiowin_bgsyscall_t *bgsyscall)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    if(!Casiowin || mach->processes[processID_bgsyscall])
+        return false;
+
+    /* Try to run it once before setting up the background process */
+    if(bgsyscall(mach))
+        return true;
+
+    Casiowin->bgsyscall = bgsyscall;
+    mach->processes[processID_bgsyscall] = mq_casiowin_process_bgsyscall;
+    mach->internallyBlocked = true;
+    return true;
 }
 
 void mq_casiowin_syscall(mqMachine *mach)
