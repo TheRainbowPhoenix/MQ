@@ -79,12 +79,18 @@ static void write_CPUOPM(mqCpu *cpu, u32 value)
     cpu->CPUOPM = (value & 0x00000008) | 0x00000300;
 }
 
+static u16 PLCR_sh3_zero = 0;
+static void write_PLCR_sh3(MQ_UNUSED void *userdata, MQ_UNUSED u32 value)
+{
+}
+
 bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
 {
     // TODO: Area 7 addresses for MMIO?
     mqPage *pgff000 = mq_memory_getPage(mem, 0xff000000);
     mqPage *pgff2f0 = mq_memory_getPage(mem, 0xff2f0000);
-    if(!pgff000 || !pgff2f0)
+    mqPage *pga4000 = mq_memory_getPage(mem, 0xa4000000);
+    if(!pgff000 || !pgff2f0 || !pga4000)
         return false;
 
     bool b = true;
@@ -100,6 +106,13 @@ bool mq_cpu_setup(mqCpu *cpu, mqMemory *mem)
         read_PRR, NULL, NULL, NULL);
     b &= mq_page_mapRegister32(pgff2f0, "CPUOPM", 0xff2f0000,
         NULL, write_CPUOPM, &cpu->CPUOPM, cpu);
+
+    /* Address of PLCR on SH7337 and SH7355. The register doesn't exist on the
+       SH7305 but we don't want to print a warning if it gets accessed, since
+       it's used for model detection. Make it available with value 0. */
+    b &= mq_page_mapRegister16(pga4000, "PLCR_sh3", 0xa4000114,
+        NULL, write_PLCR_sh3, &PLCR_sh3_zero, NULL);
+
     return b;
 }
 
