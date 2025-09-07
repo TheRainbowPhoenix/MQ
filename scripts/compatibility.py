@@ -52,29 +52,24 @@ CompatModels: tuple[str,...] = (
 )
 
 CompatStatus: dict[str,tuple[str,str]] = {
-    'playable': (
+    'complete': (
         '🟢',
-        'Games that can be completed with playable performance and no ' +
-        'game breaking glitches'
+        'Programs where most features work and games that can be completed ' +
+        'with reasonable performance'
     ),
-    'ingame': (
+    'usable': (
         '🟠',
-        'Games that either can\'t be finished, have serious glitches or ' +
-        'have insufficient performance'
+        'Programs that can be used and games that can be played but have ' +
+        'missing features, glitches, or bad performance'
     ),
-    'intro': (
+    'frame': (
         '🟤',
-        'Games that display image but don\'t make it past the menus'
-    ),
-    'loadable': (
-        '🔴',
-        'Games that display a black screen with a framerate on the ' +
-        'window\'s title'
+        'Programs that display at least one frame before failing'
     ),
     'nothing': (
         '⚫',
-        'Games that don\'t initialize properly, not loading at all ' +
-        'and/or crashing the emulator'
+        'Programs that crash, loop, or get stuck before displaying their ' +
+        'first frame'
     ),
 }
 
