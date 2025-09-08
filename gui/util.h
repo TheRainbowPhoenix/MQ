@@ -30,3 +30,7 @@ void *openAndReadFile(char const *path, long *size_ptr);
    On emscripten this fills *ofb asynchronously, in-between frames, so this
    must be a static or something safe that won't get lost until then. */
 void openFileDialog(OpenFileBuffer *ofb);
+
+/* String describing a memory size, using kiB/MiB suffixes if the size is a
+   perfect multiple of 2^10 or 2^20. With shortSuffix, appends k/M. */
+std::string memorySizeString(uint size, bool shortSuffix=false);

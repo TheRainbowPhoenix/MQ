@@ -451,15 +451,30 @@ static void render(void)
 
     static ImGui::HexViewer HV = {
         .AddressBits = 32,
+        .MinAddress = 0,
+        .MaxAddress = 0xffffffff,
+        .InputType = ImGui::HexViewer::InputFunction,
         .ReadByte = HexViewer_ReadByte,
+        .LineSpacing = 2,
         .AlignXCenter = false,
         .Cursor = 0,
     };
+    static HexViewerWindowState HVWS {};
     static MemoryWindowState MWS {};
-    MemoryWindowAction MWA = AddMemoryWindow(mach, MWS);
+    static MemoryBuffersWindowState MBWS {};
 
-    if(MWA.type == MemoryWindowAction::Type::MWA_VIEW_HEX)
-        HV.Cursor = MWA.address;
+    MemoryWindowAction MWA = AddMemoryWindow(mach, MWS);
+    (void)MWA;
+
+    MemoryBuffersWindowAction MBWA = AddMemoryBuffersWindow(mach, MBWS);
+    if(MBWA.type == MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX) {
+        HV.Cursor = MBWA.address;
+        HV.MinAddress = MBWA.address;
+        HV.MaxAddress = MBWA.address + (MBWA.size - 1);
+        HVWS.currentBuffer = MBWA.buffer;
+        HVWS.currentBufferOffset = MBWA.offset;
+        HVWS.currentBufferSize = MBWA.size;
+    }
 
     if(ImGui::Begin("Heap")) {
         u32 heapStart, heapEnd;
@@ -496,24 +511,20 @@ static void render(void)
     if(MMUWA.type == MMUWindowAction::Type::MMUWA_UNBIND)
         input.mq_mmu_unbind = true;
 
-    if(ImGui::Begin("Hex Viewer")) {
-        ImGui::PushFont(fontMono);
-        ImGui::AddHexViewer(HV);
-        ImGui::PopFont();
-    }
-    ImGui::End();
+    HexViewerWindowAction HVWA = AddHexViewerWindow(mach, HVWS, HV);
+    (void)HVWA;
 
     static bool first_frame = true;
     if(first_frame) {
         auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
-            ImGuiDir_Left, 0.68f, nullptr, &dock);
+            ImGuiDir_Left, 0.70, nullptr, &dock);
         auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
         auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Right, 0.70f, nullptr, &dock_left_top);
         auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
             dock_left_bottom,
-            ImGuiDir_Right, 0.51f, nullptr, &dock_left_bottom);
+            ImGuiDir_Right, 0.52f, nullptr, &dock_left_bottom);
         auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
             ImGuiDir_Down, 0.6f, nullptr, &dock);
 
@@ -523,7 +534,8 @@ static void render(void)
         ImGui::DockBuilderDockWindow("Messages", dock_left_top_right);
         ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
         ImGui::DockBuilderDockWindow("Interrupts", dock_left_top_right);
-        ImGui::DockBuilderDockWindow("Memory", dock_left_bottom);
+        ImGui::DockBuilderDockWindow("Memory tree", dock_left_bottom);
+        ImGui::DockBuilderDockWindow("Memory buffers", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
         ImGui::DockBuilderDockWindow("MMU", dock_left_bottom);
         ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);

@@ -57,6 +57,28 @@ void TextMono(char const *fmt, ...)
     va_end(args);
 }
 
+void TextError(char const *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    ImGui::PushStyleColor(ImGuiCol_Text, 0xff6060ff);
+    ImGui::TextV(fmt, args);
+    ImGui::PopStyleColor();
+    va_end(args);
+}
+
+void TextErrorMono(char const *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    ImGui::PushFont(fontMono);
+    ImGui::PushStyleColor(ImGuiCol_Text, 0xff6060ff);
+    ImGui::TextV(fmt, args);
+    ImGui::PopStyleColor();
+    ImGui::PopFont();
+    va_end(args);
+}
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &st)
@@ -278,6 +300,50 @@ glm::mat3 ImGuiGlWindow::windowToOpenGLMatrix() const
 
 namespace ImGui {
 
+u64 HexViewer::MinCursor() const
+{
+    if(this->PowerOfTwoLayout)
+        return this->MinAddress & -this->BytesPerLine;
+    else
+        return this->MinAddress;
+}
+
+u64 HexViewer::MaxCursor() const
+{
+    /* Number of bytes that we want to show, accounting for potential empty
+       space at the beginning of the first line.
+       FIXME: Overflows if we have a full 64-bit address space... */
+    u64 DesiredBytesInView = this->MaxAddress - MinCursor() + 1;
+    /* Number of lines we want to show total. */
+    u64 DesiredLinesInView =
+        (DesiredBytesInView + this->BytesPerLine - 1) / this->BytesPerLine;
+
+    /* Number of lines that we can skip at the top of the view. */
+    u64 MaxScrollLines;
+    if(DesiredLinesInView >= (u64)this->VisibleLines)
+        MaxScrollLines = DesiredLinesInView - this->VisibleLines;
+    else
+        MaxScrollLines = 0;
+
+    return MinCursor() + MaxScrollLines * this->BytesPerLine;
+}
+
+u64 HexViewer::AdjustCursor(u64 Cursor, i64 Increment) const
+{
+    if(__builtin_add_overflow(Cursor, Increment, &Cursor)) {
+        if(Increment < 0)
+            Cursor = 0;
+        else
+            Cursor = (u64)-1;
+    }
+
+    if(this->PowerOfTwoLayout)
+        Cursor &= -this->BytesPerLine;
+
+    u64 Min = MinCursor(), Max = MaxCursor();
+    return std::min(std::max(Min, Cursor), Max);
+}
+
 /* A reasonably good estimator of text size based on glyph count. Even for mono
    fonts, using the size of a single character appears to lead to significant
    deviations. So we use the size of up to 16. */
@@ -296,19 +362,80 @@ static int GlyphsInWidth(int pixels)
     return (16 * pixels / w);
 }
 
-static int PreviousPowerOfTwo(uint n)
+static bool IsPowerOfTwo(uint n)
 {
-    uint m;
-    while((m = (n & (n - 1))))
-        n = m;
-    return n;
+    return (n & (n - 1)) == 0;
 }
 
-static u64 ClampAddress(HexViewer &HV, u64 addr)
+void HexViewer::ComputeLayout(int AvailableWidth, int AvailableHeight)
 {
-    if(HV.AddressBits < 64)
-        addr &= (1ull << HV.AddressBits) - 1;
-    return addr;
+    /* Number of lines that will fit in the widget */
+    this->LayoutLineHeight = ImGui::GetTextLineHeight() + this->LineSpacing;
+    this->VisibleLines =
+        (AvailableHeight + this->LineSpacing) / this->LayoutLineHeight;
+
+    /* Number of pixels needed to render the address column */
+    int AddressPixels = WidthForGlyphs(this->AddressBits / 4 + 1);
+    this->LayoutXAddress = 0;
+
+    /* Space available for the bytes and ASCII columns combined with major
+       spacing (in-between both regions) already deducted */
+    int SpaceForBytes =
+        AvailableWidth - AddressPixels - 2 * this->MajorSpacing;
+    this->LayoutXBytes = AddressPixels + this->MajorSpacing;
+
+    /* Determine the number of bytes per line incrementally by computing how
+       much space we need for each set size until it doesn't fit anymore. */
+    int PixelsLeft = 0;
+    for(int BPL = 1; true; BPL++) {
+        /* Two hex glyphs, one minor spacing, and one ASCII glyph per byte.
+           But no minor spacing on the outside, so take one away. */
+        int BytesPixels = (WidthForGlyphs(2) + this->MinorSpacing) * BPL
+                          - this->MinorSpacing;
+        int AsciiPixels = WidthForGlyphs(1) * BPL;
+
+        /* Determine the number of groups, and thus, group spaces. */
+        int Groups = (BPL + this->GroupSize - 1) / this->GroupSize;
+        BytesPixels += (Groups - 1) * this->GroupSpacingBytes;
+        AsciiPixels += (Groups - 1) * this->GroupSpacingAscii;
+
+        /* Decide whether to take that BPL or not. We always take at least 1.
+           Then it depends on whether if fits and/or it's a power of two. */
+        bool Fits = BytesPixels + AsciiPixels <= SpaceForBytes;
+        if(BPL == 1 || (Fits && IsPowerOfTwo(BPL) >= this->PowerOfTwoLayout)) {
+            this->BytesPerLine = BPL;
+            this->LayoutXAscii =
+                this->LayoutXBytes + BytesPixels + this->MajorSpacing;
+            PixelsLeft = SpaceForBytes - (BytesPixels + AsciiPixels);
+        }
+        /* Only try larger sizes if it did fit however. */
+        if(!Fits)
+            break;
+    }
+
+    /* Adjust all horizontal coordinates if we're centering. */
+    if(this->AlignXCenter) {
+        this->LayoutXAddress += PixelsLeft / 2;
+        this->LayoutXBytes += PixelsLeft / 2;
+        this->LayoutXAscii += PixelsLeft / 2;
+    }
+}
+
+int HexViewer::LayoutXByteAt(int Column) const
+{
+    int FullGroups = Column / this->GroupSize;
+    int XOffset =
+        (WidthForGlyphs(2) + this->MinorSpacing) * Column +
+        this->GroupSpacingBytes * FullGroups;
+    return this->LayoutXBytes + XOffset;
+}
+
+int HexViewer::LayoutXAsciiAt(int Column) const
+{
+    int FullGroups = Column / this->GroupSize;
+    int XOffset =
+        WidthForGlyphs(1) * Column + this->GroupSpacingAscii * FullGroups;
+    return this->LayoutXAscii + XOffset;
 }
 
 static void RenderHexViewer(HexViewer &HV)
@@ -320,31 +447,14 @@ static void RenderHexViewer(HexViewer &HV)
     ImVec2 R = ImGui::GetContentRegionAvail();
     ImVec2 BR(TL.x + R.x, TL.y + R.y);
 
-    // drawList->AddRectFilled(TL, BR, 0xff000000);
+    ImGui::BeginChild("##hexviewer");
 
-    int lineHeight = ImGui::GetTextLineHeight();
-    int lines = R.y / lineHeight;
+    /* Remove the scrollbar from the rendering width, as the scrollbar is
+       placed on the child window automatically by ImGui. */
+    float scrollbarWidth = ImGui::GetStyle().ScrollbarSize;
+    R.x -= scrollbarWidth;
 
-    int addressPixels = WidthForGlyphs(HV.AddressBits / 4 + 1);
-
-    /* In each line, we fit address bits, major spacing, byte bits, major
-       spacing, and ASCII. Each byte uses two hex glyphs, one minor spacing,
-       and one ASCII glyph. The extra minor spacing is to compensate minor
-       spacing being counted one too many times. */
-    int spaceForBytes =
-        R.x - addressPixels - 2 * HV.MajorSpacing + HV.MinorSpacing;
-    int bytePixels = WidthForGlyphs(2) + WidthForGlyphs(1) + HV.MinorSpacing;
-    HV.BytesPerLine = spaceForBytes / bytePixels;
-
-    if(HV.PowerOfTwoLayout)
-        HV.BytesPerLine = PreviousPowerOfTwo(HV.BytesPerLine);
-
-    /* Center the view if we don't use all the space. */
-    if(HV.AlignXCenter) {
-        int pixelsLeft = spaceForBytes - HV.BytesPerLine * bytePixels;
-        TL.x += pixelsLeft / 2;
-        R.x -= pixelsLeft;
-    }
+    HV.ComputeLayout(R.x, R.y);
 
     u64 addr = HV.Cursor;
     u8 byte;
@@ -352,19 +462,32 @@ static void RenderHexViewer(HexViewer &HV)
     ImU32 fg = ImGui::ColorConvertFloat4ToU32(
         ImGui::GetStyle().Colors[ImGuiCol_Text]);
 
-    for(int i = 0; i < lines; i++) {
-        ImVec2 p(TL.x, TL.y + i * lineHeight), q = p;
+    for(int i = 0; i < HV.VisibleLines; i++) {
+        ImVec2 p(TL.x + HV.LayoutXAddress, TL.y + i * HV.LayoutLineHeight);
+        ImVec2 q = p;
 
         sprintf(str, "%0*" PRIx64 ":", std::min(HV.AddressBits / 4, 16), addr);
         drawList->AddText(p, fg, str);
 
-        p.x += addressPixels + HV.MajorSpacing;
-        q.x = p.x + HV.BytesPerLine * (WidthForGlyphs(2) + HV.MinorSpacing)
-              + HV.MajorSpacing - HV.MinorSpacing;
-
         for(int j = 0; j < HV.BytesPerLine; j++) {
-            bool ok = HV.ReadByte && HV.ReadByte(addr, &byte);
+            bool ok = false;
+            bool inbounds = true;
 
+            if(addr < HV.MinAddress || addr > HV.MaxAddress) {
+                inbounds = false;
+            }
+            else if(HV.InputType == HexViewer::InputFunction) {
+                ok = HV.ReadByte && HV.ReadByte(addr, &byte);
+            }
+            else if(HV.InputType == HexViewer::InputBuffer) {
+                i64 offset = addr - HV.BufferBaseAddress;
+                ok = HV.BufferPointer && offset >= 0 && offset < HV.BufferSize;
+                if(ok)
+                    byte = ((u8 *)HV.BufferPointer)[offset];
+            }
+
+            p.x = TL.x + HV.LayoutXByteAt(j);
+            q.x = TL.x + HV.LayoutXAsciiAt(j);
             if(ok) {
                 sprintf(str, "%02x", byte);
                 drawList->AddText(p, fg, str);
@@ -372,32 +495,50 @@ static void RenderHexViewer(HexViewer &HV)
                 str[1] = 0;
                 drawList->AddText(q, fg, str);
             }
-            else {
+            else if(inbounds) {
                 drawList->AddText(p, fg, "##");
                 drawList->AddText(q, fg, ".");
             }
 
-            p.x += WidthForGlyphs(2) + HV.MinorSpacing;
-            q.x += WidthForGlyphs(1);
-            addr = ClampAddress(HV, addr + 1);
+            addr++;
         }
     }
 
-    HV.VisibleLines = lines;
+    /* Manual scrollbar, based on
+       https://github.com/ocornut/imgui/issues/8215#issuecomment-2527561330 */
+
+    if(HV.MaxCursor() > HV.MinCursor()) {
+        ImGuiWindow *win = ImGui::GetCurrentWindow();
+        ImS64 scroll_max = (HV.MaxCursor() - HV.MinCursor()) / HV.BytesPerLine + HV.VisibleLines;
+        ImS64 scroll_visible_size = HV.VisibleLines;
+
+        // Hack to use GetWindowScrollbarRect()
+        win->ScrollbarSizes.x = win->ScrollbarSizes.y = scrollbarWidth;
+
+        ImRect scrollbarRect = ImGui::GetWindowScrollbarRect(win, ImGuiAxis_Y);
+        ImGuiID scrollbarID = ImGui::GetWindowScrollbarID(win, ImGuiAxis_Y);
+        static ImS64 random;
+        random = (HV.Cursor - HV.MinCursor()) / HV.BytesPerLine;
+        ImGui::ScrollbarEx(scrollbarRect, scrollbarID, ImGuiAxis_Y,
+            &random, scroll_visible_size, scroll_max, ImDrawFlags_None);
+
+        HV.Cursor = HV.AdjustCursor(HV.MinCursor() + random * HV.BytesPerLine);
+        win->ScrollbarSizes.x = win->ScrollbarSizes.y = 0.0f;
+    }
+
+    ImGui::EndChild();
     ImGui::SetCursorScreenPos(BR);
 }
 
 void AddHexViewer(HexViewer &HV)
 {
-    ImGui::BeginGroup();
     RenderHexViewer(HV);
-    ImGui::EndGroup();
 
     float wheel = ImGui::GetIO().MouseWheel;
     if(ImGui::IsItemHovered() && wheel != 0) {
         int dy = (wheel < 0) ? -1 : +1;
-        u64 newCursor = HV.Cursor - dy * HV.BytesPerLine * HV.VisibleLines;
-        HV.Cursor = ClampAddress(HV, newCursor);
+        HV.Cursor = HV.AdjustCursor(
+            HV.Cursor, -dy * HV.BytesPerLine * HV.VisibleLines);
     }
 }
 

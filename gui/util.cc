@@ -93,3 +93,19 @@ void openFileDialog(OpenFileBuffer *ofb)
 }
 
 #endif
+
+std::string memorySizeString(uint size, bool shortSuffix)
+{
+    char *str = NULL;
+
+    if(size == 0)
+        asprintf(&str, "0");
+    else if(((size >> 20) << 20) == size)
+        asprintf(&str, "%u%s", size >> 20, shortSuffix ? "M" : " MiB");
+    else if(((size >> 10) << 10) == size)
+        asprintf(&str, "%u%s", size >> 10, shortSuffix ? "k" : " kiB");
+    else
+        asprintf(&str, "%u", size);
+
+    return str;
+}

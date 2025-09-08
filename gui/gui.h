@@ -109,15 +109,33 @@ struct MemoryWindowState {
 };
 /* Actions emitted from the memory window. */
 struct MemoryWindowAction {
-    enum class Type { MWA_NONE, MWA_VIEW_HEX };
-    Type type = Type::MWA_NONE;
-    u32 address = 0;
 };
 
 MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state);
 
 MemoryWindowAction AddMemoryWindowContents(
     mqMachine *mach, MemoryWindowState &state);
+
+//=== Memory Buffers window ==================================================//
+
+struct MemoryBuffersWindowState {
+    int selectedBuffer = -1;
+};
+struct MemoryBuffersWindowAction {
+    enum class Type { MBWA_NONE, MBWA_VIEW_HEX };
+    Type type = Type::MBWA_NONE;
+    /* Region of buffer we want to visualize, and matching emulated address */
+    mqMemoryBuffer *buffer = NULL;
+    int offset = -1;
+    int size = -1;
+    u32 address = 0;
+};
+
+MemoryBuffersWindowAction AddMemoryBuffersWindow(
+    mqMachine *mach, MemoryBuffersWindowState &state);
+
+MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
+    mqMachine *mach, MemoryBuffersWindowState &state);
 
 //=== MMU window =============================================================//
 
@@ -134,5 +152,24 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach);
 
 void AddInterruptsWindow(mqMachine *mach);
 void AddInterruptsWindowContents(mqMachine *mach);
+
+//=== Hex Viewer window ======================================================//
+
+struct HexViewerWindowState {
+    /* If NULL, we're viewing the entire memory. Otherwise we're viewing just
+       that particular buffer. */
+    mqMemoryBuffer *currentBuffer = NULL;
+    /* Offset and size of the buffer section we're looking into. This keeps
+       track of whether we're looking at the full buffer or just a subset. */
+   int currentBufferOffset = 0;
+   int currentBufferSize = 0;
+};
+struct HexViewerWindowAction {
+};
+
+HexViewerWindowAction AddHexViewerWindow(
+    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV);
+HexViewerWindowAction AddHexViewerWindowContents(
+    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV);
 
 #endif /* MQ_UI_GUI_H */

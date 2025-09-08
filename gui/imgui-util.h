@@ -40,6 +40,12 @@ static inline void MoveCursorScreenPos(ImVec2 diff) {
    variadic templates, only variadic functions, so use C-style varargs. */
 __attribute__((format(printf, 1, 2)))
 void TextMono(char const *fmt, ...);
+/* Text but with a red error color. */
+__attribute__((format(printf, 1, 2)))
+void TextError(char const *fmt, ...);
+/* Text vut with the mono font and a red error color. */
+__attribute__((format(printf, 1, 2)))
+void TextErrorMono(char const *fmt, ...);
 
 /* Checkbox with smaller frame padding. */
 template<typename... Args>
@@ -139,29 +145,78 @@ private:
 namespace ImGui {
 
 struct HexViewer {
-    //=== Data input ===//
+    //=== Data input =========================================================//
 
     /* Number of bits in address values. Should be a multiple of 4. */
     int AddressBits;
-    /* Read function */
-    bool (*ReadByte)(u64 address, u8 *value);
+    /* Minimum and maximum address that we can access; both are included so
+       that MaxAddress can be specified without risking an overflow. */
+    u64 MinAddress = 0;
+    u64 MaxAddress = -1;
 
-    //=== Layout parameters ===//
+    /* Input type */
+    enum { InputFunction, InputBuffer };
+    int InputType;
 
-    /* Force layout to display a power-of-two number of bytes per line. */
+    /* [Function]: Read function */
+    bool (*ReadByte)(u64 address, u8 *value) = nullptr;
+
+    /* [Buffer]: Input buffer and its size */
+    void *BufferPointer = nullptr;
+    int BufferSize = 0;
+    /* [Buffer]: Base address of the buffer in the address space */
+    u64 BufferBaseAddress = 0;
+
+    //=== Layout parameters ==================================================//
+
+    /* Force layout to display a power-of-two number of bytes per line. This
+       also forces lines to start on aligned address. */
     bool PowerOfTwoLayout = true;
+    /* Extra spacing (pixels) in-between lines. */
+    int LineSpacing = 0;
     /* Spacing (pixels) between address, hex, and ASCII columns. */
-    int MajorSpacing = 10;
+    int MajorSpacing = 8;
     /* Spacing (pixels) between bytes in hex column. */
     int MinorSpacing = 2;
+    /* Extra spacing (pixels) between groups in hex columns, and group size. */
+    int GroupSize = 4;
+    int GroupSpacingBytes = 4;
+    int GroupSpacingAscii = 4;
     /* Center-align horizontally */
     bool AlignXCenter = true;
 
-    //=== Variable data ===//
+    //=== Variable data: layout output =======================================//
 
-    u64 Cursor;
     int BytesPerLine = 1;
     int VisibleLines = 1;
+
+    void ComputeLayout(int AvailableWidth, int AvailableHeight);
+
+    /* Layout x offsets for the address, bytes and ASCII columns. */
+    int LayoutXAddress = 0;
+    int LayoutXBytes = 0;
+    int LayoutXAscii = 0;
+    /* Line height, spacing included. */
+    int LayoutLineHeight = 0;
+
+    /* Get the layout X offset for a given byte's hex code and ASCII. */
+    int LayoutXByteAt(int Column) const;
+    int LayoutXAsciiAt(int Column) const;
+
+    //=== Variable data: viewing state =======================================//
+
+    u64 Cursor;
+
+    /* Minimum and maximum values that the cursor can have. In power-of-two
+       layout, the cursor is always line-aligned; if you have 16 bytes per line
+       and the min address is 0x28 the minimum cursor will be 0x20 and the
+       first byte will be displayed on the middle of the first line. */
+    u64 MinCursor() const;
+    u64 MaxCursor() const;
+    /* Adjust the given cursor to an acceptable value after adding the given
+       increment. The addition handles overflow. The adjustment handles both
+       alignment (in power-of-two layout) and clamping to min/max values. */
+    u64 AdjustCursor(u64 Cursor, i64 Increment=0) const;
 };
 
 void AddHexViewer(HexViewer &HV);
