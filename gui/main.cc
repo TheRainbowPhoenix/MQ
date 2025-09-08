@@ -56,8 +56,9 @@ struct DelayedInput {
 struct States {
     int mq_cycles = 0;
     mqRecord record = {
-        .start = false,
+        .status = MQ_RECORD_STATUS_UNINIT,
         .error = nullptr,
+        .stats = {0, 0, 0, 0, 0, 0},
     };
 };
 
@@ -395,7 +396,7 @@ static void render(void)
         w_button -= (style.ItemInnerSpacing.x * 2);
         w_button /= 3;
         if(mach->initialized) {
-            if(!states.record.start) {
+            if(states.record.status == MQ_RECORD_STATUS_UNINIT) {
                 mqRecordRequest request = {
                     .frameRate = 50,
                     .scale_factor = 2,
@@ -405,7 +406,10 @@ static void render(void)
                     if(record_init(&states.record, &request, mach) != 0) {
                         mq_log(MQ_LOG_ERROR, "%s", states.record.error);
                     } else {
-                        states.record.start = true;
+                        record_set_status(
+                            &states.record,
+                            MQ_RECORD_STATUS_START
+                        );
                         if(states.mq_cycles == 0)
                             states.mq_cycles = -1;
                     }
@@ -429,24 +433,50 @@ static void render(void)
                 ImGui::Button("Start", ImVec2(w_button, 0));
                 ImGui::EndDisabled();
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
-                ImGui::Button("Pause", ImVec2(w_button, 0));
+                if(ImGui::Button("Pause", ImVec2(w_button, 0))) {
+                    record_set_status(
+                        &states.record,
+                        MQ_RECORD_STATUS_PAUSED
+                    );
+                }
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
                 if(ImGui::Button("Stop", ImVec2(w_button, 0))) {
                     record_quit(&states.record);
-                    states.record.start = false;
+                    record_set_status(
+                        &states.record,
+                        MQ_RECORD_STATUS_UNINIT
+                    );
                 }
-                if(states.record.start) {
-                    // record_show(&states.record);
-                    if(record_add_frame(&states.record, mach) != 0)
-                        mq_log(MQ_LOG_ERROR, "%s", states.record.error);
-                }
+                // record_show(&states.record);
+                if(record_add_frame(&states.record, mach) != 0)
+                    mq_log(MQ_LOG_ERROR, "%s", states.record.error);
                 ImGui::Spacing();
-                ImGui::TextDisabled("Start time: xx:xx:xx");
-                ImGui::TextDisabled("Elapsed: xxs");
-                ImGui::TextDisabled("Nb. frames: xxx");
-                ImGui::TextDisabled("Profile: xxxx");
-                ImGui::TextDisabled("Output: /moc/moc/addin-date.webp");
-                ImGui::TextDisabled("Status: recording");
+                ImGui::TextDisabled(
+                    "Start time: %02d:%02d:%02d",
+                    states.record.stats.time_min,
+                    states.record.stats.time_sec,
+                    states.record.stats.time_ms
+                );
+                ImGui::TextDisabled(
+                    "Elapsed: %dms",
+                    states.record.stats.total_ms
+                );
+                ImGui::TextDisabled(
+                    "Nb. frames: %d",
+                    states.record.stats.iframe
+                );
+                ImGui::TextDisabled(
+                    "Nb. error: %d",
+                    states.record.stats.nb_error
+                );
+                ImGui::TextDisabled(
+                    "Output: %s",
+                    states.record.stats.pathname_out
+                );
+                ImGui::TextDisabled(
+                    "Status: %s",
+                    states.record.stats.status
+                );
                 ImGui::Spacing();
                 if (states.mq_cycles == 0) {
                     ImGui::TextCenteredColor("Paused", 0x00ff00);
@@ -468,11 +498,6 @@ static void render(void)
             ImGui::EndDisabled();
             ImGui::Spacing();
             ImGui::TextCenteredColor("No addin selected", 0xff0000);
-            // auto status = "No addin selected";
-            // auto w_widget = ImGui::GetContentRegionAvail().x;
-            // auto w_text = ImGui::CalcTextSize(status).x;
-            // ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
-            // ImGui::TextColored(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), status);
         }
     }
     ImGui::End();

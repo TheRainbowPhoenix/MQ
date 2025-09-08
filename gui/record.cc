@@ -29,7 +29,7 @@ struct _mqFfmpeg {
     AVFrame *yuvpic;
     AVPacket *packet;
 
-    int iframe;
+    uint iframe;
 
     uint frameRate;
     uint height_in;
@@ -52,10 +52,8 @@ static int _ffmpeg_init(
     int ret;
 
     //fixme: assert record != NULL
-    if(display == nullptr || request == nullptr) {
-        record->error = "ffmpeg_init: broken args";
-        return -99;
-    }
+    if(display == nullptr || request == nullptr)
+        return record_set_error(record, -99, "ffmpeg_init: broken args");
 
     // register the backend now, to have potential error context as soon
     // as possible even with a broken backend
@@ -84,8 +82,10 @@ static int _ffmpeg_init(
         NULL
     );
     if (ffmpeg.scale_ctx == NULL) {
-        record->error = "ffmpeg_init: could not allocate scale/conv context";
-        return -1;
+        return record_set_error(
+            record, -1,
+            "ffmpeg_init: could not allocate scale/conv context"
+        );
     }
 
     // Preparing the data concerning the format and codec in order to
@@ -94,15 +94,19 @@ static int _ffmpeg_init(
     // - use guessing feature to find mp4 information
     ffmpeg.format_out = av_guess_format("mp4", NULL, NULL);
     if (ffmpeg.format_out == NULL) {
-        record->error = "ffmpeg_init: could not guess format";
-        return -2;
+        return record_set_error(
+            record, -2,
+            "ffmpeg_init: could not guess output file format"
+        );
     }
     ret = avformat_alloc_output_context2(
         &ffmpeg.format_ctx, NULL, NULL, request->filename
     );
     if (ret < 0) {
-        record->error = "ffmpeg_init: could not allocate format context";
-        return -3;
+        return record_set_error(
+            record, -3,
+            "ffmpeg_init: could not allocate format context"
+        );
     }
 
     // Setting up the codec:
@@ -114,13 +118,17 @@ static int _ffmpeg_init(
     //      value
     const AVCodec *codec = avcodec_find_encoder_by_name("libvpx-vp9");
     if (codec == NULL) {
-        record->error = "ffmpeg_init: could not allocate codec";
-        return -4;
+        return record_set_error(
+            record, -4,
+            "ffmpeg_init: could not allocate codec"
+        );
     }
     AVDictionary* codec_opt = NULL;
     if (av_dict_set(&codec_opt, "crf", "32", 0) < 0) {
-        record->error = "ffmpeg_init: could not generate codec options";
-        return -5;
+        return record_set_error(
+            record, -5,
+            "ffmpeg_init: could not generate codec options"
+        );
     }
 
     // setup stream
@@ -129,8 +137,10 @@ static int _ffmpeg_init(
     // - indicate the frame-rate
     ffmpeg.stream = avformat_new_stream(ffmpeg.format_ctx, codec);
     if (ffmpeg.stream == NULL) {
-        record->error = "ffmpeg_init: could not allocate stream memory";
-        return -6;
+        return record_set_error(
+            record, -6,
+            "ffmpeg_init: could not allocate stream memory"
+        );
     }
     ffmpeg.stream->time_base = (AVRational){ 1, (int)ffmpeg.frameRate };
 
@@ -142,24 +152,30 @@ static int _ffmpeg_init(
     // - initialize the stream codec parameters
     ffmpeg.codec_ctx = avcodec_alloc_context3(codec);
     if (ffmpeg.codec_ctx == NULL) {
-        record->error = "ffmpeg_init: could not alloc video codec context";
-        return -7;
+        return record_set_error(
+            record, -7,
+            "ffmpeg_init: could not alloc video codec context"
+        );
     }
     ffmpeg.codec_ctx->width = ffmpeg.width_out;
     ffmpeg.codec_ctx->height = ffmpeg.height_out;
     ffmpeg.codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     ffmpeg.codec_ctx->time_base = (AVRational){ 1, (int)ffmpeg.frameRate };
     if (avcodec_open2(ffmpeg.codec_ctx, codec, &codec_opt) < 0) {
-        record->error = "ffmpeg_init: could not open codec";
-        return -8;
+        return record_set_error(
+            record, -8,
+            "ffmpeg_init: could not open codec"
+        );
     }
     ret = avcodec_parameters_from_context(
         ffmpeg.stream->codecpar,
         ffmpeg.codec_ctx
     );
     if (ret < 0) {
-        record->error = "ffmpeg_init: could not initialize stream parameters";
-        return -9;
+        return record_set_error(
+            record, -9,
+            "ffmpeg_init: could not initialize stream parameters"
+        );
     }
 
     // Once the codec is set up, we need to let the container know
@@ -171,8 +187,10 @@ static int _ffmpeg_init(
     ret = avio_open(
         &(ffmpeg.format_ctx->pb), request->filename, AVIO_FLAG_WRITE);
     if (ret < 0) {
-        record->error = "ffmpeg_init: could not open avio";
-        return -10;
+        return record_set_error(
+            record, -10,
+            "ffmpeg_init: could not open avio"
+        );
     }
 
     // allocate the stream private data and write the stream header to
@@ -186,8 +204,10 @@ static int _ffmpeg_init(
     // - get a dict containing options that were not found and remove this
     //      from the original one
     if (avformat_write_header(ffmpeg.format_ctx, &codec_opt) < 0) {
-        record->error = "ffmpeg_init: write header error";
-        return -11;
+        return record_set_error(
+            record, -11,
+            "ffmpeg_init: write header error"
+        );
     }
     av_dict_free(&codec_opt);
 
@@ -198,29 +218,37 @@ static int _ffmpeg_init(
     // - allocate internal frame data memory (lets ffmpeg choose align)
     ffmpeg.rgbpic = av_frame_alloc();
     if (ffmpeg.rgbpic == NULL) {
-        record->error = "ffmpeg_init: could not allocate RGB frame";
-        return -12;
+        return record_set_error(
+            record, -12,
+            "ffmpeg_init: could not allocate RGB frame"
+        );
     }
     ffmpeg.rgbpic->format = AV_PIX_FMT_RGB565LE;
     ffmpeg.rgbpic->width = ffmpeg.width_in;
     ffmpeg.rgbpic->height = ffmpeg.height_in;
     if (av_frame_get_buffer(ffmpeg.rgbpic, 0) != 0) {
-        record->error = "ffmpeg_init: could not finish allocate RGB frame";
-        return -13;
+        return record_set_error(
+            record, -13,
+            "ffmpeg_init: could not finish allocate RGB frame"
+        );
     }
 
     // Allocating memory for each conversion output YUV frame.
     ffmpeg.yuvpic = av_frame_alloc();
     if (ffmpeg.yuvpic == NULL) {
-        record->error = "ffmpeg_init: could not allocate YUV frame";
-        return -14;
+        return record_set_error(
+            record, -14,
+            "ffmpeg_init: could not allocate YUV frame"
+        );
     }
     ffmpeg.yuvpic->format = AV_PIX_FMT_YUV420P;
     ffmpeg.yuvpic->width = ffmpeg.width_out;
     ffmpeg.yuvpic->height = ffmpeg.height_out;
-    if (av_frame_get_buffer(ffmpeg.yuvpic, 0) != 0) {
-        record->error = "ffmpeg_init: could not finish allocate YUV frame";
-        return -15;
+    if(av_frame_get_buffer(ffmpeg.yuvpic, 0) != 0) {
+        return record_set_error(
+            record, -15,
+            "ffmpeg_init: could not finish allocate YUV frame"
+        );
     }
 
     // Allocating packet
@@ -228,8 +256,10 @@ static int _ffmpeg_init(
     // - used to communicate with ffmpeg during the sending of a frame
     ffmpeg.packet = av_packet_alloc();
     if (ffmpeg.packet == NULL) {
-        record->error = "ffmpeg_init: unable to init packet!!";
-        return -16;
+        return record_set_error(
+            record, -16,
+            "ffmpeg_init: unable to init packet!!"
+        );
     }
     ffmpeg.packet->data = NULL;
     ffmpeg.packet->size = 0;
@@ -298,16 +328,22 @@ static int _ffmpeg_frame_add(mqRecord *record, mqDisplay *display)
     if (display != NULL)
     {
         if(ffmpeg.width_in != display->width) {
-            record->error = "ffmpeg_frame_add: mq display has changed (width)";
-            return -2;
+            return record_set_error(
+                record, -2,
+                "ffmpeg_frame_add: mq display has changed (width)"
+            );
         }
         if(ffmpeg.height_in != display->height) {
-            record->error = "ffmpeg_frame_add: mq display has changed (height)";
-            return -2;
+            return record_set_error(
+                record, -2,
+                "ffmpeg_frame_add: mq display has changed (height)"
+            );
         }
         if(ffmpeg.vram_fmt != display->format) {
-            record->error = "ffmpeg_frame_add: mq display has changed (format)";
-            return -2;
+            return record_set_error(
+                record, -2,
+                "ffmpeg_frame_add: mq display has changed (format)"
+            );
         }
         if(ffmpeg.vram_fmt == MQ_DISPLAY_FORMAT_L8) {
             _ffmpeg_frame_conv_mono(display->data);
@@ -320,14 +356,19 @@ static int _ffmpeg_frame_add(mqRecord *record, mqDisplay *display)
             ffmpeg.rgbpic
         );
         if (ret < 0) {
-            record->error = "ffmpeg_frame_add: unable to convert RGB to YUV";
-            return -3;
+            return record_set_error(
+                record, -3,
+                "ffmpeg_frame_add: unable to convert RGB to YUV"
+            );
         }
         // The PTS of the frame are just in a reference unit,
         // unrelated to the format we are using. We set them,
         // for instance, as the corresponding frame number.
         ffmpeg.yuvpic->pts = ffmpeg.iframe++;
         yuvframe = ffmpeg.yuvpic;
+
+        // update stat information (iframe, total_ms, ...)
+        record_set_iframe(record, ffmpeg.iframe);
     }
 
     // send the frame and check error
@@ -339,43 +380,56 @@ static int _ffmpeg_frame_add(mqRecord *record, mqDisplay *display)
     if (display == NULL && ret == AVERROR_EOF)
         return 1;
     if (ret < 0) {
-        record->error = "ffmpeg_frame_add: error sending frame to codec";
-        return -4;
+        return record_set_error(
+            record, -4,
+            "ffmpeg_frame_add: error sending frame to codec"
+        );
     }
 
     // check status
-    // fixme: memory leak??
+    // - special check for EAGAIN -> return 0 (fake success write)
+    // - special check for EOF    -> return 1
+    // fixme: there is no memory leak here, but why?
+    // fixme: how to correctly handle EAGAIN?!
+    // fixme: update record error counter?
     ffmpeg.packet->data = NULL;
     ffmpeg.packet->size = 0;
     ret = avcodec_receive_packet(ffmpeg.codec_ctx, ffmpeg.packet);
-    if (ret < 0 && ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
-        record->error = "ffmpeg_frame_add: error receiving packet from codec";
-        return -5;
-    }
-    if (ret >= 0)
-    {
-        // We set the packet PTS and DTS taking in the account our FPS
-        // (second argument), and the time base that our selected format
-        // uses (third argument).
-        av_packet_rescale_ts(
-            ffmpeg.packet,
-            (AVRational){ 1, (int)ffmpeg.frameRate },
-            ffmpeg.stream->time_base
-        );
-        ffmpeg.packet->stream_index = ffmpeg.stream->index;
-
-        // Write the encoded frame to the mp4 file.
-        av_interleaved_write_frame(ffmpeg.format_ctx, ffmpeg.packet);
-        av_packet_unref(ffmpeg.packet);
+    if(ret == AVERROR(EAGAIN)){
+        mq_log(MQ_LOG_WARNING, "ffmpeg_frame_add: EAGAIN error, ignored");
         return 0;
     }
-    record->error = "ffmpeg_frame_add: weird receive packet error";
-    return -6;
+    if(ret == AVERROR_EOF) {
+        mq_log(MQ_LOG_WARNING, "ffmpeg_frame_add: EOF error, ignored");
+        return 1;
+    }
+    if(ret < 0) {
+        return record_set_error(
+            record, -5,
+            "ffmpeg_frame_add: error receiving packet from codec"
+        );
+    }
+
+    // handle PTS and DTS
+    // We set the packet PTS and DTS taking in the account our FPS
+    // (second argument), and the time base that our selected format
+    // uses (third argument).
+    av_packet_rescale_ts(
+        ffmpeg.packet,
+        (AVRational){ 1, (int)ffmpeg.frameRate },
+        ffmpeg.stream->time_base
+    );
+    ffmpeg.packet->stream_index = ffmpeg.stream->index;
+
+    // Write the encoded frame to the mp4 file.
+    av_interleaved_write_frame(ffmpeg.format_ctx, ffmpeg.packet);
+    av_packet_unref(ffmpeg.packet);
+    return 0;
 }
 
 static int _ffmpeg_quit(mqRecord *record)
 {
-    //fixme: asset record != NULL
+    //fixme: assert record != NULL
 
     // force flush pending frames
     if(ffmpeg.initialized) {
@@ -384,7 +438,10 @@ static int _ffmpeg_quit(mqRecord *record)
             if (ret == 1)
                 break;
             if (ret < 0) {
-                record->error = "ffmpeg_quit: error sending NULL frame to codec";
+                record_set_error(
+                    record, ret,
+                    "ffmpeg_quit: error sending NULL frame to codec"
+                );
                 break;
             }
         }
@@ -425,29 +482,63 @@ static int _ffmpeg_quit(mqRecord *record)
     return 0;
 }
 
-//=== Record interface ======================================================//
+//=== Record setter =========================================================//
 
-int record_quit(mqRecord *record)
+
+int record_set_iframe(mqRecord *record, uint iframe)
 {
     //fixme: assert record != NULL
-    if(!record->initialized)
-        return 0;
-    //fixme: error handling
-    _ffmpeg_quit(record);
-    record->start = false;
-    record->initialized = false;
+    record->stats.iframe   = iframe;
+    record->stats.total_ms = record->stats.iframe * 17;
+    record->stats.time_ms  = record->stats.total_ms % 1000;
+    record->stats.time_sec = (record->stats.total_ms / 1000) % 60;
+    record->stats.time_min = ((record->stats.total_ms / 1000) / 60) % 60;
     return 0;
 }
 
-int record_add_frame(mqRecord *record, mqMachine *mach)
+int record_set_error(mqRecord *record, int ret, char const *error)
 {
     //fixme: assert record != NULL
-    if(mach == nullptr || !mach->initialized || mach->display == nullptr) {
-        record->error = "Machine not initialized";
-        return -99;
+    record->error = error;
+    if(error != nullptr) {
+        mq_log(MQ_LOG_ERROR, "%s", error);
+        record->stats.nb_error += 1;
     }
-    return _ffmpeg_frame_add(record, mach->display);
+    return ret;
 }
+
+int record_set_status(mqRecord *record, mqRecordStatus status)
+{
+    //fixme: assert record != NULL
+    switch(status) {
+    case MQ_RECORD_STATUS_UNINIT:
+        record->status = status;
+        record->stats.status = "not initialized";
+        return 0;
+    case MQ_RECORD_STATUS_START:
+        record->status = status;
+        record->stats.status = "recording...";
+        return 0;
+    case MQ_RECORD_STATUS_PAUSED:
+        record->status = status;
+        record->stats.status = "paused";
+        return 0;
+    default:
+        return record_set_error(record, -99, "unknown status");
+    }
+}
+
+int record_set_pathname(mqRecord *record, char const *pathname)
+{
+    //fixme: assert record != NULL
+    //todo: expand path
+    //todo: ensure path exists
+    //todo: ensure filename format (date, ffmpeg?)
+    record->stats.pathname_out = pathname;
+    return 0;
+}
+
+//=== Record interface ======================================================//
 
 int record_init(
     mqRecord *record,
@@ -455,27 +546,38 @@ int record_init(
     mqMachine *mach
 ) {
     //fixme: assert record != NULL
-    if(mach == nullptr || !mach->initialized || mach->display == nullptr) {
-        record->error = "Machine not initialized";
-        return -99;
-    }
-    record->start = false;
-    record->initialized = false;
+    if(mach == nullptr || !mach->initialized || mach->display == nullptr)
+        return record_set_error(record, -99, "Machine not initialized");
+    record_set_status(record, MQ_RECORD_STATUS_UNINIT);
+    record_set_error(record, 0, nullptr);
+    record_set_iframe(record, 0);
+    record_set_pathname(record, request->filename);
     int ret = _ffmpeg_init(record, request, mach->display);
     if(ret < 0) {
         _ffmpeg_quit(record);
         return ret;
     }
-    record->initialized = true;
+    record_set_status(record, MQ_RECORD_STATUS_START);
     return 0;
+}
+
+int record_add_frame(mqRecord *record, mqMachine *mach)
+{
+    //fixme: assert record != NULL
+    if(mach == nullptr || !mach->initialized || mach->display == nullptr)
+        return record_set_error(record, -99, "Machine not initialized");
+    if(record->status == MQ_RECORD_STATUS_UNINIT)
+        return record_set_error(record, -99, "Record not initialized");
+    if(record->status != MQ_RECORD_STATUS_START)
+        return 0;
+    return _ffmpeg_frame_add(record, mach->display);
 }
 
 void record_show(mqRecord *record)
 {
     //fixme: assert record != NULL
     mq_log(MQ_LOG_DEBUG, "record:");
-    mq_log(MQ_LOG_DEBUG, "|-- start = %d", record->start);
-    mq_log(MQ_LOG_DEBUG, "|-- initialized = %d", record->initialized);
+    mq_log(MQ_LOG_DEBUG, "|-- status = %d", record->status);
     mq_log(MQ_LOG_DEBUG, "`-- error = %s", record->error);
     mq_log(MQ_LOG_DEBUG, "ffmpeg:");
     mq_log(MQ_LOG_DEBUG, "|-- iframe = %d", ffmpeg.iframe);
@@ -485,4 +587,15 @@ void record_show(mqRecord *record)
     mq_log(MQ_LOG_DEBUG, "|-- height_out = %d", ffmpeg.height_out);
     mq_log(MQ_LOG_DEBUG, "|-- scale = %d", ffmpeg.scale_factor);
     mq_log(MQ_LOG_DEBUG, "`-- format = %d", ffmpeg.vram_fmt);
+}
+
+int record_quit(mqRecord *record)
+{
+    //fixme: assert record != NULL
+    if(record->status == MQ_RECORD_STATUS_UNINIT)
+        return 0;
+    //fixme: error handling
+    _ffmpeg_quit(record);
+    record_set_status(record, MQ_RECORD_STATUS_UNINIT);
+    return 0;
 }
