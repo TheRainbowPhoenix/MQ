@@ -396,14 +396,20 @@ static void render(void)
         w_button /= 3;
         if(mach->initialized) {
             if(!states.record.start) {
+                mqRecordRequest request = {
+                    .frameRate = 50,
+                    .scale_factor = 2,
+                    .filename = "record.mp4",
+                };
                 if(ImGui::Button("Start", ImVec2(w_button, 0))) {
-                    if(record_init(&states.record, mach) != 0) {
+                    if(record_init(&states.record, &request, mach) != 0) {
                         mq_log(MQ_LOG_ERROR, "%s", states.record.error);
                     } else {
                         states.record.start = true;
                         if(states.mq_cycles == 0)
                             states.mq_cycles = -1;
                     }
+                    record_show(&states.record);
                 }
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
                 ImGui::BeginDisabled();
@@ -430,6 +436,7 @@ static void render(void)
                     states.record.start = false;
                 }
                 if(states.record.start) {
+                    // record_show(&states.record);
                     if(record_add_frame(&states.record, mach) != 0)
                         mq_log(MQ_LOG_ERROR, "%s", states.record.error);
                 }
