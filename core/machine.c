@@ -86,7 +86,7 @@ static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
     void *xram = xyram;
     void *yram = xram + (8 << 10);
     mq_memory_createBlock(mach->memory, 0xe500e000, 16 << 10, xyram);
-    mq_memory_createBlock(mach->memory, 0xe5007000, 8 << 10, yram);
+    mq_memory_createBlock(mach->memory, 0xe5007000, 8 << 10, xram);
     mq_memory_createBlock(mach->memory, 0xe5017000, 8 << 10, yram);
     // TODO[machine]: XYRAM @ 0xe5000000, repeat for 64k, block repeats for 4M
 }
