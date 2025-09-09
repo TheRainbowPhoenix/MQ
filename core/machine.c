@@ -167,8 +167,8 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     }
     else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
         u32 layout_addin    = 0x81800000; /* @ 24 MB, somewhere in fs */
-        u32 layout_uram_p1  = 0x8c180000; /* @ 1.5 MB */
-        u32 layout_uram_p2  = 0xac180000;
+        u32 layout_uram_p1  = 0x8c170000; /* @ 1.5 MB - 64 kB (contiguity) */
+        u32 layout_uram_p2  = 0xac170000;
 
         mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
         mq_cpu_setup(&mach->cpu, mach->memory);
@@ -189,12 +189,12 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mq_memory_createBlock(mach->memory, layout_uram_p2, 512 << 10, uram);
         /* OS stack */
         void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
-        mq_memory_createBlock(mach->memory, 0x8c0f0000, 512 << 10, ostk);
-        mq_memory_createBlock(mach->memory, 0xac0f0000, 512 << 10, ostk);
+        mq_memory_createBlock(mach->memory, 0x8c0e0000, 512 << 10, ostk);
+        mq_memory_createBlock(mach->memory, 0xac0e0000, 512 << 10, ostk);
         /* Additional RAM not used by OS */
         void *eram = mq_memory_allocBuffer(mach->memory, "ERAM", 2 << 20);
-        mq_memory_createBlock(mach->memory, 0x8c200000, 1 << 20, eram);
-        mq_memory_createBlock(mach->memory, 0xac200000, 1 << 20, eram);
+        mq_memory_createBlock(mach->memory, 0x8c200000, 2 << 20, eram);
+        mq_memory_createBlock(mach->memory, 0xac200000, 2 << 20, eram);
 
         mach->display = mq_display_create();
         mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
