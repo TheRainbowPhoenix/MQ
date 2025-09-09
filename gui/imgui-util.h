@@ -34,6 +34,9 @@ void SeparatorTextD(char const *str);
 /* Icon button with a tooltip text. */
 bool IconButton(int iconID, char const *tooltip, bool disabled=false);
 
+/* button with custom width and enabled/disabled status */
+bool ButtonWSized(char const *name, float width, bool disabled);
+
 /* Move cursor by a given amount. */
 static inline void MoveCursorScreenPos(ImVec2 diff) {
    ImVec2 pos = ImGui::GetCursorScreenPos();

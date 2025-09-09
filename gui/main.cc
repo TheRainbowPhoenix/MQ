@@ -402,7 +402,7 @@ static void render(void)
                     .scale_factor = 2,
                     .filename = "record.mp4",
                 };
-                if(ImGui::Button("Start", ImVec2(w_button, 0))) {
+                if(ImGui::ButtonWSized("Start", w_button, false)) {
                     if(record_init(&states.record, &request, mach) != 0) {
                         mq_log(MQ_LOG_ERROR, "%s", states.record.error);
                     } else {
@@ -416,38 +416,44 @@ static void render(void)
                     record_show(&states.record);
                 }
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
-                ImGui::BeginDisabled();
-                ImGui::Button("Pause", ImVec2(w_button, 0));
-                ImGui::EndDisabled();
+                ImGui::ButtonWSized("Pause", w_button, true);
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
-                ImGui::BeginDisabled();
-                ImGui::Button("Stop", ImVec2(w_button, 0));
-                ImGui::EndDisabled();
+                ImGui::ButtonWSized("Stop", w_button, true);
                 ImGui::Spacing();
                 const char *text = "Start recording and emulation";
                 if(states.mq_cycles != 0)
                     text = "Start recording";
                 ImGui::TextCenteredColor(text, 0x00ffff);
             } else {
-                ImGui::BeginDisabled();
-                ImGui::Button("Start", ImVec2(w_button, 0));
-                ImGui::EndDisabled();
+                if (states.mq_cycles == 0) {
+                    record_set_status(
+                        &states.record,
+                        MQ_RECORD_STATUS_PAUSED
+                    );
+                }
+                bool d = (states.record.status != MQ_RECORD_STATUS_PAUSED);
+                if(ImGui::ButtonWSized("Continue", w_button, d)) {
+                    record_set_status(
+                        &states.record,
+                        MQ_RECORD_STATUS_START
+                    );
+                }
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
-                if(ImGui::Button("Pause", ImVec2(w_button, 0))) {
+                d = (states.record.status != MQ_RECORD_STATUS_START);
+                if(ImGui::ButtonWSized("Pause", w_button, d)) {
                     record_set_status(
                         &states.record,
                         MQ_RECORD_STATUS_PAUSED
                     );
                 }
                 ImGui::SameLine(0, style.ItemInnerSpacing.x);
-                if(ImGui::Button("Stop", ImVec2(w_button, 0))) {
+                if(ImGui::ButtonWSized("Stop", w_button, false)) {
                     record_quit(&states.record);
                     record_set_status(
                         &states.record,
                         MQ_RECORD_STATUS_UNINIT
                     );
                 }
-                // record_show(&states.record);
                 if(record_add_frame(&states.record, mach) != 0)
                     mq_log(MQ_LOG_ERROR, "%s", states.record.error);
                 ImGui::Spacing();
@@ -478,24 +484,20 @@ static void render(void)
                     states.record.stats.status
                 );
                 ImGui::Spacing();
-                if (states.mq_cycles == 0) {
-                    ImGui::TextCenteredColor("Paused", 0x00ff00);
-                } else {
+                if (states.record.status == MQ_RECORD_STATUS_PAUSED) {
+                    ImGui::TextCenteredColor("Paused", 0x00ffff);
+                } else if(states.record.status == MQ_RECORD_STATUS_START){
                     ImGui::TextCenteredColor("Recording", 0x00ff00);
+                } else {
+                    ImGui::TextCenteredColor("Error", 0xff0000);
                 }
             }
         } else {
-            ImGui::BeginDisabled();
-            ImGui::Button("Start", ImVec2(w_button, 0));
-            ImGui::EndDisabled();
+            ImGui::ButtonWSized("Start", w_button, true);
             ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            ImGui::BeginDisabled();
-            ImGui::Button("Pause", ImVec2(w_button, 0));
-            ImGui::EndDisabled();
+            ImGui::ButtonWSized("Pause", w_button, true);
             ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            ImGui::BeginDisabled();
-            ImGui::Button("Stop", ImVec2(w_button, 0));
-            ImGui::EndDisabled();
+            ImGui::ButtonWSized("Stop", w_button, true);
             ImGui::Spacing();
             ImGui::TextCenteredColor("No addin selected", 0xff0000);
         }

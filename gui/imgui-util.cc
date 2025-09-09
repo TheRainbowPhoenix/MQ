@@ -47,6 +47,16 @@ bool IconButton(int iconID, char const *tooltip, bool disabled)
     return b;
 }
 
+bool ButtonWSized(char const *name, float width, bool disabled)
+{
+    if(disabled)
+        ImGui::BeginDisabled();
+    bool b = ImGui::Button(name, ImVec2(width, 0));
+    if(disabled)
+        ImGui::EndDisabled();
+    return b;
+}
+
 void TextMono(char const *fmt, ...)
 {
     va_list args;
