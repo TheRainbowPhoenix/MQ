@@ -1,7 +1,7 @@
 addins:
   - name: gintctl
     author: Lephe
-    status: ingame
+    status: usable
     updated: 2025-08-21
     model: fxcg50
     urls:
@@ -12,7 +12,7 @@ addins:
 
   - name: Gravity Duck
     author: PierrotLL
-    status: playable
+    status: complete
     updated: 2025-09-03
     model: fxcg50
     urls:
@@ -24,7 +24,7 @@ addins:
 
   - name: Duet
     author: Yatis and Lephe
-    status: ingame
+    status: usable
     updated: 2025-08-21
     model: fxcg50
     urls:
@@ -35,7 +35,7 @@ addins:
 
   - name: Mario Kart
     author: Circuit10
-    status: playable
+    status: complete
     updated: 2025-08-21
     model: fxcg50
     urls:
@@ -45,17 +45,18 @@ addins:
 
   - name: HorlogeSH4
     author: Lephe
-    status: intro
+    status: usable
     updated: 2025-09-03
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2606-1-horloge-sh4-lephenixnoir-utilitaires-add-ins.html
     remarks:
-      - frame not displayed entierly
+      - displays and works in real-time
+      - blocked by `%14d Bdisp_AreaReverseVRAM` in date/time edition menu
 
   - name: Cube Field
     author: PierrotLL
-    status: playable
+    status: complete
     updated: 2025-09-03
     model: fxcg50
     urls:
@@ -66,7 +67,7 @@ addins:
   - name: OutRun
     author: SlyvTT
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html
@@ -76,7 +77,7 @@ addins:
   - name: Demineur winXP
     author: Smashmaster
     updated: 2025-08-21
-    status: intro
+    status: frame
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html
@@ -110,7 +111,7 @@ addins:
   - name: Cgsnake
     author: Eiyeron
     updated: 2025-08-21
-    status: loadable
+    status: nothing
     model: fxcg20
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1902-last-cgsnake-eiyeron-jeux-add-ins.html
@@ -121,7 +122,7 @@ addins:
   - name: Sonic
     author: Smashmaster
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1904-last-sonic-smashmaster-jeux-add-ins.html
@@ -153,7 +154,7 @@ addins:
   - name: Meta Ball
     author: Lancelot
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2344-last-meta-ball-lancelot-jeux-add-ins.html
@@ -165,7 +166,7 @@ addins:
   - name: Life game cg-20
     author: Smashmaster
     updated: 2025-08-21
-    status: loadable
+    status: nothing
     model: fxcg20
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1853-last-life-game-cg-20-smashmaster-jeux-add-ins.html
@@ -177,7 +178,7 @@ addins:
   - name: After Burner
     author: Lephe
     updated: 2025-08-21
-    status: playable
+    status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4238-last-after-burner-lephenixnoir-jeux-add-ins.html
@@ -187,7 +188,7 @@ addins:
   - name: AST3 C
     author: Tituya
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4100-last-ast3-c-tituya-jeux-add-ins.html
@@ -198,7 +199,7 @@ addins:
   - name: Super Mario 3D
     author: Farhi
     updated: 2025-08-21
-    status: playable
+    status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4343-last-super-mario-3d-farhi-jeux-add-ins.html
@@ -208,7 +209,7 @@ addins:
   - name: Maverick Bird
     author: Lephe
     updated: 2025-08-21
-    status: playable
+    status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4268-last-maverick-bird-lephenixnoir-jeux-add-ins.html
@@ -218,7 +219,7 @@ addins:
   - name: Mario 3D
     author: Games
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4411-last-mario-3d-games-jeux-add-ins.html
@@ -252,7 +253,7 @@ addins:
   - name: Frozen Frenzy
     author: Massena
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4192-last-frozen-frenzy-massena-jeux-add-ins.html
@@ -262,7 +263,7 @@ addins:
   - name: Dumb Clicker Goto Edition
     author: Kikoodx
     updated: 2025-08-21
-    status: playable
+    status: complete
     model: fxcg50
     urls:
       - https://git.planet-casio.com/kdx/dcge
@@ -272,7 +273,7 @@ addins:
   - name: Momento
     author: Kikoodx
     updated: 2025-08-21
-    status: playable
+    status: complete
     model: fxcg50
     urls:
       - https://git.sr.ht/~kikoodx/momento
@@ -282,7 +283,7 @@ addins:
   - name: Teh Moon Show
     author: Massena
     updated: 2025-08-21
-    status: playable
+    status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4240-last-teh-moon-show-massena-jeux-add-ins.html
@@ -293,7 +294,7 @@ addins:
   - name: Chaos Drop
     author: Lephe
     updated: 2025-08-21
-    status: ingame
+    status: usable
     model: fxcg50
     urls:
       - https://git.planet-casio.com/Lephenixnoir/chaos-drop
@@ -304,7 +305,7 @@ addins:
   - name: Geometry Dash
     author: Fife86
     updated: 2025-09-03
-    status: playable
+    status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme3115-last-geometry-dash-fife86-jeux-add-ins.html
@@ -324,7 +325,7 @@ addins:
   - name: Angry Bird
     author: LouLoux
     updated: 2025-08-27
-    status: ingame
+    status: usable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1943-last-angry-birds-louloux-jeux-add-ins.html
@@ -334,7 +335,7 @@ addins:
   - name: Mario land ce
     author: Bebe-vador
     updated: 2025-08-27
-    status: intro
+    status: frame
     model: fx9860g_sh3
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1064-last-mario-land-ce-bebe-vador-jeux-add-ins.html
@@ -356,7 +357,7 @@ addins:
   - name: Evasion
     author: Dodormeur
     updated: 2025-09-03
-    status: ingame
+    status: usable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2082-last-evasion-surv-dodormeur-jeux-add-ins.html
@@ -367,17 +368,17 @@ addins:
   - name: Gravity Duck
     author: PierrotLL
     updated: 2025-08-28
-    status: playable
+    status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html
     remarks:
-      - Perfect
+      - incorrect black pixel lines at bottom right of screen
 
   - name: 2048 delux
     author: Kirafi
     updated: 2025-09-03
-    status: playable
+    status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html
@@ -387,7 +388,7 @@ addins:
   - name: Mipjabok
     author: Louloux
     updated: 2025-08-28
-    status: ingame
+    status: usable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2303-last-mipjabok-louloux-jeux-add-ins.html
@@ -428,7 +429,7 @@ addins:
   - name: gintctl
     author: Lephe
     updated: 2025-08-29
-    status: ingame
+    status: usable
     model: fx9860g_sh4
     urls:
       - https://git.planet-casio.com/Lephenixnoir/gintctl
@@ -439,7 +440,7 @@ addins:
   - name: Destiny
     author: Dodormeur
     updated: 2025-09-03
-    status: playable
+    status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2684-last-destiny-dodormeur-jeux-add-ins.html
@@ -449,7 +450,7 @@ addins:
   - name: Bomberman
     author: Dodormeur
     updated: 2025-09-03
-    status: playable
+    status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2242-1-bomberman-dodormeur-jeux-add-ins.html

@@ -19,6 +19,9 @@ MQ_START_DEFS
 struct mqMachine;
 typedef struct mqMachine mqMachine;
 
+/* Type of a background syscall progress function. */
+typedef bool mq_casiowin_bgsyscall_t(struct mqMachine *mach);
+
 /* Supported OS versions. */
 enum mqCasiowin_Version {
     // MQ_CASIOWIN_FX100,  // Super old FX... (SH3)
@@ -67,6 +70,9 @@ struct mqCasiowin_OSInfo {
     int dataVramCount;
 };
 
+/* Data tracked for background syscalls */
+struct mqCasiowin_BGSyscallData;
+
 /* Information that we keep track of in the machine structure. */
 struct mqCasiowin {
     enum mqCasiowin_Version version;
@@ -76,9 +82,15 @@ struct mqCasiowin {
     u32 rodataKeymapAddress;
     u32 dataVramAddresses[4];
 
+    /* Currently-running blocking syscall. */
+    mq_casiowin_bgsyscall_t *bgsyscall;
+
+    /* Memory for background syscalls. */
+    struct mqCasiowin_BGSyscallData *bgs;
+
     // TODO[mqCasiowin]: Localization, SH3/SH4 revision, version patch.
 
-    /* Globals from the display system */
+    //=== Globals from the display system ====================================//
 
     /* VRAM buffer pointer. This points to a memory buffer, which means it's
        4-byte little-endian mode! */
@@ -90,6 +102,7 @@ struct mqCasiowin {
 
 typedef enum mqCasiowin_Version mqCasiowin_Version;
 typedef struct mqCasiowin_OSInfo mqCasiowin_OSInfo;
+typedef struct mqCasiowin_BGSyscallData mqCasiowin_BGSyscallData;
 typedef struct mqCasiowin mqCasiowin;
 
 /* Setup the CASIOWIN interface for the given OS version. */
@@ -109,6 +122,16 @@ void mq_casiowin_syscall(mqMachine *mach);
    function can be called explicitly but generally that's not required, as it
    will be initialized on-demand if a heap syscall is invoked. */
 bool mq_casiowin_initHeap(mqMachine *mach);
+
+/* Start a background syscall. This is a syscall that blocks and may take an
+   arbitrarily long time to run (e.g. GetKey). The background function will be
+   called once immediately then regularly as a background process, and the
+   syscall ends once the background function returns true. Currently it's only
+   possible to run one background syscall at a time. If a background syscall
+   needs to call another one, use the syscall support functions, which should
+   offer the progress style. */
+bool mq_casiowin_runBackgroundSyscall(
+    mqMachine *mach, mq_casiowin_bgsyscall_t *bgsyscall);
 
 //=== Mono rendering functions ===============================================//
 // These functions are used to serve syscalls. They can be called to emulate
@@ -146,6 +169,42 @@ bool mq_casiowin_rtc_gettime(
     u32 second,
     u32 millisecond
 );
+
+//=== Syscall support functions ==============================================//
+// These functions are used to serve syscalls on all APIs.
+
+enum {
+    MQ_CASIOWIN_KEYWAIT_HALTON_TIMEROFF = 0,
+    MQ_CASIOWIN_KEYWAIT_HALTOFF_TIMEROFF = 1,
+    MQ_CASIOWIN_KEYWAIT_HALTON_TIMERON = 2,
+};
+enum {
+    MQ_CASIOWIN_KEYREP_NOEVENT = 0,
+    MQ_CASIOWIN_KEYREP_KEYEVENT = 1,
+    MQ_CASIOWIN_KEYREP_TIMEREVENT = 2,
+};
+
+struct mqCasiowin_GetKeyWaitArgs {
+    /* Pointers to output col/row variables */
+    u32 ptr_i32_col, ptr_i32_row;
+    /* MQ_CASIOWIN_KEYWAIT_* enumerated value */
+    int waitType;
+    /* MQ_CASIOWIN_KEYREP_* enumerated value */
+    int timeout;
+    /* Menu setting: 0 allows return to menu (unless no waiting), 1 doesn't */
+    int menu;
+    /* Pointer to output keycode variable */
+    u32 ptr_u16_key;
+};
+
+void mq_casiowin_GetKeyWait(
+    mqMachine *mach, struct mqCasiowin_GetKeyWaitArgs args);
+
+//=== All background syscall state ===========================================//
+
+struct mqCasiowin_BGSyscallData {
+    struct { struct mqCasiowin_GetKeyWaitArgs args; } GetKeyWait;
+};
 
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_CASIOWIN_H */

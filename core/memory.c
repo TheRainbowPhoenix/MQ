@@ -192,6 +192,17 @@ void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size)
     return NULL;
 }
 
+mqMemoryBuffer *mq_memory_getBufferOwning(mqMemory *mem, void *data)
+{
+    for(int i = 0; i < mem->bufferCount; i++) {
+        struct mqMemoryBuffer *b = &mem->buffers[i];
+        if(data >= b->data && data < b->data + b->size)
+            return b;
+    }
+
+    return NULL;
+}
+
 bool mq_memory_createBufferChunk(mqMemory *mem, u32 addr, void *buffer)
 {
     u32 chunkNum = addr >> 20;
@@ -245,6 +256,104 @@ bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer)
         size -= 0x1000;
         addr += 0x1000;
         buffer += 0x1000;
+    }
+
+    return true;
+}
+
+/* Find the first section of buffer at or after the given address. This can be
+   a buffer chunk or a buffer page. Returns a pointer to the backing and the
+   size of the section found. There may be more subsequent pages or chunks
+   mapping to the same backing storage. */
+static bool mq_memory_findBlockSection(
+      mqMemory *mem, u32 startAddress, bool canAdvance, u32 *foundAddress,
+      u32 *foundSize, void **foundStorage)
+{
+    *foundAddress = -1;
+    *foundSize = -1;
+    *foundStorage = NULL;
+
+    /* Round the start address up to the next page */
+    startAddress = (startAddress + 0x1000 - 1) & -0x1000;
+
+    /* Current location in the search */
+    u32 chunkNum = startAddress >> 20;
+    u32 pageNum = (startAddress & 0xfffff) >> 12;
+
+    do {
+        mqChunkPointer ptr = mem->chunks[chunkNum];
+
+        /* Nothing in this chunk: move along */
+        if(ptr == MQ_CHUNKPTR_NULL) {
+            chunkNum++;
+            pageNum = 0;
+        }
+        /* Buffer chunk: take it but only if we're at the start */
+        else if(MQ_CHUNKPTR_ISBUFFER(ptr)) {
+            if(pageNum == 0) {
+                *foundAddress = chunkNum << 20;
+                *foundSize = (1 << 20);
+                *foundStorage = MQ_CHUNKPTR_GETBUFFER(ptr);
+                return true;
+            }
+            else {
+                chunkNum++;
+                pageNum = 0;
+            }
+        }
+        /* Broken-down chunk: check current page */
+        else {
+            mqChunk *chunk = MQ_CHUNKPTR_GET(ptr);
+            mqPagePointer pptr = chunk->pages[pageNum];
+
+            if(MQ_PAGEPTR_ISBUFFER(pptr)) {
+                *foundAddress = (chunkNum << 20) + (pageNum << 12);
+                *foundSize = (1 << 12);
+                *foundStorage = MQ_PAGEPTR_GETBUFFER(pptr);
+                return true;
+            }
+            else {
+                pageNum = (pageNum + 1) & 0xff;
+                chunkNum += (pageNum == 0);
+            }
+        }
+    }
+    while(canAdvance && chunkNum < 0x1000);
+
+    return false;
+}
+
+bool mq_memory_findBlock(
+    mqMemory *mem, u32 startAddress, u32 *blockAddress, u32 *blockSize,
+    void **blockStorage)
+{
+    u32 foundAddress, foundSize, nextAddress;
+    void *foundStorage;
+
+    /* Find the first chunk/page after the given address */
+    if(!mq_memory_findBlockSection(mem, startAddress, true, &foundAddress,
+            &foundSize, &foundStorage)) {
+        *blockAddress = -1;
+        *blockSize = -1;
+        *blockStorage = NULL;
+        return false;
+    }
+
+    *blockAddress = foundAddress;
+    *blockSize = foundSize;
+    *blockStorage = foundStorage;
+
+    /* Now look for subsequent extensions */
+    while(1) {
+        if(__builtin_add_overflow(*blockAddress, *blockSize, &nextAddress))
+            break;
+        if(!mq_memory_findBlockSection(mem, nextAddress, false, &foundAddress,
+                &foundSize, &foundStorage))
+            break;
+        if(foundStorage != *blockStorage + *blockSize)
+            break;
+
+        *blockSize += foundSize;
     }
 
     return true;

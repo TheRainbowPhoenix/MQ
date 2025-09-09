@@ -40,6 +40,10 @@ struct mqMachine
     bool internallyPaused;
     mqTimer internalPauseTimer;
     int internalPauseTicksRemaining;
+    /* Machine is internally blocked for a high-level reason (e.g. a blocking
+       syscall). Unlike internal pausing, this status does not expire
+       automatically and must be cleared by blocking code. */
+    bool internallyBlocked;
 
     /* Data from hardware modules; the array has size mq_module_count(). */
     void **modules;

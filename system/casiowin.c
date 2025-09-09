@@ -14,10 +14,12 @@
 #include <stdio.h>
 
 static int moduleID = -1;
+static int processID_bgsyscall = -1;
 
 static void inithook(void)
 {
     moduleID = mq_module_register();
+    processID_bgsyscall = mq_process_register();
 }
 MQ_HOOK_REGISTER(init, inithook)
 
@@ -157,6 +159,9 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     mqCasiowin *Casiowin = calloc(1, sizeof *Casiowin);
     if(!Casiowin)
         return false;
+    Casiowin->bgs = calloc(1, sizeof *Casiowin->bgs);
+    if(!Casiowin->bgs)
+        return false;
 
     Casiowin->info = mq_casiowin_getOSInfo(version);
     Casiowin->version = version;
@@ -215,13 +220,21 @@ static void mq_casiowin_cleanup(mqMachine *mach)
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_casiowin_cleanup)
 
+static bool readStack32(mqMachine *mach, int offset, void *ptr)
+{
+    mqCpu *cpu = &mach->cpu;
+    return mq_memory_read32(mach, mach->memory, cpu->r[15] + offset, ptr);
+}
+
 static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
 
     /* Log except for syscalls that happen often */
     if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420 &&
-       syscallID != 0xc4f)
+       syscallID != 0xc4f && syscallID != 0x807 && syscallID != 0x808 &&
+       syscallID != 0x028 && syscallID != 0x03b && syscallID != 0x146 &&
+       syscallID != 0x247)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
@@ -303,10 +316,20 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     // case 0x014d: /* Bdisp_AreaReverseVRAM() */
     //     return;
 
-    case 0x0247: /* Keyboard_GetKeyWait() */
-        mq_log(MQ_LOG_ERROR, "unhandled Keyboard_GetKeyWait(), return 0");
-        cpu->r[0] = 0;
+    case 0x0247: { /* Keyboard_GetKeyWait() */
+        struct mqCasiowin_GetKeyWaitArgs args = {
+            .ptr_i32_col = cpu->r[4],
+            .ptr_i32_row = cpu->r[5],
+            .waitType = cpu->r[6],
+            .timeout = cpu->r[7],
+        };
+        if(readStack32(mach, +0, &args.menu) &&
+           readStack32(mach, +4, &args.ptr_u16_key))
+            mq_casiowin_GetKeyWait(mach, args);
+        else
+            mach->stuck = true;
         return;
+    }
 
     case 0x024c: /* Keyboard_IsSpecialKeyDown */
         mq_log(
@@ -482,9 +505,22 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     }
 
+    case 0x02a3: /* FrameColor() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2a3 FrameColor() ignored");
+        cpu->r[0] = 0;
+        return;
     case 0x02a8: /* DrawFrame() */
         mq_log(MQ_LOG_ERROR, "syscall %%2a8 DrawFrame() not supported");
         mach->stuck = true;
+        return;
+
+    case 0x02b7: /* EnableStatusArea() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2b7 EnableStatusArea() ignored");
+        cpu->r[0] = 0;
+        return;
+    case 0x02b8: /* DefineStatusAreaFlags() */
+        mq_log(MQ_LOG_ERROR, "syscall %%2b8 DefineStatusAreaFlags() ignored");
+        cpu->r[0] = 0;
         return;
 
     case 0x02bf: /* RTC_Reset() */
@@ -502,16 +538,8 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0921: /* EnableColors() */
-        mq_log(MQ_LOG_ERROR, "syscall %921 EnableColor() ignored");
+        mq_log(MQ_LOG_ERROR, "syscall %%921 EnableColor() ignored");
         cpu->r[0] = 0;
-        return;
-    case 0x02a3: /* FrameColor() */
-        mq_log(MQ_LOG_ERROR, "syscall %2a3 FrameColor() ignored");
-        cpu->r[0] = 0;
-        return;
-    case 0x18f9: /* PrintXY() */
-        mq_log(MQ_LOG_ERROR, "syscall %18f9 PrintXY() ignored");
-        mach->stuck = true;
         return;
 
     case 0x1170: { /* itoa() */
@@ -526,11 +554,44 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     }
 
+    case 0x12bf: { /* GetKeyWait_OS() */
+        struct mqCasiowin_GetKeyWaitArgs args = {
+            .ptr_i32_col = cpu->r[4],
+            .ptr_i32_row = cpu->r[5],
+            .waitType = cpu->r[6],
+            .timeout = cpu->r[7],
+        };
+        if(readStack32(mach, +0, &args.menu) &&
+           readStack32(mach, +4, &args.ptr_u16_key))
+            mq_casiowin_GetKeyWait(mach, args);
+        else
+            mach->stuck = true;
+        return;
+    }
+
     case 0x1511: /* memset() */
         /* We can't memset if it's not aligned, because the endianness makes
            the storage non-contiguous! */
         for(u32 i = 0; i < cpu->r[6]; i++)
             mq_memory_write(mach, mach->memory, cpu->r[4], 1, cpu->r[5]);
+        cpu->r[0] = 0;
+        return;
+
+    case 0x1562: /* MCSGetDLen2() */
+        cpu->r[0] = 0x40; // does not exist
+        return;
+
+    case 0x18f9: /* PrintXY() */
+        mq_log(MQ_LOG_ERROR, "syscall %%18f9 PrintXY() ignored");
+        cpu->r[0] = 0; //mach->stuck = true;
+        return;
+
+    case 0x1d77: /* DefineStatusMessage() */
+        mq_log(MQ_LOG_ERROR, "syscall %%1d77 DefineStatusMessage() ignored");
+        cpu->r[0] = 0;
+        return;
+    case 0x1d81: /* DisplayStatusArea() */
+        mq_log(MQ_LOG_ERROR, "syscall %%1d81 DisplayStatusArea() ignored");
         cpu->r[0] = 0;
         return;
 
@@ -604,6 +665,36 @@ bool mq_casiowin_initHeap(mqMachine *mach)
         return false;
 
     return mq_heap_init(start, start + size, buffer);
+}
+
+static void mq_casiowin_process_bgsyscall(mqMachine *mach, int cyclesElapsed)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    (void)cyclesElapsed;
+
+    bool done = Casiowin->bgsyscall(mach);
+    if(done) {
+        Casiowin->bgsyscall = NULL;
+        mach->processes[processID_bgsyscall] = NULL;
+        mach->internallyBlocked = false;
+    }
+}
+
+bool mq_casiowin_runBackgroundSyscall(
+    mqMachine *mach, mq_casiowin_bgsyscall_t *bgsyscall)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    if(!Casiowin || mach->processes[processID_bgsyscall])
+        return false;
+
+    /* Try to run it once before setting up the background process */
+    if(bgsyscall(mach))
+        return true;
+
+    Casiowin->bgsyscall = bgsyscall;
+    mach->processes[processID_bgsyscall] = mq_casiowin_process_bgsyscall;
+    mach->internallyBlocked = true;
+    return true;
 }
 
 void mq_casiowin_syscall(mqMachine *mach)

@@ -10,6 +10,7 @@ static void AddChunkList(
     mqMemory const *mem = mach->memory;
     char addr[16];
     int totalChunks = 0;
+    (void)a;
 
     ImVec2 avl = ImGui::GetContentRegionAvail();
     avl.x -= 4;
@@ -38,8 +39,6 @@ static void AddChunkList(
             s.selectedChunk = i;
             s.selectedPage = -1;
             s.selectedIO = -1;
-            a.type = MemoryWindowAction::Type::MWA_VIEW_HEX;
-            a.address = i << 20;
 
             /* Autoselect page #0 if there is exactly one non-null page */
             mqChunk *ch = MQ_CHUNKPTR_GET(mem->chunks[i]);
@@ -69,6 +68,7 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
     mqChunkPointer chunkPtr, MemoryWindowAction &a)
 {
     (void)mach;
+    (void)a;
     if(chunkPtr == MQ_CHUNKPTR_NULL)
         return;
     if(MQ_CHUNKPTR_ISBUFFER(chunkPtr)) {
@@ -106,8 +106,6 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
         if(clicked && s.selectedPage != (int)i) {
             s.selectedPage = i;
             s.selectedIO = -1;
-            a.type = MemoryWindowAction::Type::MWA_VIEW_HEX;
-            a.address = chunkBase + (i << 12);
         }
 
         totalPages++;
@@ -247,8 +245,132 @@ MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state)
 {
     MemoryWindowAction a;
 
-    if(ImGui::Begin("Memory", nullptr, ImGuiWindowFlags_HorizontalScrollbar))
+    if(ImGui::Begin("Memory tree", nullptr, ImGuiWindowFlags_HorizontalScrollbar))
         a = AddMemoryWindowContents(mach, state);
+    ImGui::End();
+
+    return a;
+}
+
+MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
+    mqMachine *mach, MemoryBuffersWindowState &state)
+{
+    MemoryBuffersWindowAction a;
+    mqMemory *mem = mach->memory;
+
+    uint totalSize = 0;
+    for(int i = 0; i < mem->bufferCount; i++)
+        totalSize += mem->buffers[i].size;
+
+    ImGui::Text("%d buffers (total size %.1f MB)",
+            mem->bufferCount, (float)totalSize / 1e6);
+
+    ImGui::BeginTable("membuffers", 3,
+        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg);
+    ImGui::TableSetupColumn("Address");
+    ImGui::TableSetupColumn("Size");
+    ImGui::TableSetupColumn("Origin");
+    ImGui::TableHeadersRow();
+
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    if(ImGui::Selectable("Virtual address space", state.selectedBuffer == 0,
+            ImGuiSelectableFlags_SpanAllColumns |
+            ImGuiSelectableFlags_AllowOverlap)) {
+        state.selectedBuffer = 0;
+        a.type = MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX;
+        a.buffer = NULL;
+        a.offset = 0;
+        a.size = 0xffffffff;
+        a.address = 0;
+    }
+    ImGui::TableNextColumn();
+    ImGui::Text("4 GiB");
+    ImGui::TableNextColumn();
+    ImGui::Text("Emulator logic");
+
+    u32 previousBlockEnd = -1;
+    u32 blockAddress, blockSize;
+    void *blockStorage;
+    u32 startAddress = 0;
+    mqMemoryBuffer *blockBuffer;
+    int blockOffset = 0;
+    bool blockFits = true;
+    char str[64];
+    int i = 0;
+
+    while(mq_memory_findBlock(mach->memory, startAddress, &blockAddress,
+        &blockSize, &blockStorage)) {
+        blockBuffer = mq_memory_getBufferOwning(mach->memory, blockStorage);
+        if(blockBuffer) {
+            blockOffset = (char *)blockStorage - (char *)blockBuffer->data;
+            blockFits = blockOffset + blockSize <= blockBuffer->size;
+        }
+
+        if(blockAddress == previousBlockEnd) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextError("Non-contiguity violation!");
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+
+        sprintf(str, "%08x", blockAddress);
+        ImGui::PushFont(fontMono);
+        if(ImGui::Selectable(str, state.selectedBuffer == i + 1,
+                ImGuiSelectableFlags_SpanAllColumns |
+                ImGuiSelectableFlags_AllowOverlap)) {
+            state.selectedBuffer = i + 1;
+            if(blockBuffer) {
+                a.type = MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX;
+                a.buffer = blockBuffer;
+                a.offset = blockOffset;
+                a.size = blockSize;
+                a.address = blockAddress;
+            }
+        }
+        ImGui::PopFont();
+        ImGui::TableNextColumn();
+
+        std::string sizeStr = memorySizeString(blockSize);
+        ImGui::Text(sizeStr.c_str());
+        ImGui::TableNextColumn();
+
+        if(blockBuffer) {
+            ImGui::TextMono("%s", blockBuffer->name);
+            if(blockOffset || blockSize != blockBuffer->size) {
+                ImGui::SameLine(0, 0);
+                ImGui::Text(" [%s, %s)",
+                    memorySizeString(blockOffset).c_str(),
+                    memorySizeString(blockOffset + blockSize).c_str());
+            }
+            if(!blockFits) {
+                ImGui::SameLine(0, 0);
+                ImGui::TextError(" Overflow");
+            }
+        }
+        else {
+            ImGui::TextErrorMono("%p", blockStorage);
+        }
+
+        if(__builtin_add_overflow(blockAddress, blockSize, &startAddress))
+            break;
+        previousBlockEnd = startAddress;
+        i++;
+    }
+    ImGui::EndTable();
+
+    return a;
+}
+
+MemoryBuffersWindowAction AddMemoryBuffersWindow(
+    mqMachine *mach, MemoryBuffersWindowState &state)
+{
+    MemoryBuffersWindowAction a;
+
+    if(ImGui::Begin("Memory buffers"))
+        a = AddMemoryBuffersWindowContents(mach, state);
     ImGui::End();
 
     return a;
@@ -545,4 +667,62 @@ void AddInterruptsWindowContents(mqMachine *mach)
 
         ImGui::EndTable();
     }
+}
+
+HexViewerWindowAction AddHexViewerWindowContents(
+    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV)
+{
+    HexViewerWindowAction a;
+    (void)mach;
+
+    if(state.currentBuffer) {
+        ImGui::TextMono("%s", state.currentBuffer->name);
+        ImGui::SameLine(0, 0);
+        if(state.currentBufferOffset != 0 ||
+           state.currentBufferSize != (int)state.currentBuffer->size) {
+            std::string startStr = memorySizeString(
+                state.currentBufferOffset);
+            std::string endStr = memorySizeString(
+                state.currentBufferOffset + state.currentBufferSize);
+            ImGui::Text(" section [%s, %s)",
+                startStr.c_str(), endStr.c_str());
+        }
+        else {
+            std::string sizeStr = memorySizeString(
+                state.currentBufferSize);
+            ImGui::Text(" (%s)", sizeStr.c_str());
+        }
+    }
+    else {
+        ImGui::Text("Virtual address space (4 GiB)");
+    }
+
+    u64 Min = HV.MinCursor();
+    u64 Max = HV.MaxCursor();
+    if(Max > Min) {
+        float progress = (float)(HV.Cursor - Min) / (Max - Min);
+        char str[64];
+        sprintf(str, "%.2f%%", 100 * progress);
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x -
+                        ImGui::CalcTextSize(str).x);
+        ImGui::TextUnformatted(str);
+    }
+
+    ImGui::PushFont(fontMono);
+    ImGui::AddHexViewer(HV);
+    ImGui::PopFont();
+
+    return a;
+}
+
+HexViewerWindowAction AddHexViewerWindow(
+    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV)
+{
+    HexViewerWindowAction a;
+
+    if(ImGui::Begin("Hex Viewer"))
+        a = AddHexViewerWindowContents(mach, state, HV);
+    ImGui::End();
+
+    return a;
 }

@@ -191,6 +191,7 @@ struct mqMMIO {
     char const *name;
 };
 
+typedef struct mqMemoryBuffer mqMemoryBuffer;
 typedef struct mqMemory mqMemory;
 typedef struct mqChunk mqChunk;
 typedef struct mqPage mqPage;
@@ -214,6 +215,10 @@ void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size);
 /* Get a previously allocated buffer by name, NULL if nonexistant. If size is
    not NULL, it receives the size of the buffer. */
 void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size);
+
+/* Get the buffer which owns the given pointer. If the given pointer is not
+   part of any memory buffer, returns NULL. */
+mqMemoryBuffer *mq_memory_getBufferOwning(mqMemory *mem, void *data);
 
 /* Create a buffer chunk; the backing data cannot be NULL. Returns true on
    success, false if the chunk already exists (in which case the call is a
@@ -240,6 +245,18 @@ bool mq_chunk_createBufferPage(mqChunk *chunk, u32 addr, void *buffer);
 
    FIXME: This breaks for repeating regions, so no direct access there! */
 bool mq_memory_createBlock(mqMemory *mem, u32 addr, u32 size, void *buffer);
+
+/* Find the first block in memory after the given address. This function
+   analyzes the configuration of chunks and pages and extracts the largest
+   contiguous page-aligned block after the given address. It returns the
+   block's address, size, and backing storage. If the backing storage is not
+   contiguous across all consecutive pages and chunks, the block ends. Such a
+   setup is not allowed (see mq_memory_createBlock). This function can be used
+   to enumerate "real" blocks and detect violations of the contiguity
+   contraint. Returns false if no block was found. */
+bool mq_memory_findBlock(
+    mqMemory *mem, u32 startAddress, u32 *blockAddress, u32 *blockSize,
+    void **blockStorage);
 
 //=== Configuration of memory-mapped I/O =====================================//
 
