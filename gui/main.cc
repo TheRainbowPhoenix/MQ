@@ -330,12 +330,22 @@ static void render(void)
 
         if(workingFolderAddins.size() == 0)
             ImGui::Text("(No add-ins in working folder)");
+        else
+            ImGui::Text("Reset and load:");
+
+        int spaceLeft = 0;
         for(uint i = 0; i < workingFolderAddins.size(); i++) {
-            char str[128];
-            snprintf(str, sizeof str, "Reset and load %s",
-                workingFolderAddins[i].c_str());
-            if(ImGui::Button(str))
+            char const *addin = workingFolderAddins[i].c_str();
+            /* Check if we have enough space (32 for button + spacing) */
+            int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
+            if(spaceLeft < spaceNeeded)
+                spaceLeft = ImGui::GetContentRegionAvail().x;
+            else
+                ImGui::SameLine();
+
+            if(ImGui::Button(addin))
                 input.mq_load_working_folder_addin = i;
+            spaceLeft -= spaceNeeded;
         }
 
         if(mach->initialized) {
@@ -521,10 +531,10 @@ static void render(void)
         auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
             ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
         auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
-            ImGuiDir_Right, 0.70f, nullptr, &dock_left_top);
+            ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
         auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
             dock_left_bottom,
-            ImGuiDir_Right, 0.52f, nullptr, &dock_left_bottom);
+            ImGuiDir_Right, 0.48f, nullptr, &dock_left_bottom);
         auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
             ImGuiDir_Down, 0.6f, nullptr, &dock);
 
@@ -868,7 +878,7 @@ int main(void)
 
     mach = mq_machine_create();
 
-    if(azur_init("MQ", 1366, 768) != 0)
+    if(azur_init("MQ", 1500, 850) != 0)
         return 1;
     if(!azur_init_imgui())
         return 1;
