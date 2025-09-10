@@ -90,6 +90,27 @@ static bool HexViewer_ReadByte(u64 addr, u8 *result)
     return b;
 }
 
+static ImGui::HexViewer HV = {
+    .AddressBits = 32,
+    .MinAddress = 0,
+    .MaxAddress = 0xffffffff,
+    .InputType = ImGui::HexViewer::InputFunction,
+    .ReadByte = HexViewer_ReadByte,
+    .LineSpacing = 2,
+    .AlignXCenter = false,
+    .Cursor = 0,
+};
+static HexViewerWindowState HVWS {};
+static MemoryWindowState MWS {};
+static MemoryBuffersWindowState MBWS {};
+
+static void resetWindowStates(void)
+{
+    MWS = MemoryWindowState();
+    MBWS = MemoryBuffersWindowState();
+    HVWS = HexViewerWindowState();
+}
+
 static void render(void)
 {
     ZoneScopedN("render");
@@ -459,20 +480,6 @@ static void render(void)
 
     AddInterruptsWindow(mach);
 
-    static ImGui::HexViewer HV = {
-        .AddressBits = 32,
-        .MinAddress = 0,
-        .MaxAddress = 0xffffffff,
-        .InputType = ImGui::HexViewer::InputFunction,
-        .ReadByte = HexViewer_ReadByte,
-        .LineSpacing = 2,
-        .AlignXCenter = false,
-        .Cursor = 0,
-    };
-    static HexViewerWindowState HVWS {};
-    static MemoryWindowState MWS {};
-    static MemoryBuffersWindowState MBWS {};
-
     MemoryWindowAction MWA = AddMemoryWindow(mach, MWS);
     (void)MWA;
 
@@ -647,10 +654,12 @@ static bool generate_rgb_pattern(mqDisplay *display)
 static void open_addin(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
+        resetWindowStates();
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
         mq_machine_load_g1a(mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
+        resetWindowStates();
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         mq_machine_load_g3a(mach, data, size);
     }
@@ -682,10 +691,12 @@ static int update(void)
     }
 
     if(input.mq_initialize_addin_fx) {
+        resetWindowStates();
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_initialize_addin_cg) {
+        resetWindowStates();
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         render_needed = std::max(render_needed, 1);
     }
