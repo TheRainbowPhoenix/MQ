@@ -61,12 +61,14 @@ struct GUIState {
     std::vector<std::string> workingFolderAddins;
     int mq_cycles = 0;
 
-    bool watch_enabled = true;
+    bool watch_enabled = false;
     struct WatchInfo watch_info = {
         .fd = -1,
         .wd = -1,
         .addin_path = "",
     };
+
+    fs::path start_path = "";
 };
 
 struct GUIInput input;
@@ -716,6 +718,11 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
     fs::path path = "";
+    if(!state.start_path.empty()) {
+        path = state.start_path;
+        state.start_path = "";
+        state.mq_cycles = -1;
+    }
     if(state.watch_enabled) {
         enum WatchEvent event;
         while(true) {
@@ -923,8 +930,15 @@ int main(int argc, char **argv)
             printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
             return 0;
         }
-        mq_log(MQ_LOG_ERROR, "unknown argument '%s'", argv[i]);
-        return 1;
+        if(!state.start_path.empty()) {
+            mq_log(
+                MQ_LOG_WARNING,
+                "dropping previous addin request '%s'",
+                state.start_path.c_str()
+            );
+        }
+        state.start_path = argv[i];
+        i += 1;
     }
 
     mq_init();
