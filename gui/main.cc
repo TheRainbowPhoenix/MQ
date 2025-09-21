@@ -52,7 +52,11 @@ struct DelayedInput {
     bool ui_pattern_rgb = false;
 
     bool mq_watch = false;
-    struct WatchInfo mq_watch_info = {.fd = -1, .wd = -1};
+    struct WatchInfo mq_watch_info = {
+        .fd = -1,
+        .wd = -1,
+        .addin = -1,
+    };
 
     bool quit = false;
 };
@@ -704,6 +708,21 @@ static int update(void)
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         render_needed = std::max(render_needed, 1);
     }
+    if(input.mq_watch) {
+        enum WatchEvent event;
+        while(true) {
+            event = watch_poll(&input.mq_watch_info);
+            if (event == MQ_WATCH_EVT_NONE)
+                break;
+            if (event == MQ_WATCH_EVT_DELETED)
+                mq_log(MQ_LOG_WARNING, "- addin has been removed");
+            if (event == MQ_WATCH_EVT_UPDATED) {
+                mq_log(MQ_LOG_DEBUG, "watch: addin has been removed");
+                input.mq_load_working_folder_addin = input.mq_watch_info.addin;
+                cyclesLeft = input.mq_cycles;
+            };
+        }
+    }
     if(input.mq_load_working_folder_addin >= 0) {
         fs::path path = workingFolderAddins[input.mq_load_working_folder_addin];
         long size;
@@ -714,20 +733,13 @@ static int update(void)
             inputFile.size = size;
         }
         if(input.mq_watch) {
-            if(watch_init(&input.mq_watch_info, path.c_str()) != 0)
+            if(watch_init(
+                &input.mq_watch_info,
+                path.c_str(),
+                input.mq_load_working_folder_addin
+            ) != 0) {
                 mq_log(MQ_LOG_ERROR, "unable to watch the file o(x_x)o");
-        }
-    }
-    if(input.mq_watch) {
-        enum WatchEvent event;
-        while(true) {
-            event = watch_poll(&input.mq_watch_info);
-            if (event == MQ_WATCH_EVT_NONE)
-                break;
-            if (event == MQ_WATCH_EVT_DELETED)
-                mq_log(MQ_LOG_WARNING, "- addin has been removed");
-            if (event == MQ_WATCH_EVT_UPDATED)
-                mq_log(MQ_LOG_WARNING, "- addin has been updated!!");
+            }
         }
     }
 

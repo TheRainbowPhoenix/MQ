@@ -6,6 +6,7 @@
 struct WatchInfo {
     int fd;
     int wd;
+    int addin;
 };
 enum WatchEvent {
     MQ_WATCH_EVT_NONE    = 0,
@@ -13,7 +14,7 @@ enum WatchEvent {
     MQ_WATCH_EVT_DELETED = 2,
 };
 
-int watch_init(struct WatchInfo *info, char const *pathname);
+int watch_init(struct WatchInfo *info, char const *pathname, int addin);
 enum WatchEvent watch_poll(struct WatchInfo *info);
 
 #endif /* MQ_UI_WATCH_H */

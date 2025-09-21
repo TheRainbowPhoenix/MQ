@@ -7,8 +7,11 @@
 #include "watch.h"
 #include <mq/mq.h>
 
-int watch_init(struct WatchInfo *info, char const *pathname)
-{
+int watch_init(
+    struct WatchInfo *info,
+    char const *pathname,
+    int addin
+) {
     if(info == nullptr || pathname == nullptr) {
         mq_log(MQ_LOG_ERROR, "watch_init: invalid arguments");
         return -99;
@@ -36,6 +39,7 @@ int watch_init(struct WatchInfo *info, char const *pathname)
         );
         return -2;
     }
+    info->addin = addin;
     return 0;
 }
 enum WatchEvent watch_poll(struct WatchInfo *info)
