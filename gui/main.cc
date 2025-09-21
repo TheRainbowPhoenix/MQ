@@ -6,6 +6,7 @@
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
 #include <mq/modules/mmu.h>
+#include "watch.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -49,6 +50,9 @@ struct DelayedInput {
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
+
+    bool mq_watch = false;
+    struct WatchInfo mq_watch_info = {.fd = -1, .wd = -1};
 
     bool quit = false;
 };
@@ -709,7 +713,24 @@ static int update(void)
             inputFile.data = data;
             inputFile.size = size;
         }
+        if(input.mq_watch) {
+            if(watch_init(&input.mq_watch_info, path.c_str()) != 0)
+                mq_log(MQ_LOG_ERROR, "unable to watch the file o(x_x)o");
+        }
     }
+    if(input.mq_watch) {
+        enum WatchEvent event;
+        while(true) {
+            event = watch_poll(&input.mq_watch_info);
+            if (event == MQ_WATCH_EVT_NONE)
+                break;
+            if (event == MQ_WATCH_EVT_DELETED)
+                mq_log(MQ_LOG_WARNING, "- addin has been removed");
+            if (event == MQ_WATCH_EVT_UPDATED)
+                mq_log(MQ_LOG_WARNING, "- addin has been updated!!");
+        }
+    }
+
     /* Intentional re-check */
     if(inputFile.data) {
         open_addin(inputFile.path, inputFile.data, inputFile.size);
@@ -783,8 +804,13 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
 
+    // fixme : proper states management
+    bool mq_watch = input.mq_watch;
+    struct WatchInfo mq_watch_info = input.mq_watch_info;
     input = DelayedInput();
     input.mq_cycles = cyclesLeft;
+    input.mq_watch = mq_watch;
+    input.mq_watch_info = mq_watch_info;
 
     return 0;
 }
@@ -878,13 +904,31 @@ static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
         (void *)ptr, size, pointSize, &fontConfig);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     setlocale(LC_ALL, "C.UTF-8");
-    printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
 
     ConsoleText.alloc(65536, 256);
     mq_log_handler(handle_log);
+
+    //todo: better arg handling
+    int i = 1;
+    while(i < argc) {
+        if (strcmp("--watch", argv[i]) == 0) {
+            mq_log(MQ_LOG_DEBUG, "activate watch feature");
+            input.mq_watch = true;
+            i += 1;
+            continue;
+        }
+        if(strcmp("--version", argv[i]) == 0) {
+            printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
+            return 0;
+        }
+        mq_log(MQ_LOG_ERROR, "unknown argument '%s'", argv[i]);
+        return 1;
+    }
+
+    printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
     mq_init();
 
     mach = mq_machine_create();
