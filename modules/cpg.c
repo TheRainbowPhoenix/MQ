@@ -139,5 +139,10 @@ bool mq_cpg_setup(mqMachine *mach, int initializeKind)
         NULL, write_FLLFRQ, &CPG->FLLFRQ, CPG);
     ok &= mq_page_mapRegister32(pg, "LSTATUS",  0xa4150060,
         NULL, write_LSTATUS, &CPG->LSTATUS, CPG);
+
+    if(ok)
+        mach->modules[moduleID] = CPG;
+    else
+        free(CPG);
     return ok;
 }

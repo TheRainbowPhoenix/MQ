@@ -212,8 +212,10 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
 static void mq_casiowin_cleanup(mqMachine *mach)
 {
     mqCasiowin *Casiowin = mach->modules[moduleID];
-    if(Casiowin)
+    if(Casiowin) {
+        free(Casiowin->bgs);
         free(Casiowin);
+    }
 
     // TODO[casiowin]: mq_heap_reset: Should be bound to machine, not global!
     mq_heap_reset();
