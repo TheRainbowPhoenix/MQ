@@ -37,7 +37,12 @@ RichText::Text ConsoleText;
 /* Refresh request triggered by SDL events and Dear ImGui's initial frames. */
 static int render_needed = IMGUI_SETTLING_FRAMES;
 
+/* Main machine on which we're running the program. This is used in the
+   emulation thread and can't be accessed randomly by GUI. */
 static mqMachine *mach = nullptr;
+/* Observer machine containing snapshots of the main machine's state, used by
+   the GUI and (mostly) independent from the emulation thread */
+static mqMachine *omach = nullptr;
 
 // GUI one-frame input information
 struct GUIInput {
@@ -129,6 +134,9 @@ static void resetWindowStates(void)
     MWS = MemoryWindowState();
     MBWS = MemoryBuffersWindowState();
     HVWS = HexViewerWindowState();
+    HV.Cursor = 0;
+    HV.MinAddress = 0;
+    HV.MaxAddress = (u32)-1;
 }
 
 static void render(void)
@@ -153,6 +161,10 @@ static void render(void)
     /* Don't accumulate work when the window is not focused! */
     Uint32 flags = SDL_GetWindowFlags(window);
     if(previous_time != 0.0 && !(flags & SDL_WINDOW_INPUT_FOCUS)) return;
+
+    /* Generate an observer for the current state of the machine */
+    if(mach)
+        omach = mq_machine_createObserver(mach);
 
     if(mach && mach->display && mach->display->dirty) {
         mqDisplay *d = mach->display;
@@ -367,7 +379,7 @@ static void render(void)
         //   proc_pid_statm(5)
 #endif
 
-        if(mach->initialized) {
+        if(omach->initialized) {
             ImGui::Text("Cycle:");
             ImGui::SameLine();
             if(ImGui::Button("1"))
@@ -388,7 +400,7 @@ static void render(void)
         else {
             ImGui::Text("Machine is not initialized.");
         }
-        if(mach->stuck) {
+        if(omach->stuck) {
             ImGui::Text("Machine is stuck!");
             state.mq_cycles = 0;
         }
@@ -448,24 +460,24 @@ static void render(void)
 
     if(ImGui::Begin("CPU", nullptr,
             ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::Text("Sleeping: %d", (int)mach->cpu.sleeping);
+        ImGui::Text("Sleeping: %d", (int)omach->cpu.sleeping);
         ImGui::PushFont(fontMono);
 
         ImGui::BeginGroup();
         for(int i = 0; i < 16; i++)
-            ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", mach->cpu.r[i]);
+            ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", omach->cpu.r[i]);
         ImGui::EndGroup();
 
         ImGui::SameLine(0, 40);
         ImGui::BeginGroup();
-        ImGui::Text("pc:    %08x", mach->cpu.pc);
-        ImGui::Text("gbr:   %08x", mach->cpu.spRegs[SH_GBR]);
-        ImGui::Text("mach:  %08x", mach->cpu.spRegs[SH_MACH]);
-        ImGui::Text("macl:  %08x", mach->cpu.spRegs[SH_MACL]);
-        ImGui::Text("pr:    %08x", mach->cpu.spRegs[SH_PR]);
+        ImGui::Text("pc:    %08x", omach->cpu.pc);
+        ImGui::Text("gbr:   %08x", omach->cpu.spRegs[SH_GBR]);
+        ImGui::Text("mach:  %08x", omach->cpu.spRegs[SH_MACH]);
+        ImGui::Text("macl:  %08x", omach->cpu.spRegs[SH_MACL]);
+        ImGui::Text("pr:    %08x", omach->cpu.spRegs[SH_PR]);
 
-        u32 SR = mach->cpu.spRegs[SH_SR];
-        ImGui::Text("sr:    %08x", mach->cpu.spRegs[SH_SR]);
+        u32 SR = omach->cpu.spRegs[SH_SR];
+        ImGui::Text("sr:    %08x", omach->cpu.spRegs[SH_SR]);
         ImGui::Text(" MD=%d RB=%d BL=%d",
             (SR >> 30) & 1, (SR >> 29 & 1), (SR >> 28) & 1);
         ImGui::Text(" IMASK=%d",
@@ -476,14 +488,14 @@ static void render(void)
 
         ImGui::SameLine(0, 40);
         ImGui::BeginGroup();
-        ImGui::Text("vbr:     %08x", mach->cpu.spRegs[SH_VBR]);
-        ImGui::Text("ssr:     %08x", mach->cpu.spRegs[SH_SSR]);
-        ImGui::Text("spc:     %08x", mach->cpu.spRegs[SH_SPC]);
-        ImGui::Text("sgr:     %08x", mach->cpu.spRegs[SH_SGR]);
-        ImGui::Text("dbr:     %08x", mach->cpu.spRegs[SH_DBR]);
-        ImGui::Text("dsr:     %08x", mach->cpu.spRegs[SH_DSR]);
+        ImGui::Text("vbr:     %08x", omach->cpu.spRegs[SH_VBR]);
+        ImGui::Text("ssr:     %08x", omach->cpu.spRegs[SH_SSR]);
+        ImGui::Text("spc:     %08x", omach->cpu.spRegs[SH_SPC]);
+        ImGui::Text("sgr:     %08x", omach->cpu.spRegs[SH_SGR]);
+        ImGui::Text("dbr:     %08x", omach->cpu.spRegs[SH_DBR]);
+        ImGui::Text("dsr:     %08x", omach->cpu.spRegs[SH_DSR]);
         for(int i = 0; i < 8; i++)
-            ImGui::Text("r%d_bank: %08x", i, mach->cpu.spRegs[SH_RnBANK + i]);
+            ImGui::Text("r%d_bank: %08x", i, omach->cpu.spRegs[SH_RnBANK + i]);
         // ImGui::Text();
         ImGui::EndGroup();
 
@@ -491,18 +503,18 @@ static void render(void)
         ImGui::BeginGroup();
         ImGui::Text("[DSP]");
         ImGui::Text("a0:  %02x.%08x",
-            mach->cpu.spRegs[SH_A0G], mach->cpu.spRegs[SH_A0]);
+            omach->cpu.spRegs[SH_A0G], omach->cpu.spRegs[SH_A0]);
         ImGui::Text("a1:  %02x.%08x",
-            mach->cpu.spRegs[SH_A1G], mach->cpu.spRegs[SH_A1]);
-        ImGui::Text("x0:     %08x", mach->cpu.spRegs[SH_X0]);
-        ImGui::Text("x1:     %08x", mach->cpu.spRegs[SH_X1]);
-        ImGui::Text("y0:     %08x", mach->cpu.spRegs[SH_Y0]);
-        ImGui::Text("y1:     %08x", mach->cpu.spRegs[SH_Y1]);
-        ImGui::Text("m0:     %08x", mach->cpu.spRegs[SH_M0]);
-        ImGui::Text("m1:     %08x", mach->cpu.spRegs[SH_M1]);
-        ImGui::Text("mod:    %08x", mach->cpu.spRegs[SH_MOD]);
-        ImGui::Text("rs:     %08x", mach->cpu.spRegs[SH_RS]);
-        ImGui::Text("re:     %08x", mach->cpu.spRegs[SH_RE]);
+            omach->cpu.spRegs[SH_A1G], omach->cpu.spRegs[SH_A1]);
+        ImGui::Text("x0:     %08x", omach->cpu.spRegs[SH_X0]);
+        ImGui::Text("x1:     %08x", omach->cpu.spRegs[SH_X1]);
+        ImGui::Text("y0:     %08x", omach->cpu.spRegs[SH_Y0]);
+        ImGui::Text("y1:     %08x", omach->cpu.spRegs[SH_Y1]);
+        ImGui::Text("m0:     %08x", omach->cpu.spRegs[SH_M0]);
+        ImGui::Text("m1:     %08x", omach->cpu.spRegs[SH_M1]);
+        ImGui::Text("mod:    %08x", omach->cpu.spRegs[SH_MOD]);
+        ImGui::Text("rs:     %08x", omach->cpu.spRegs[SH_RS]);
+        ImGui::Text("re:     %08x", omach->cpu.spRegs[SH_RE]);
         // ImGui::Text();
         ImGui::EndGroup();
 
@@ -512,15 +524,15 @@ static void render(void)
 
     AddInterruptsWindow(mach);
 
-    MemoryWindowAction MWA = AddMemoryWindow(mach, MWS);
+    MemoryWindowAction MWA = AddMemoryWindow(omach, MWS);
     (void)MWA;
 
-    MemoryBuffersWindowAction MBWA = AddMemoryBuffersWindow(mach, MBWS);
+    MemoryBuffersWindowAction MBWA = AddMemoryBuffersWindow(omach, MBWS);
     if(MBWA.type == MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX) {
         HV.Cursor = MBWA.address;
         HV.MinAddress = MBWA.address;
         HV.MaxAddress = MBWA.address + (MBWA.size - 1);
-        HVWS.currentBuffer = MBWA.buffer;
+        HVWS.currentBufferName = MBWA.buffer ? MBWA.buffer->name : "";
         HVWS.currentBufferOffset = MBWA.offset;
         HVWS.currentBufferSize = MBWA.size;
     }
@@ -601,6 +613,9 @@ static void render(void)
     /* Present results to user */
     SDL_GL_SwapWindow(window);
     previous_time = time;
+
+    mq_machine_destroyObserver(omach);
+    omach = nullptr;
 
     FrameMark;
 }
@@ -981,9 +996,6 @@ int main(int argc, char **argv)
     srand(clock());
 
     DGW.init(displayTexture);
-
-    if(mach->display)
-        generate_rgb_pattern(mach->display);
 
     /* Generate an example display for a texture */
     displayTexture.init(GL_TEXTURE_2D);

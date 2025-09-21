@@ -74,6 +74,59 @@ void mq_machine_destroy(mqMachine *mach)
     free(mach);
 }
 
+mqMachine *mq_machine_createObserver(mqMachine const *mach)
+{
+    mqMachine *omach = calloc(1, sizeof *omach);
+    if(!omach)
+        return NULL;
+    memcpy(omach, mach, sizeof *mach);
+
+    /* Create observers for the CPU and memory */
+    mq_cpu_makeObserver(&omach->cpu, &mach->cpu);
+    omach->memory = mq_memory_createObserver(mach->memory);
+
+    /* Duplicate the modules and make observers for them too */
+    if(mach->modules) {
+        omach->modules = calloc(mq_module_count(), sizeof *mach->modules);
+        memcpy(omach->modules, mach->modules,
+            mq_module_count() * sizeof *omach->modules);
+        mq_callhook_module_createObserver(omach, mach);
+    }
+
+    /* Duplicate the list of processes */
+    if(mach->processes) {
+        size_t size = mq_process_count() * sizeof *omach->processes;
+        omach->processes = malloc(size);
+        if(omach->processes)
+            memcpy(omach->processes, mach->processes, size);
+    }
+
+    // TODO: Implement observers for display, keyboard, and modules
+    // omach->display = mq_display_createObserver(mach->display);
+    // omach->keyboard = mq_keyboard_createObserver(mach->keyboard);
+    return omach;
+}
+
+void mq_machine_destroyObserver(mqMachine *omach)
+{
+    mq_cpu_cleanupObserver(&omach->cpu);
+    mq_memory_destroyObserver(omach->memory);
+
+    if(omach->modules) {
+        mq_callhook_module_destroyObserver(omach);
+        free(omach->modules);
+    }
+    if(omach->processes)
+        free(omach->processes);
+
+    // TODO: Implement observers for display, keyboard, and modules
+    // if(omach->display)
+    //     mq_display_destroyObserver(omach->display);
+    // if(omach->keyboard)
+    //     mq_keyboard_destroyObserver(omach->keyboard);
+    free(omach);
+}
+
 static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
 {
     /* ILRAM occupies 4 kB at 0xe5200000 and repeats for 2 MB */

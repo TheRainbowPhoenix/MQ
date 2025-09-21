@@ -150,6 +150,105 @@ void mq_page_destroy(mqPage *pg)
     free(pg);
 }
 
+//=== Observers ==============================================================//
+
+static void *memdup(void const *ptr, size_t size)
+{
+    if(!size)
+        return NULL;
+    void *optr = malloc(size);
+    return optr ? memcpy(optr, ptr, size) : NULL;
+}
+
+static mqPage *mq_page_createObserver(mqPage const *pg)
+{
+    mqPage *opg = mq_page_create();
+    if(!opg)
+        return NULL;
+    memcpy(opg, pg, sizeof *pg);
+
+    /* Duplicate IO structure map */
+    opg->map = memdup(pg->map, pg->length * sizeof *pg->map);
+    /* Duplicate list of IO structures */
+    opg->io = memdup(pg->io, pg->ioCount * sizeof *pg->io);
+
+    return opg;
+}
+
+static void mq_page_destroyObserver(mqPage *opg)
+{
+    mq_page_destroy(opg);
+}
+
+static mqChunk *mq_chunk_createObserver(mqChunk const *chunk)
+{
+    mqChunk *ochunk = mq_chunk_create();
+    if(!ochunk)
+        return NULL;
+
+    for(int i = 0; i < 256; i++) {
+        mqPagePointer ptr = chunk->pages[i];
+        if(ptr == MQ_PAGEPTR_NULL || MQ_PAGEPTR_ISBUFFER(ptr))
+            ochunk->pages[i] = ptr;
+        else
+            ochunk->pages[i] = MQ_PAGEPTR_MK(
+                mq_page_createObserver(MQ_PAGEPTR_GET(ptr)));
+    }
+
+    return ochunk;
+}
+
+static void mq_chunk_destroyObserver(mqChunk *ochunk)
+{
+    for(int i = 0; i < 256; i++) {
+        mqPagePointer ptr = ochunk->pages[i];
+        ochunk->pages[i] = MQ_PAGEPTR_NULL;
+
+        mqPage *opg = MQ_PAGEPTR_GET(ptr);
+        if(opg)
+            mq_page_destroyObserver(opg);
+    }
+
+    free(ochunk);
+}
+
+mqMemory *mq_memory_createObserver(mqMemory const *mem)
+{
+    mqMemory *omem = mq_memory_create();
+    if(!omem)
+        return NULL;
+
+    memcpy(omem, mem, sizeof *mem);
+
+    /* Duplicate chunk information, but keep the pointers to buffers. */
+    for(int i = 0; i < 0x1000; i++) {
+        mqChunkPointer ptr = omem->chunks[i];
+        if(ptr != MQ_CHUNKPTR_NULL && !MQ_CHUNKPTR_ISBUFFER(ptr)) {
+            omem->chunks[i] = MQ_CHUNKPTR_MK(
+                mq_chunk_createObserver(MQ_CHUNKPTR_GET(ptr)));
+        }
+    }
+
+    /* Duplicate buffer information, but don't copy the buffer themselves!
+       We'll observe them dirctly even if it's a bit racy. */
+    omem->buffers =
+        memdup(mem->buffers, mem->bufferCount * sizeof *mem->buffers);
+
+    return omem;
+}
+
+void mq_memory_destroyObserver(mqMemory *omem)
+{
+    for(int i = 0; i < 0x1000; i++) {
+        mqChunk *ochunk = MQ_CHUNKPTR_GET(omem->chunks[i]);
+        if(ochunk)
+            mq_chunk_destroyObserver(ochunk);
+    }
+
+    free(omem->buffers);
+    free(omem);
+}
+
 //=== Configuration of memory buffers ========================================//
 
 void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size)
@@ -175,20 +274,13 @@ void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size)
     return data;
 }
 
-void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size)
+mqMemoryBuffer *mq_memory_getBuffer(mqMemory *mem, char const *name)
 {
-    if(!name)
-        return NULL;
-
     for(int i = 0; i < mem->bufferCount; i++) {
-        struct mqMemoryBuffer *b = &mem->buffers[i];
-        if(b->name && !strcmp(b->name, name)) {
-            if(size)
-                *size = b->size;
-            return b->data;
-        }
+        mqMemoryBuffer *b = &mem->buffers[i];
+        if(name && b->name && !strcmp(b->name, name))
+            return b;
     }
-
     return NULL;
 }
 

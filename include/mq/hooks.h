@@ -34,10 +34,23 @@ typedef void mq_hook_quit_t(void);
 bool mq_hook_quit(mq_hook_quit_t *function);
 void mq_callhook_quit(void);
 
+/* [module_createObserver] Hook that runs when creating a machine observer. */
+typedef void mq_hook_module_createObserver_t(
+    struct mqMachine *omach, struct mqMachine const *mach);
+bool mq_hook_module_createObserver(mq_hook_module_createObserver_t *function);
+void mq_callhook_module_createObserver(
+    struct mqMachine *omach, struct mqMachine const *mach);
+
 /* [module_cleanup] Hook that runs when an mqMachine cleans up module data. */
 typedef void mq_hook_module_cleanup_t(struct mqMachine *mach);
 bool mq_hook_module_cleanup(mq_hook_module_cleanup_t *function);
 void mq_callhook_module_cleanup(struct mqMachine *mach);
+
+/* [module_destroyObserver]
+   Hook that runs when destroying a machine observer. */
+typedef void mq_hook_module_destroyObserver_t(struct mqMachine *omach);
+bool mq_hook_module_destroyObserver(mq_hook_module_destroyObserver_t *function);
+void mq_callhook_module_destroyObserver(struct mqMachine *omach);
 
 /* [memory_read] hook that runs when there is an uncaught memory read in a
    configurable memory area. If multiple hooks cover the same address one of

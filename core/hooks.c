@@ -35,11 +35,26 @@ void mq_callhook_quit(void)
         hk_quit[i]();
 }
 
+MQ_DEFINE_HOOK(module_createObserver, 32)
+void mq_callhook_module_createObserver(
+    struct mqMachine *omach, struct mqMachine const *mach)
+{
+    for(int i = 0; hk_module_createObserver[i]; i++)
+        hk_module_createObserver[i](omach, mach);
+}
+
 MQ_DEFINE_HOOK(module_cleanup, 32)
 void mq_callhook_module_cleanup(struct mqMachine *mach)
 {
     for(int i = 0; hk_module_cleanup[i]; i++)
         hk_module_cleanup[i](mach);
+}
+
+MQ_DEFINE_HOOK(module_destroyObserver, 32)
+void mq_callhook_module_destroyObserver(struct mqMachine *omach)
+{
+    for(int i = 0; hk_module_destroyObserver[i]; i++)
+        hk_module_destroyObserver[i](omach);
 }
 
 MQ_DEFINE_HOOK(memory_read, 32)

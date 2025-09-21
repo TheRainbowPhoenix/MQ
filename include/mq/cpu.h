@@ -141,6 +141,12 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind);
 /* Setup module IO for the CPU's internal mechanisms. */
 bool mq_cpu_setup(mqCpu *cpu, struct mqMemory *mem);
 
+/* Observer functions for mqCpu. These are "non-standard" because the CPU is
+   allocated as part of mqMachine. No idea if this is worth it. We'll test the
+   performance and maybe adjust this later. */
+void mq_cpu_makeObserver(mqCpu *ocpu, mqCpu const *cpu);
+void mq_cpu_cleanupObserver(mqCpu *ocpu);
+
 //=== Emulation routines =====================================================//
 
 /* Raise an exception. The exception will be handled at the next appropriate

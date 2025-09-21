@@ -49,6 +49,16 @@ void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
     /* CPU registers are initialized here (most to 0). */
 }
 
+void mq_cpu_makeObserver(mqCpu *ocpu, mqCpu const *cpu)
+{
+    memcpy(ocpu, cpu, sizeof *cpu);
+}
+
+void mq_cpu_cleanupObserver(mqCpu *ocpu)
+{
+    (void)ocpu;
+}
+
 static void write_TRA(mqCpu *cpu, u32 value)
 {
     cpu->TRA = value & 0x000003fc;

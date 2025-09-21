@@ -205,6 +205,10 @@ mqMemory *mq_memory_create(void);
 void mq_memory_reset(mqMemory *mem);
 void mq_memory_destroy(mqMemory *mem);
 
+/* Observer functions for mqMemory. */
+mqMemory *mq_memory_createObserver(mqMemory const *mem);
+void mq_memory_destroyObserver(mqMemory *omem);
+
 /* Allocate a new zero-initialized buffer owned by the mqMemory. The buffer can
    be mapped freely to memory, including partially, multiple times, and in
    overlapping fashions. The name string can be used to later query the buffer
@@ -214,7 +218,7 @@ void *mq_memory_allocBuffer(mqMemory *mem, char const *name, u32 size);
 
 /* Get a previously allocated buffer by name, NULL if nonexistant. If size is
    not NULL, it receives the size of the buffer. */
-void *mq_memory_getBuffer(mqMemory *mem, char const *name, u32 *size);
+mqMemoryBuffer *mq_memory_getBuffer(mqMemory *mem, char const *name);
 
 /* Get the buffer which owns the given pointer. If the given pointer is not
    part of any memory buffer, returns NULL. */
