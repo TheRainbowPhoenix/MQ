@@ -18,5 +18,6 @@ enum WatchEvent {
 
 int watch_init(struct WatchInfo *info, std::filesystem::path &pathname);
 enum WatchEvent watch_poll(struct WatchInfo *info);
+int watch_quit(struct WatchInfo *info);
 
 #endif /* MQ_UI_WATCH_H */

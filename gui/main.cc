@@ -976,6 +976,8 @@ int main(int argc, char **argv)
 
     DGW.cleanup();
 
+    watch_quit(&state.watch_info);
+
     azur_quit();
     if(mach) {
         mq_machine_destroy(mach);

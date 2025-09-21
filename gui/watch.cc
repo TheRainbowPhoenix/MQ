@@ -78,3 +78,19 @@ enum WatchEvent watch_poll(struct WatchInfo *info)
     }
     return MQ_WATCH_EVT_NONE;
 }
+
+int watch_quit(struct WatchInfo *info)
+{
+    if(info == nullptr) {
+        mq_log(MQ_LOG_ERROR, "watch_quit: invalid arguments");
+        return -99;
+    }
+    if(info->fd >= 0) {
+        if(close(info->fd) != 0)
+            mq_log(MQ_LOG_ERROR, "watch_quit: unable to close inotify");
+    }
+    info->fd = -1;
+    info->wd = -1;
+    info->addin_path = "";
+    return 0;
+}
