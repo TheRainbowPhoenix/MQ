@@ -361,28 +361,6 @@ static void render(void)
         //   proc_pid_statm(5)
 #endif
 
-        ImGui::Checkbox2("Show demo window", &show_demo_window);
-
-        if(state.workingFolderAddins.size() == 0)
-            ImGui::Text("(No add-ins in working folder)");
-        else
-            ImGui::Text("Reset and load:");
-
-        int spaceLeft = 0;
-        for(uint i = 0; i < state.workingFolderAddins.size(); i++) {
-            char const *addin = state.workingFolderAddins[i].c_str();
-            /* Check if we have enough space (32 for button + spacing) */
-            int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
-            if(spaceLeft < spaceNeeded)
-                spaceLeft = ImGui::GetContentRegionAvail().x;
-            else
-                ImGui::SameLine();
-
-            if(ImGui::Button(addin))
-                input.mq_load_working_folder_addin = i;
-            spaceLeft -= spaceNeeded;
-        }
-
         if(mach->initialized) {
             ImGui::Text("Cycle:");
             ImGui::SameLine();
@@ -414,6 +392,30 @@ static void render(void)
             else
                 ImGui::Text("Running...");
         }
+
+        ImGui::Checkbox2("Enable watch", &state.watch_enabled);
+
+        if(state.workingFolderAddins.size() == 0)
+            ImGui::Text("(No add-ins in working folder)");
+        else
+            ImGui::Text("Reset and load:");
+
+        int spaceLeft = 0;
+        for(uint i = 0; i < state.workingFolderAddins.size(); i++) {
+            char const *addin = state.workingFolderAddins[i].c_str();
+            /* Check if we have enough space (32 for button + spacing) */
+            int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
+            if(spaceLeft < spaceNeeded)
+                spaceLeft = ImGui::GetContentRegionAvail().x;
+            else
+                ImGui::SameLine();
+
+            if(ImGui::Button(addin))
+                input.mq_load_working_folder_addin = i;
+            spaceLeft -= spaceNeeded;
+        }
+
+        ImGui::Checkbox2("Show demo window", &show_demo_window);
     }
     ImGui::End();
 
