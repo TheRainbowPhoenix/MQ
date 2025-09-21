@@ -7,12 +7,9 @@
 #include "watch.h"
 #include <mq/mq.h>
 
-int watch_init(
-    struct WatchInfo *info,
-    char const *pathname,
-    int addin
-) {
-    if(info == nullptr || pathname == nullptr) {
+int watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
+{
+    if(info == nullptr || pathname.empty()) {
         mq_log(MQ_LOG_ERROR, "watch_init: invalid arguments");
         return -99;
     }
@@ -29,7 +26,9 @@ int watch_init(
         }
     }
     info->wd = inotify_add_watch(
-        info->fd, pathname, IN_CLOSE_WRITE | IN_DELETE_SELF
+        info->fd,
+        pathname.c_str(),
+        IN_CLOSE_WRITE | IN_DELETE_SELF
     );
     if (info->wd == -1) {
         mq_log(
@@ -39,9 +38,10 @@ int watch_init(
         );
         return -2;
     }
-    info->addin = addin;
+    info->addin_path = pathname;
     return 0;
 }
+
 enum WatchEvent watch_poll(struct WatchInfo *info)
 {
     struct inotify_event event;
@@ -53,9 +53,8 @@ enum WatchEvent watch_poll(struct WatchInfo *info)
     }
     if(info->fd < 0)
         return MQ_WATCH_EVT_NONE;
-    while (true)
-    {
-        if (ioctl(info->fd, FIONREAD, &size) != 0) {
+    while (true) {
+        if(ioctl(info->fd, FIONREAD, &size) != 0) {
             mq_log(
                 MQ_LOG_ERROR,
                 "watch_poll: ioctl FIONREAD error: %s",
@@ -63,17 +62,17 @@ enum WatchEvent watch_poll(struct WatchInfo *info)
             );
             break;
         }
-        if ((unsigned long)size < sizeof(event))
+        if((unsigned long)size < sizeof(event))
             break;
-        if (read(info->fd, &event, sizeof(event)) != sizeof(event)) {
+        if(read(info->fd, &event, sizeof(event)) != sizeof(event)) {
             mq_log(MQ_LOG_ERROR, "watch_poll: broken received event size");
             break;
         }
-        if (event.mask & IN_CLOSE)
+        if(event.mask & IN_CLOSE)
             return MQ_WATCH_EVT_UPDATED;
-        if (event.mask & IN_DELETE_SELF)
+        if(event.mask & IN_DELETE_SELF)
             return MQ_WATCH_EVT_DELETED;
-        if (event.mask & IN_IGNORED)
+        if(event.mask & IN_IGNORED)
             continue;
         mq_log(MQ_LOG_WARNING, "watch_poll: unknown event %x\n", event.mask);
     }
