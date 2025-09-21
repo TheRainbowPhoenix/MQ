@@ -109,7 +109,8 @@ set(GUI_SOURCES
   gui/stb.cc
   gui/texture.cc
   gui/util.cc
-  gui/windows.cc)
+  gui/windows.cc
+  gui/watch.cc)
 
 set(ASSETS
   gui/assets/DejaVuSans.subset.ttf

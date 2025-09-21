@@ -49,10 +49,11 @@ void TextErrorMono(char const *fmt, ...);
 
 /* Checkbox with smaller frame padding. */
 template<typename... Args>
-void Checkbox2(Args... args) {
+bool Checkbox2(Args... args) {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(1, 1));
-    ImGui::Checkbox(std::forward<Args>(args)...);
+    bool b = ImGui::Checkbox(std::forward<Args>(args)...);
     ImGui::PopStyleVar();
+    return b;
 }
 
 } /* namespace ImGui */

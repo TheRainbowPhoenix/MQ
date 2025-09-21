@@ -6,6 +6,7 @@
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
 #include <mq/modules/mmu.h>
+#include "watch.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -38,11 +39,11 @@ static int render_needed = IMGUI_SETTLING_FRAMES;
 
 static mqMachine *mach = nullptr;
 
-struct DelayedInput {
+// GUI one-frame input information
+struct GUIInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
     int mq_load_working_folder_addin = -1;
-    int mq_cycles = 0;
     bool mq_heap_init = false;
     bool mq_mmu_unbind = false;
     bool mq_mmu_bind = false;
@@ -50,13 +51,32 @@ struct DelayedInput {
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
 
+    /* Update the inotify watch on the running add-in */
+    bool watch_update = false;
+
     bool quit = false;
 };
 
-struct DelayedInput input;
-struct OpenFileBuffer inputFile;
+// GUI information that must survive multiple frames
+struct GUIState {
+    // Filled asynchronously by file input dialog
+    struct OpenFileBuffer inputFile;
+    std::vector<std::string> workingFolderAddins;
+    int mq_cycles = 0;
 
-std::vector<std::string> workingFolderAddins;
+    bool watch_enabled = false;
+    struct WatchInfo watch_info = {
+        .fd = -1,
+        .wd = -1,
+        .addin_path = "",
+    };
+
+    fs::path start_path = "";
+    fs::path current_program_path = "";
+};
+
+struct GUIInput input;
+struct GUIState state;
 
 ImFont *fontSans = nullptr;
 ImFont *fontMono = nullptr;
@@ -201,17 +221,17 @@ static void render(void)
             ImGui::SameLine(0, 6);
 
             ImGui::BeginDisabled(!mach->initialized);
-            bool paused = input.mq_cycles == 0;
+            bool paused = state.mq_cycles == 0;
             bool stuck = mach->stuck;
 
             if(paused && ImGui::IconButton(0, "Run"))
-                input.mq_cycles = -1;
+                state.mq_cycles = -1;
             if(!paused && ImGui::IconButton(1, "Pause"))
-                input.mq_cycles = 0;
+                state.mq_cycles = 0;
             ImGui::SameLine(0, 6);
 
             if(ImGui::IconButton(2, "Step", !paused))
-                input.mq_cycles = 1;
+                state.mq_cycles = 1;
             ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
@@ -230,7 +250,7 @@ static void render(void)
     /* On native builds tihs fills inputFile instantly, while on emscripten
        this fills it asynchronously and we'll get it in a future frame */
     if(open)
-        openFileDialog(&inputFile);
+        openFileDialog(&state.inputFile);
 
     auto dock = ImGui::DockSpaceOverViewport();
 
@@ -347,16 +367,58 @@ static void render(void)
         //   proc_pid_statm(5)
 #endif
 
-        ImGui::Checkbox2("Show demo window", &show_demo_window);
+        if(mach->initialized) {
+            ImGui::Text("Cycle:");
+            ImGui::SameLine();
+            if(ImGui::Button("1"))
+                state.mq_cycles = 1;
+            ImGui::SameLine();
+            if(ImGui::Button("10"))
+                state.mq_cycles = 10;
+            ImGui::SameLine();
+            if(ImGui::Button("100"))
+                state.mq_cycles = 100;
+            ImGui::SameLine();
+            if(ImGui::Button("1000"))
+                state.mq_cycles = 1000;
+            ImGui::SameLine();
+            if(ImGui::Button("10k"))
+                state.mq_cycles = 10000;
+        }
+        else {
+            ImGui::Text("Machine is not initialized.");
+        }
+        if(mach->stuck) {
+            ImGui::Text("Machine is stuck!");
+            state.mq_cycles = 0;
+        }
+        if(state.mq_cycles) {
+            if(state.mq_cycles > 0)
+                ImGui::Text("Cycles pending: %d", state.mq_cycles);
+            else
+                ImGui::Text("Running...");
+        }
 
-        if(workingFolderAddins.size() == 0)
+        char watch_str[256];
+        if(state.watch_info.fd < 0)
+            strcpy(watch_str, "Watch program");
+        else
+            snprintf(watch_str, sizeof watch_str,
+                "Watch program: %s (%d, %d)",
+                state.watch_info.addin_path.c_str(), state.watch_info.fd,
+                state.watch_info.wd);
+
+        if(ImGui::Checkbox2(watch_str, &state.watch_enabled))
+            input.watch_update = state.watch_enabled;
+
+        if(state.workingFolderAddins.size() == 0)
             ImGui::Text("(No add-ins in working folder)");
         else
             ImGui::Text("Reset and load:");
 
         int spaceLeft = 0;
-        for(uint i = 0; i < workingFolderAddins.size(); i++) {
-            char const *addin = workingFolderAddins[i].c_str();
+        for(uint i = 0; i < state.workingFolderAddins.size(); i++) {
+            char const *addin = state.workingFolderAddins[i].c_str();
             /* Check if we have enough space (32 for button + spacing) */
             int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
             if(spaceLeft < spaceNeeded)
@@ -369,37 +431,7 @@ static void render(void)
             spaceLeft -= spaceNeeded;
         }
 
-        if(mach->initialized) {
-            ImGui::Text("Cycle:");
-            ImGui::SameLine();
-            if(ImGui::Button("1"))
-                input.mq_cycles = 1;
-            ImGui::SameLine();
-            if(ImGui::Button("10"))
-                input.mq_cycles = 10;
-            ImGui::SameLine();
-            if(ImGui::Button("100"))
-                input.mq_cycles = 100;
-            ImGui::SameLine();
-            if(ImGui::Button("1000"))
-                input.mq_cycles = 1000;
-            ImGui::SameLine();
-            if(ImGui::Button("10k"))
-                input.mq_cycles = 10000;
-        }
-        else {
-            ImGui::Text("Machine is not initialized.");
-        }
-        if(mach->stuck) {
-            ImGui::Text("Machine is stuck!");
-            input.mq_cycles = 0;
-        }
-        if(input.mq_cycles) {
-            if(input.mq_cycles > 0)
-                ImGui::Text("Cycles pending: %d", input.mq_cycles);
-            else
-                ImGui::Text("Running...");
-        }
+        ImGui::Checkbox2("Show demo window", &show_demo_window);
     }
     ImGui::End();
 
@@ -655,11 +687,13 @@ static void open_addin(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         resetWindowStates();
+        watch_quit(&state.watch_info);
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
         mq_machine_load_g1a(mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         resetWindowStates();
+        watch_quit(&state.watch_info);
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         mq_machine_load_g3a(mach, data, size);
     }
@@ -673,7 +707,6 @@ static int update(void)
     ZoneScopedN("update");
 
     SDL_Event e;
-    int cyclesLeft = 0;
 
     if(input.quit)
         return 1;
@@ -700,24 +733,50 @@ static int update(void)
         mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_load_working_folder_addin >= 0) {
-        fs::path path = workingFolderAddins[input.mq_load_working_folder_addin];
+    fs::path path = "";
+    if(!state.start_path.empty()) {
+        path = state.start_path;
+        state.start_path = "";
+        state.mq_cycles = -1;
+    }
+    if(state.watch_enabled) {
+        enum WatchEvent event;
+        while((event = watch_poll(&state.watch_info)) != MQ_WATCH_EVT_NONE) {
+            if(event == MQ_WATCH_EVT_DELETED)
+                mq_log(MQ_LOG_WARNING, "watch: addin has been removed");
+            if(event == MQ_WATCH_EVT_UPDATED) {
+                mq_log(MQ_LOG_DEBUG, "watch: addin has been updated");
+                path = state.watch_info.addin_path;
+                state.mq_cycles = -1;
+            }
+        }
+    }
+    if(input.mq_load_working_folder_addin >= 0)
+        path = state.workingFolderAddins[input.mq_load_working_folder_addin];
+    if(!path.empty()) {
         long size;
         void *data = openAndReadFile(path.c_str(), &size);
         if(data) {
-            inputFile.path = path;
-            inputFile.data = data;
-            inputFile.size = size;
+            state.inputFile.path = path;
+            state.inputFile.data = data;
+            state.inputFile.size = size;
         }
+        else
+            path = "";
     }
+
     /* Intentional re-check */
-    if(inputFile.data) {
-        open_addin(inputFile.path, inputFile.data, inputFile.size);
-        free(inputFile.data);
-        inputFile = OpenFileBuffer();
+    if(state.inputFile.data) {
+        open_addin(
+            state.inputFile.path,
+            state.inputFile.data,
+            state.inputFile.size);
+        free(state.inputFile.data);
+        state.current_program_path = state.inputFile.path;
+        state.inputFile = OpenFileBuffer();
         render_needed = std::max(render_needed, 1);
     }
-    else if(input.mq_cycles) {
+    else if(state.mq_cycles) {
         ZoneScopedN("update mq");
 
         /* Cycle until we reach 12 milliseconds */
@@ -725,7 +784,7 @@ static int update(void)
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
         // printf("ts_start=%ld\n", ts_start.tv_nsec);
 
-        while(input.mq_cycles != 0 /* negative is infinity */) {
+        while(state.mq_cycles != 0 /* negative is infinity */) {
             struct timespec ts_current;
             clock_gettime(CLOCK_MONOTONIC, &ts_current);
             int64_t ns_elapsed = (ts_current.tv_nsec - ts_start.tv_nsec);
@@ -735,35 +794,35 @@ static int update(void)
             if(ns_elapsed >= 12'000'000)
                 break;
 
-            int cycles = std::min(input.mq_cycles, 100000);
+            int cycles = std::min(state.mq_cycles, 100000);
             if(cycles < 0) {
                 cycles = 100000;
-                cyclesLeft = -1;
-                // printf("input.mq_cycles=%d, cycles=%d\n", input.mq_cycles, cycles);
+                // printf("state.mq_cycles=%d, cycles=%d\n", state.mq_cycles, cycles);
             }
             else {
-                // printf("input.mq_cycles=%d, cycles=%d\n", input.mq_cycles, cycles);
-                input.mq_cycles -= cycles;
+                // printf("state.mq_cycles=%d, cycles=%d\n", state.mq_cycles, cycles);
+                state.mq_cycles -= cycles;
             }
             mq_machine_cycle(mach, cycles);
         }
-
-        /* Limit the number of cycles for each GUI frame to not lock the GUI.
-           TODO: Proper "real-time" controls, e.g limit to 20 ms.
-           I don't think I want threads here, too annoying to sync. */
-#if 0
-        int cycles = std::min(input.mq_cycles, 2000000);
-        cyclesLeft = input.mq_cycles - cycles;
-        if(cycles < 0) {
-            cycles = 2000000;
-            cyclesLeft = -1;
-        }
-        mq_machine_cycle(mach, cycles);
-#endif
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_heap_init) {
         mq_casiowin_initHeap(mach);
+    }
+
+    bool may_enable_watch = false;
+    /* Update the watch if we're loading a new program */
+    if(!path.empty())
+        may_enable_watch = true;
+    /* Update the watch if we're clicking on the checkbox and there is a
+       program running */
+    if(input.watch_update && !state.current_program_path.empty())
+        may_enable_watch = true;
+
+    if(state.watch_enabled && may_enable_watch) {
+        if(!watch_init(&state.watch_info, state.current_program_path))
+            mq_log(MQ_LOG_ERROR, "unable to watch the file o(x_x)o");
     }
 
     if(input.ui_pattern_mono && mach->display) {
@@ -783,9 +842,7 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
 
-    input = DelayedInput();
-    input.mq_cycles = cyclesLeft;
-
+    input = GUIInput();
     return 0;
 }
 
@@ -878,13 +935,40 @@ static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
         (void *)ptr, size, pointSize, &fontConfig);
 }
 
-int main(void)
+bool parse_cli_args(int argc, char **argv)
+{
+    for(int i = 1; i < argc; i++) {
+        if(!strcmp("--watch", argv[i]))
+            state.watch_enabled = true;
+        else if(!strcmp("--version", argv[i])) {
+            printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,
+                AZUR_VERSION_MINOR);
+            return false;
+        }
+        else {
+            if(!state.start_path.empty()) {
+                mq_log(
+                    MQ_LOG_WARNING,
+                    "dropping previous addin request '%s'",
+                    state.start_path.c_str());
+            }
+            state.start_path = argv[i];
+        }
+    }
+    return true;
+}
+
+int main(int argc, char **argv)
 {
     setlocale(LC_ALL, "C.UTF-8");
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
 
     ConsoleText.alloc(65536, 256);
     mq_log_handler(handle_log);
+
+    if(!parse_cli_args(argc, argv))
+        return 0;
+
     mq_init();
 
     mach = mq_machine_create();
@@ -930,11 +1014,13 @@ int main(void)
     ImGui_LoadMQStyle(ImGui::GetStyle());
 
     /* Provide options for loading add-ins in the current folder */
-    find_cwd_addins(workingFolderAddins);
+    find_cwd_addins(state.workingFolderAddins);
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
 
     DGW.cleanup();
+
+    watch_quit(&state.watch_info);
 
     azur_quit();
     if(mach) {
