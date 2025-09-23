@@ -106,10 +106,10 @@ static void handle_log(enum mq_log_priority priority, char *str)
 
 static bool HexViewer_ReadByte(u64 addr, u8 *result)
 {
-    if(!mach || !mach->memory)
+    if(!omach || !omach->memory)
         return false;
     u32 v;
-    bool b = mq_memory_read_pure(mach->memory, addr, 1, &v);
+    bool b = mq_memory_read_pure(omach->memory, addr, 1, &v);
     if(b)
         *result = v;
     return b;
@@ -521,7 +521,7 @@ static void render(void)
     }
     ImGui::End();
 
-    AddInterruptsWindow(mach);
+    AddInterruptsWindow(omach);
 
     MemoryWindowAction MWA = AddMemoryWindow(omach, MWS);
     (void)MWA;
@@ -536,6 +536,7 @@ static void render(void)
         HVWS.currentBufferSize = MBWA.size;
     }
 
+    // TODO: Heap should be attached to Casiowin module, not a global!
     if(ImGui::Begin("Heap")) {
         u32 heapStart, heapEnd;
         bool initialized = mq_heap_isInitialized(&heapStart, &heapEnd);
@@ -565,13 +566,13 @@ static void render(void)
     }
     ImGui::End();
 
-    MMUWindowAction MMUWA = AddMMUWindow(mach);
+    MMUWindowAction MMUWA = AddMMUWindow(omach);
     if(MMUWA.type == MMUWindowAction::Type::MMUWA_BIND)
         input.mq_mmu_bind = true;
     if(MMUWA.type == MMUWindowAction::Type::MMUWA_UNBIND)
         input.mq_mmu_unbind = true;
 
-    HexViewerWindowAction HVWA = AddHexViewerWindow(mach, HVWS, HV);
+    HexViewerWindowAction HVWA = AddHexViewerWindow(omach, HVWS, HV);
     (void)HVWA;
 
     static bool first_frame = true;

@@ -375,22 +375,22 @@ MemoryBuffersWindowAction AddMemoryBuffersWindow(
     return a;
 }
 
-MMUWindowAction AddMMUWindow(mqMachine *mach)
+MMUWindowAction AddMMUWindow(mqMachine *omach)
 {
     MMUWindowAction a;
 
     if(ImGui::Begin("MMU"))
-        a = AddMMUWindowContents(mach);
+        a = AddMMUWindowContents(omach);
     ImGui::End();
 
     return a;
 }
 
-MMUWindowAction AddMMUWindowContents(mqMachine *mach)
+MMUWindowAction AddMMUWindowContents(mqMachine *omach)
 {
     MMUWindowAction a;
 
-    mqMMU *MMU = mq_mmu_get(mach);
+    mqMMU *MMU = mq_mmu_get(omach);
     if(!MMU) {
         ImGui::Text("Machine does not have an MMU module.");
         return a;
@@ -499,21 +499,21 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
     return a;
 }
 
-void AddInterruptsWindow(mqMachine *mach)
+void AddInterruptsWindow(mqMachine *omach)
 {
     if(ImGui::Begin("Interrupts"))
-        AddInterruptsWindowContents(mach);
+        AddInterruptsWindowContents(omach);
     ImGui::End();
 }
 
-void AddInterruptsWindowContents(mqMachine *mach)
+void AddInterruptsWindowContents(mqMachine *omach)
 {
-    mqCpu *cpu = &mach->cpu;
+    mqCpu *cpu = &omach->cpu;
     int IMASK = (cpu->spRegs[SH_SR] >> 4) & 0xf;
     int INTMU = (cpu->CPUOPM >> 3) & 1;
 
-    mqINTC *INTC = mq_intc_get(mach);
-    mqMMU *MMU = mq_mmu_get(mach);
+    mqINTC *INTC = mq_intc_get(omach);
+    mqMMU *MMU = mq_mmu_get(omach);
 
     char const *INTEVT_name = "";
     if(cpu->INTEVT) {
@@ -725,12 +725,12 @@ HexViewerWindowAction AddHexViewerWindowContents(
 }
 
 HexViewerWindowAction AddHexViewerWindow(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV)
+    mqMachine *omach, HexViewerWindowState &state, ImGui::HexViewer &HV)
 {
     HexViewerWindowAction a;
 
     if(ImGui::Begin("Hex Viewer"))
-        a = AddHexViewerWindowContents(mach, state, HV);
+        a = AddHexViewerWindowContents(omach, state, HV);
     ImGui::End();
 
     return a;

@@ -222,6 +222,29 @@ static void mq_casiowin_cleanup(mqMachine *mach)
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_casiowin_cleanup)
 
+static void mq_casiowin_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    mqCasiowin const *Casiowin = mach->modules[moduleID];
+    mqCasiowin *oCasiowin = memdup(Casiowin, sizeof *Casiowin);
+    omach->modules[moduleID] = oCasiowin;
+    if(!oCasiowin)
+        return;
+
+    /* Also duplicate the background syscall memory */
+    oCasiowin->bgs = memdup(Casiowin->bgs, sizeof *Casiowin->bgs);
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_casiowin_createObserver)
+
+static void mq_casiowin_destroyObserver(mqMachine *omach)
+{
+    mqCasiowin *oCasiowin = omach->modules[moduleID];
+    if(oCasiowin) {
+        free(oCasiowin->bgs);
+        free(oCasiowin);
+    }
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_casiowin_destroyObserver)
+
 static bool readStack32(mqMachine *mach, int offset, void *ptr)
 {
     mqCpu *cpu = &mach->cpu;
