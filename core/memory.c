@@ -846,8 +846,8 @@ bool _mq_chunk_read(
        accessing U0/P0 but just silently return undefined values in P1-P4. */
     else if(addr >= 0x80000000) {
         mq_log(MQ_LOG_WARNING,
-            "[PC=%08x] unhandled read @ %08x -> returning 0",
-            mach->cpu.pc, addr);
+            "[PC=%08x] unhandled read @ %08x (%dB) -> returning 0",
+            mach->cpu.pc, addr, size);
         *out = 0;
         return true;
     }
@@ -950,8 +950,9 @@ bool mq_memory_write(
     if(addr < 0x80000000)
         return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_WRITE_ADDR, addr);
     else
-        mq_log(MQ_LOG_WARNING, "[PC=%08x] unhandled write @ %08x -> ignoring",
-            mach->cpu.pc, addr);
+        mq_log(MQ_LOG_WARNING,
+            "[PC=%08x] unhandled write @ %08x (%dB) -> ignoring",
+            mach->cpu.pc, addr, size);
 
     return true;
 }
