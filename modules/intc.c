@@ -426,3 +426,17 @@ mqINTC_InterruptInfo const *mq_intc_interruptInfo(mqInt interrupt)
     static mqINTC_InterruptInfo zeroInfo = { 0 };
     return (uint)interrupt < MQ_INT_NUM ? &interrupts[interrupt] : &zeroInfo;
 }
+
+static void mq_intc_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqINTC));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_intc_createObserver)
+
+static void mq_intc_destroyObserver(mqMachine *omach)
+{
+    mqINTC *INTC = omach->modules[moduleID];
+    if(INTC)
+        free(INTC);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_intc_destroyObserver)

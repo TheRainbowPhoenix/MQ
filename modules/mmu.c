@@ -295,3 +295,18 @@ struct mqMMU_Data mq_mmu_decode_data(u32 u)
     data.WT = u;
     return data;
 }
+
+static void mq_mmu_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqMMU));
+}
+
+MQ_HOOK_REGISTER(module_createObserver, mq_mmu_createObserver)
+
+static void mq_mmu_destroyObserver(mqMachine *omach)
+{
+    mqMMU *MMU = omach->modules[moduleID];
+    if(MMU)
+        free(MMU);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_mmu_destroyObserver)

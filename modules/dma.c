@@ -25,35 +25,6 @@ MQ_HOOK_REGISTER(init, inithook)
 MQ_LOG_REGISTER(MQ_LOG_DMA_TRANSFER_ENDED, "dma-transfer-ended", 4,
     MQ_LOG_DEBUG, 6)
 
-static void mq_dma_cleanup(mqMachine *mach)
-{
-    mqDMA *DMA = mach->modules[moduleID];
-    if(DMA)
-        free(DMA);
-}
-MQ_HOOK_REGISTER(module_cleanup, mq_dma_cleanup)
-
-static void mq_dma_createObserver(mqMachine *omach, mqMachine const *mach)
-{
-    mqDMA *oDMA = memdup(mach->modules[moduleID], sizeof(mqDMA));
-    omach->modules[moduleID] = oDMA;
-    if(!oDMA)
-        return;
-
-    /* Recreate back-pointers to main structure from channels */
-    for(int i = 0; i < 6; i++)
-        oDMA->channels[i].DMA = oDMA;
-}
-MQ_HOOK_REGISTER(module_createObserver, mq_dma_createObserver)
-
-static void mq_dma_destroyObserver(mqMachine *omach)
-{
-    mqDMA *DMA = omach->modules[moduleID];
-    if(DMA)
-        free(DMA);
-}
-MQ_HOOK_REGISTER(module_destroyObserver, mq_dma_destroyObserver)
-
 mqDMA *mq_dma_get(mqMachine *mach)
 {
     return mach->modules ? mach->modules[moduleID] : NULL;
@@ -375,3 +346,32 @@ bool mq_dma_setup(mqMachine *mach)
         free(DMA);
     return ok;
 }
+
+static void mq_dma_cleanup(mqMachine *mach)
+{
+    mqDMA *DMA = mach->modules[moduleID];
+    if(DMA)
+        free(DMA);
+}
+MQ_HOOK_REGISTER(module_cleanup, mq_dma_cleanup)
+
+static void mq_dma_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    mqDMA *oDMA = memdup(mach->modules[moduleID], sizeof(mqDMA));
+    omach->modules[moduleID] = oDMA;
+    if(!oDMA)
+        return;
+
+    /* Recreate back-pointers to main structure from channels */
+    for(int i = 0; i < 6; i++)
+        oDMA->channels[i].DMA = oDMA;
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_dma_createObserver)
+
+static void mq_dma_destroyObserver(mqMachine *omach)
+{
+    mqDMA *DMA = omach->modules[moduleID];
+    if(DMA)
+        free(DMA);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_dma_destroyObserver)

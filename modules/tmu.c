@@ -242,3 +242,17 @@ static void mq_tmu_cleanup(mqMachine *mach)
         free(TMU);
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_tmu_cleanup)
+
+static void mq_tmu_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqTMU));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_tmu_createObserver)
+
+static void mq_tmu_destroyObserver(mqMachine *omach)
+{
+    mqTMU *TMU = omach->modules[moduleID];
+    if(TMU)
+        free(TMU);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_tmu_destroyObserver)

@@ -100,3 +100,17 @@ static void mq_t6k11_cleanup(mqMachine *mach)
         free(t6k11);
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_t6k11_cleanup)
+
+static void mq_t6k11_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqT6K11));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_t6k11_createObserver)
+
+static void mq_t6k11_destroyObserver(mqMachine *omach)
+{
+    mqT6K11 *T6K11 = omach->modules[moduleID];
+    if(T6K11)
+        free(T6K11);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_t6k11_destroyObserver)

@@ -23,28 +23,6 @@ static void inithook(void)
 }
 MQ_HOOK_REGISTER(init, inithook)
 
-static void mq_cmod_cleanup(mqMachine *mach)
-{
-    mqCmod *Cmod = mach->modules[moduleID];
-    if(Cmod)
-        free(Cmod);
-}
-MQ_HOOK_REGISTER(module_cleanup, mq_cmod_cleanup)
-
-static void mq_cmod_createObserver(mqMachine *omach, mqMachine const *mach)
-{
-    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqCmod));
-}
-MQ_HOOK_REGISTER(module_createObserver, mq_cmod_createObserver)
-
-static void mq_cmod_destroyObserver(mqMachine *omach)
-{
-    mqCmod *Cmod = omach->modules[moduleID];
-    if(Cmod)
-        free(Cmod);
-}
-MQ_HOOK_REGISTER(module_destroyObserver, mq_cmod_destroyObserver)
-
 mqCmod *mq_cmod_get(mqMachine *mach)
 {
     return mach->modules ? mach->modules[moduleID] : NULL;
@@ -245,3 +223,25 @@ bool mq_cmod_setup(mqMachine *mach)
         free(Cmod);
     return ok;
 }
+
+static void mq_cmod_cleanup(mqMachine *mach)
+{
+    mqCmod *Cmod = mach->modules[moduleID];
+    if(Cmod)
+        free(Cmod);
+}
+MQ_HOOK_REGISTER(module_cleanup, mq_cmod_cleanup)
+
+static void mq_cmod_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqCmod));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_cmod_createObserver)
+
+static void mq_cmod_destroyObserver(mqMachine *omach)
+{
+    mqCmod *Cmod = omach->modules[moduleID];
+    if(Cmod)
+        free(Cmod);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_cmod_destroyObserver)
