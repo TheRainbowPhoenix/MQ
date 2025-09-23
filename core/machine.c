@@ -76,10 +76,9 @@ void mq_machine_destroy(mqMachine *mach)
 
 mqMachine *mq_machine_createObserver(mqMachine const *mach)
 {
-    mqMachine *omach = calloc(1, sizeof *omach);
+    mqMachine *omach = memdup(mach, sizeof *mach);
     if(!omach)
         return NULL;
-    memcpy(omach, mach, sizeof *mach);
 
     /* Create observers for the CPU and memory */
     mq_cpu_makeObserver(&omach->cpu, &mach->cpu);
@@ -87,19 +86,14 @@ mqMachine *mq_machine_createObserver(mqMachine const *mach)
 
     /* Duplicate the modules and make observers for them too */
     if(mach->modules) {
-        omach->modules = calloc(mq_module_count(), sizeof *mach->modules);
-        memcpy(omach->modules, mach->modules,
-            mq_module_count() * sizeof *omach->modules);
+        omach->modules =
+            memdup(mach->modules, mq_module_count() * sizeof *mach->modules);
         mq_callhook_module_createObserver(omach, mach);
     }
 
     /* Duplicate the list of processes */
-    if(mach->processes) {
-        size_t size = mq_process_count() * sizeof *omach->processes;
-        omach->processes = malloc(size);
-        if(omach->processes)
-            memcpy(omach->processes, mach->processes, size);
-    }
+    omach->processes =
+        memdup(mach->processes, mq_process_count() * sizeof *omach->processes);
 
     // TODO: Implement observers for display, keyboard, and modules
     // omach->display = mq_display_createObserver(mach->display);

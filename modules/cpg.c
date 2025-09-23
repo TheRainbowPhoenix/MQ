@@ -26,6 +26,21 @@ static void mq_cpg_cleanup(mqMachine *mach)
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_cpg_cleanup)
 
+static void mq_cpg_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqCPG));
+}
+
+MQ_HOOK_REGISTER(module_createObserver, mq_cpg_createObserver)
+
+static void mq_cpg_destroyObserver(mqMachine *omach)
+{
+    mqCPG *CPG = omach->modules[moduleID];
+    if(CPG)
+        free(CPG);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_cpg_destroyObserver)
+
 static void write_FRQCR(struct mqCPG *CPG, u32 value)
 {
     CPG->FRQCR = value & 0xbff0ff0f;

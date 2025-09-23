@@ -152,14 +152,6 @@ void mq_page_destroy(mqPage *pg)
 
 //=== Observers ==============================================================//
 
-static void *memdup(void const *ptr, size_t size)
-{
-    if(!size)
-        return NULL;
-    void *optr = malloc(size);
-    return optr ? memcpy(optr, ptr, size) : NULL;
-}
-
 static mqPage *mq_page_createObserver(mqPage const *pg)
 {
     mqPage *opg = mq_page_create();
