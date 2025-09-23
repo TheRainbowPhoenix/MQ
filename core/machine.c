@@ -145,12 +145,11 @@ static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
 }
 
 static void mq_machine_setupPeripheralModules_sh7305(
-    mqMachine *mach,
-    int initializeKind
-) {
+    mqMachine *mach, int initializeKind)
+{
     mq_cpg_setup(mach, initializeKind);
 
-    mq_intc_setup(mach);
+    mq_intc_setup(mach, initializeKind);
 
     mq_keysc_setup(mach);
 

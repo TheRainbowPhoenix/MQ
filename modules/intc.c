@@ -230,7 +230,7 @@ static void write_IMCRn(struct mqMMIO *io, u32 addr, u32 value, int size)
     mq_intc_updateLogic(mach);
 }
 
-bool mq_intc_setup(mqMachine *mach)
+bool mq_intc_setup(mqMachine *mach, int initializeKind)
 {
     mqMemory *mem = mach->memory;
     mqPage *pg405 = mq_memory_getPagePrealloc(mem, 0xa4050000, 0x1fb, 6);
@@ -282,6 +282,37 @@ bool mq_intc_setup(mqMachine *mach)
     // 04140.0c0  NMIFCR
     // 04700.000  USERIMASK
     // ff000.028  INTEVT
+
+    /* Load initial OS state */
+    // TODO: Move to Casiowin module, as this is version-dependent!
+    INTC->IPR[0] = 0x0800;
+    INTC->IPR[1] = 0xc000;
+    INTC->IPR[5] = 0xd000;
+
+    INTC->IMR[0] = 0x07;
+    INTC->IMR[1] = 0x0f;
+    INTC->IMR[2] = 0x07;
+    INTC->IMR[3] = 0xfc;
+    // IMR4
+    INTC->IMR[5] = 0x77;
+    INTC->IMR[6] = 0x1b;
+    INTC->IMR[7] = 0xff;
+    INTC->IMR[8] = 0x07;
+    INTC->IMR[9] = 0x12;
+    // IMR10
+    INTC->IMR[11] = 0x01;
+    INTC->IMR[12] = 0x38;
+
+    if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
+        INTC->IPR[10] = 0x8d00;
+        INTC->IMR[4] = 0x70;
+        INTC->IMR[10] = 0x14;
+    }
+    else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
+        INTC->IPR[10] = 0x8000;
+        INTC->IMR[4] = 0x00;
+        INTC->IMR[10] = 0x34;
+    }
 
     if(ok)
         mach->modules[moduleID] = INTC;
