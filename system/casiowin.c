@@ -68,7 +68,7 @@ static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .versionString          = "03.80.0000",
     .dateString             = "2023.0419.1456",
     .syscallStubAddress     = 0x80020070,
-    .heapAddress            = 0x8c0c0000, /* @ 768 kB */
+    .heapAddress            = 0x8c0b0000, /* @ 704 kB */
     .heapSize               = 128 << 10,
 
     .rodataAreaAddress      = 0x80b40000, /* @ -128 kB, approximately */
