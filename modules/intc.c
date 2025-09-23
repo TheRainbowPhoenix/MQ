@@ -200,7 +200,7 @@ static u32 read_IMRn(mqMMIO *io, u32 addr, int size)
     mqMachine *mach = io->userdata;
     mqINTC *INTC = mach->modules[moduleID];
     (void)size;
-    return INTC->IMR[((addr & 0xfff) - 0x80) >> 4];
+    return INTC->IMR[((addr & 0xfff) - 0x80) >> 2];
 }
 
 static void write_IMRn(mqMMIO *io, u32 addr, u32 value, int size)
@@ -208,7 +208,7 @@ static void write_IMRn(mqMMIO *io, u32 addr, u32 value, int size)
     mqMachine *mach = io->userdata;
     mqINTC *INTC = mach->modules[moduleID];
     (void)size;
-    int n = ((addr & 0xfff) - 0x80) >> 4;
+    int n = ((addr & 0xfff) - 0x80) >> 2;
     INTC->IMR[n] |= (value & IMR_masks[n]);
     mq_intc_updateLogic(mach);
 }
@@ -225,8 +225,8 @@ static void write_IMCRn(struct mqMMIO *io, u32 addr, u32 value, int size)
     mqMachine *mach = io->userdata;
     mqINTC *INTC = mach->modules[moduleID];
     (void)size;
-    int n = ((addr & 0xfff) - 0xc0) >> 4;
-    INTC->IMR[n] &= (value & IMR_masks[n]);
+    int n = ((addr & 0xfff) - 0xc0) >> 2;
+    INTC->IMR[n] &= ~(value & IMR_masks[n]);
     mq_intc_updateLogic(mach);
 }
 
