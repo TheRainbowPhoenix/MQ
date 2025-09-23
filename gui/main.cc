@@ -413,12 +413,11 @@ static void render(void)
 
         char watch_str[256];
         if(state.watch_info.fd < 0)
-            strcpy(watch_str, "Watch program");
+            strcpy(watch_str, "Watch input file");
         else
             snprintf(watch_str, sizeof watch_str,
-                "Watch program: %s (%d, %d)",
-                state.watch_info.addin_path.c_str(), state.watch_info.fd,
-                state.watch_info.wd);
+                "Watching input file: %s",
+                state.watch_info.addin_path.c_str());
 
         if(ImGui::Checkbox2(watch_str, &state.watch_enabled))
             input.watch_update = state.watch_enabled;
