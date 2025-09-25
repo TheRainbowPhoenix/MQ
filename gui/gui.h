@@ -98,29 +98,51 @@ private:
     Texture const *m_texture = nullptr;
 };
 
-//=== Memory window ==========================================================//
+//=== GUI windows ============================================================//
 
-/* State retained from one frame to the next in the memory window. */
-struct MemoryWindowState {
-    /* Current selection */
-    int selectedChunk = -1;
-    int selectedPage = -1;
-    int selectedIO = -1;
+class MQWindow
+{
+public:
+    MQWindow(char const *title): m_title {title} {}
+
+    /* Render the contents of the window, without Begin()/End() */
+    // TODO: Give windows an [mqMachine const *] to enforce observer semantics
+    virtual void renderContents(mqMachine *omach) = 0;
+    /* Render entire window, with Begin()/End(). Defaults to no settings */
+    virtual void render(mqMachine *omach);
+    /* Reset state after changing the underlying machine */
+    virtual void resetState() {}
+
+    /* Window title */
+    char const *title() const { return m_title; }
+    void setTitle(char const *title) { m_title = title ? title : ""; }
+
+private:
+    char const *m_title = "";
 };
-/* Actions emitted from the memory window. */
-struct MemoryWindowAction {
+
+//=== Memory tree ============================================================//
+
+class MemoryTreeWindow: public MQWindow
+{
+public:
+    MemoryTreeWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+    void resetState() override;
+
+    // TODO: Action for opening an address in Hex Viewer
+    void AddChunkList(mqMemory const *omem);
+    void AddPageList(u32 chunkBase, mqChunkPointer chunkPtr);
+    void AddMMIOList(u32 addr, mqPagePointer pagePtr);
+
+private:
+    int m_selectedChunk = -1;
+    int m_selectedPage = -1;
+    int m_selectedIO = -1;
 };
-
-MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state);
-
-MemoryWindowAction AddMemoryWindowContents(
-    mqMachine *mach, MemoryWindowState &state);
 
 //=== Memory Buffers window ==================================================//
 
-struct MemoryBuffersWindowState {
-    int selectedBuffer = -1;
-};
 struct MemoryBuffersWindowAction {
     enum class Type { MBWA_NONE, MBWA_VIEW_HEX };
     Type type = Type::MBWA_NONE;
@@ -131,11 +153,19 @@ struct MemoryBuffersWindowAction {
     u32 address = 0;
 };
 
-MemoryBuffersWindowAction AddMemoryBuffersWindow(
-    mqMachine *mach, MemoryBuffersWindowState &state);
+class MemoryBuffersWindow: public MQWindow
+{
+public:
+    MemoryBuffersWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+    void resetState() override;
 
-MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
-    mqMachine *mach, MemoryBuffersWindowState &state);
+    MemoryBuffersWindowAction const &action() const { return m_action; }
+
+private:
+    int m_selectedBuffer = -1;
+    MemoryBuffersWindowAction m_action;
+};
 
 //=== MMU window =============================================================//
 
@@ -145,31 +175,53 @@ struct MMUWindowAction {
     Type type = Type::MMUWA_NONE;
 };
 
-MMUWindowAction AddMMUWindow(mqMachine *mach);
-MMUWindowAction AddMMUWindowContents(mqMachine *mach);
+class MMUWindow: public MQWindow
+{
+public:
+    MMUWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+
+    MMUWindowAction const &action() const { return m_action; }
+
+private:
+    MMUWindowAction m_action;
+};
 
 //=== Interrupts window ======================================================//
 
-void AddInterruptsWindow(mqMachine *mach);
-void AddInterruptsWindowContents(mqMachine *mach);
+class InterruptsWindow: public MQWindow
+{
+public:
+    InterruptsWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+};
 
 //=== Hex Viewer window ======================================================//
 
-struct HexViewerWindowState {
+class HexViewerWindow: public MQWindow
+{
+public:
+    HexViewerWindow(char const *title, ImGui::HexViewer &HV):
+        MQWindow(title), m_HexViewer {HV} {}
+    void renderContents(mqMachine *omach) override;
+    void resetState() override;
+
+    /* Switch to a buffer given by name (or "") for full address space. The
+       section spanning the given offset/size will be displayed. And the entire
+       segment will be shown at the given address. */
+    void viewBuffer(std::string bufferName, u32 address, u32 offset, u32 size);
+
+private:
+    static bool ReadByte(u64 addr, u8 *result, void *userdata);
+    ImGui::HexViewer m_HexViewer;
+
     /* If empty, we're viewing the entire memory. Otherwise we're viewing just
        that particular buffer. */
-    std::string currentBufferName = "";
+    std::string m_currentBufferName = "";
     /* Offset and size of the buffer section we're looking into. This keeps
        track of whether we're looking at the full buffer or just a subset. */
-   int currentBufferOffset = 0;
-   int currentBufferSize = 0;
+   int m_currentBufferOffset = 0;
+   int m_currentBufferSize = 0;
 };
-struct HexViewerWindowAction {
-};
-
-HexViewerWindowAction AddHexViewerWindow(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV);
-HexViewerWindowAction AddHexViewerWindowContents(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV);
 
 #endif /* MQ_UI_GUI_H */

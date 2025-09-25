@@ -477,7 +477,8 @@ static void RenderHexViewer(HexViewer &HV)
                 inbounds = false;
             }
             else if(HV.InputType == HexViewer::InputFunction) {
-                ok = HV.ReadByte && HV.ReadByte(addr, &byte);
+                ok = HV.ReadByte &&
+                     HV.ReadByte(addr, &byte, HV.ReadByteUserdata);
             }
             else if(HV.InputType == HexViewer::InputBuffer) {
                 i64 offset = addr - HV.BufferBaseAddress;

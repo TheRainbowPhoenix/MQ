@@ -160,7 +160,8 @@ struct HexViewer {
     int InputType;
 
     /* [Function]: Read function */
-    bool (*ReadByte)(u64 address, u8 *value) = nullptr;
+    bool (*ReadByte)(u64 address, u8 *value, void *userdata) = nullptr;
+    void *ReadByteUserdata = nullptr;
 
     /* [Buffer]: Input buffer and its size */
     void *BufferPointer = nullptr;

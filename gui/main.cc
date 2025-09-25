@@ -104,36 +104,26 @@ static void handle_log(enum mq_log_priority priority, char *str)
     ConsoleText.addLine(line);
 }
 
-static bool HexViewer_ReadByte(u64 addr, u8 *result)
-{
-    if(!omach || !omach->memory)
-        return false;
-    u32 v;
-    bool b = mq_memory_read_pure(omach->memory, addr, 1, &v);
-    if(b)
-        *result = v;
-    return b;
-}
-
 static ImGui::HexViewer HV = {
     .AddressBits = 32,
     .MinAddress = 0,
     .MaxAddress = 0xffffffff,
     .InputType = ImGui::HexViewer::InputFunction,
-    .ReadByte = HexViewer_ReadByte,
     .LineSpacing = 2,
     .AlignXCenter = false,
     .Cursor = 0,
 };
-static HexViewerWindowState HVWS {};
-static MemoryWindowState MWS {};
-static MemoryBuffersWindowState MBWS {};
+static InterruptsWindow IW("Interrupts");
+static MemoryTreeWindow MTW("Memory tree");
+static MemoryBuffersWindow MBW("Memory buffers");
+static MMUWindow MMUW("MMU");
+static HexViewerWindow HVW("Hex Viewer", HV);
 
 static void resetWindowStates(void)
 {
-    MWS = MemoryWindowState();
-    MBWS = MemoryBuffersWindowState();
-    HVWS = HexViewerWindowState();
+    MTW.resetState();
+    MBW.resetState();
+    HVW.resetState();
     HV.Cursor = 0;
     HV.MinAddress = 0;
     HV.MaxAddress = (u32)-1;
@@ -521,19 +511,14 @@ static void render(void)
     }
     ImGui::End();
 
-    AddInterruptsWindow(omach);
+    IW.render(omach);
+    MTW.render(omach);
+    MBW.render(omach);
 
-    MemoryWindowAction MWA = AddMemoryWindow(omach, MWS);
-    (void)MWA;
-
-    MemoryBuffersWindowAction MBWA = AddMemoryBuffersWindow(omach, MBWS);
+    MemoryBuffersWindowAction MBWA = MBW.action();
     if(MBWA.type == MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX) {
-        HV.Cursor = MBWA.address;
-        HV.MinAddress = MBWA.address;
-        HV.MaxAddress = MBWA.address + (MBWA.size - 1);
-        HVWS.currentBufferName = MBWA.buffer ? MBWA.buffer->name : "";
-        HVWS.currentBufferOffset = MBWA.offset;
-        HVWS.currentBufferSize = MBWA.size;
+        HVW.viewBuffer(MBWA.buffer ? MBWA.buffer->name : "",
+            MBWA.address, MBWA.offset, MBWA.size);
     }
 
     // TODO: Heap should be attached to Casiowin module, not a global!
@@ -566,14 +551,15 @@ static void render(void)
     }
     ImGui::End();
 
-    MMUWindowAction MMUWA = AddMMUWindow(omach);
+    MMUW.render(omach);
+
+    MMUWindowAction MMUWA = MMUW.action();
     if(MMUWA.type == MMUWindowAction::Type::MMUWA_BIND)
         input.mq_mmu_bind = true;
     if(MMUWA.type == MMUWindowAction::Type::MMUWA_UNBIND)
         input.mq_mmu_unbind = true;
 
-    HexViewerWindowAction HVWA = AddHexViewerWindow(omach, HVWS, HV);
-    (void)HVWA;
+    HVW.render(omach);
 
     static bool first_frame = true;
     if(first_frame) {
@@ -594,11 +580,11 @@ static void render(void)
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
         ImGui::DockBuilderDockWindow("Messages", dock_left_top_right);
         ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
-        ImGui::DockBuilderDockWindow("Interrupts", dock_left_top_right);
-        ImGui::DockBuilderDockWindow("Memory tree", dock_left_bottom);
-        ImGui::DockBuilderDockWindow("Memory buffers", dock_left_bottom);
+        ImGui::DockBuilderDockWindow(IW.title(), dock_left_top_right);
+        ImGui::DockBuilderDockWindow(MTW.title(), dock_left_bottom);
+        ImGui::DockBuilderDockWindow(MBW.title(), dock_left_bottom);
         ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
-        ImGui::DockBuilderDockWindow("MMU", dock_left_bottom);
+        ImGui::DockBuilderDockWindow(MMUW.title(), dock_left_bottom);
         ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
