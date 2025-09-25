@@ -7,8 +7,17 @@
 #include <mq/defs.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdarg.h>
 #include <limits.h>
+
+void *memdup(void const *ptr, size_t size)
+{
+    if(!ptr || !size)
+        return NULL;
+    void *optr = malloc(size);
+    return optr ? memcpy(optr, ptr, size) : NULL;
+}
 
 void mq_log_default_handler(enum mq_log_priority priority, char *str)
 {

@@ -54,6 +54,10 @@ typedef int64_t i64;
 #define MQ_LIKELY(EXPR) __builtin_expect((EXPR), 1)
 #define MQ_UNLIKELY(EXPR) __builtin_expect((EXPR), 0)
 
+/* General utilities */
+
+void *memdup(void const *ptr, size_t size);
+
 /* Simple logging facilities for the GUI console */
 
 enum mq_log_priority {

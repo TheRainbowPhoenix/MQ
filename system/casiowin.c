@@ -68,7 +68,7 @@ static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .versionString          = "03.80.0000",
     .dateString             = "2023.0419.1456",
     .syscallStubAddress     = 0x80020070,
-    .heapAddress            = 0x8c0c0000, /* @ 768 kB */
+    .heapAddress            = 0x8c0b0000, /* @ 704 kB */
     .heapSize               = 128 << 10,
 
     .rodataAreaAddress      = 0x80b40000, /* @ -128 kB, approximately */
@@ -212,13 +212,38 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
 static void mq_casiowin_cleanup(mqMachine *mach)
 {
     mqCasiowin *Casiowin = mach->modules[moduleID];
-    if(Casiowin)
+    if(Casiowin) {
+        free(Casiowin->bgs);
         free(Casiowin);
+    }
 
     // TODO[casiowin]: mq_heap_reset: Should be bound to machine, not global!
     mq_heap_reset();
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_casiowin_cleanup)
+
+static void mq_casiowin_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    mqCasiowin const *Casiowin = mach->modules[moduleID];
+    mqCasiowin *oCasiowin = memdup(Casiowin, sizeof *Casiowin);
+    omach->modules[moduleID] = oCasiowin;
+    if(!oCasiowin)
+        return;
+
+    /* Also duplicate the background syscall memory */
+    oCasiowin->bgs = memdup(Casiowin->bgs, sizeof *Casiowin->bgs);
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_casiowin_createObserver)
+
+static void mq_casiowin_destroyObserver(mqMachine *omach)
+{
+    mqCasiowin *oCasiowin = omach->modules[moduleID];
+    if(oCasiowin) {
+        free(oCasiowin->bgs);
+        free(oCasiowin);
+    }
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_casiowin_destroyObserver)
 
 static bool readStack32(mqMachine *mach, int offset, void *ptr)
 {

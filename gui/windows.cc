@@ -5,9 +5,8 @@
 #include <mq/modules/intc.h>
 
 static void AddChunkList(
-    mqMachine *mach, MemoryWindowState &s, MemoryWindowAction &a)
+    mqMemory const *omem, MemoryWindowState &s, MemoryWindowAction &a)
 {
-    mqMemory const *mem = mach->memory;
     char addr[16];
     int totalChunks = 0;
     (void)a;
@@ -22,12 +21,12 @@ static void AddChunkList(
 
     for(uint i = 0; i < 0x1000; i++) {
         sprintf(addr, "%08x", i << 20);
-        if(mem->chunks[i] == MQ_CHUNKPTR_NULL)
+        if(omem->chunks[i] == MQ_CHUNKPTR_NULL)
             continue;
 
         ImGui::SetNextItemAllowOverlap();
         bool clicked = ImGui::Selectable(addr, (int)i == s.selectedChunk);
-        if(MQ_CHUNKPTR_ISBUFFER(mem->chunks[i])) {
+        if(MQ_CHUNKPTR_ISBUFFER(omem->chunks[i])) {
             ImGui::SameLine(0, 7);
             ImGui::PushFont(fontSans);
             // TODO: Get buffer name!
@@ -41,7 +40,7 @@ static void AddChunkList(
             s.selectedIO = -1;
 
             /* Autoselect page #0 if there is exactly one non-null page */
-            mqChunk *ch = MQ_CHUNKPTR_GET(mem->chunks[i]);
+            mqChunk *ch = MQ_CHUNKPTR_GET(omem->chunks[i]);
             if(ch) {
                 int nonnullPages = 0;
                 int firstPage = -1;
@@ -64,10 +63,9 @@ static void AddChunkList(
     ImGui::Text("Total: %d chunks", totalChunks);
 }
 
-static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
+static void AddPageList(MemoryWindowState &s, u32 chunkBase,
     mqChunkPointer chunkPtr, MemoryWindowAction &a)
 {
-    (void)mach;
     (void)a;
     if(chunkPtr == MQ_CHUNKPTR_NULL)
         return;
@@ -116,8 +114,8 @@ static void AddPageList(mqMachine *mach, MemoryWindowState &s, u32 chunkBase,
     ImGui::Text("Total: %d pages", totalPages);
 }
 
-static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
-        mqPagePointer pagePtr, MemoryWindowAction &a)
+static void AddMMIOList(MemoryWindowState &s, u32 addr, mqPagePointer pagePtr,
+    MemoryWindowAction &a)
 {
     if(pagePtr == MQ_PAGEPTR_NULL)
         return;
@@ -173,14 +171,13 @@ static void AddMMIOList(mqMachine *mach, MemoryWindowState &s, u32 addr,
         ImGui::PopFont();
     }
 
-    (void)mach;
     (void)a;
 }
 
 MemoryWindowAction AddMemoryWindowContents(
-    mqMachine *mach, MemoryWindowState &s)
+    mqMachine *omach, MemoryWindowState &s)
 {
-    mqMemory const *mem = mach->memory;
+    mqMemory const *omem = omach->memory;
     MemoryWindowAction a;
 
     mqChunkPointer chunkPtr = MQ_CHUNKPTR_NULL;
@@ -190,7 +187,7 @@ MemoryWindowAction AddMemoryWindowContents(
     //=== Reset selection if invalid after a change ===//
 
     if(s.selectedChunk >= 0) {
-        chunkPtr = mem->chunks[s.selectedChunk];
+        chunkPtr = omem->chunks[s.selectedChunk];
         if(chunkPtr == MQ_CHUNKPTR_NULL)
             s.selectedChunk = -1;
         else if(!MQ_CHUNKPTR_ISBUFFER(chunkPtr))
@@ -209,7 +206,7 @@ MemoryWindowAction AddMemoryWindowContents(
     //=== General memory statistics ===//
 
     // TODO: Avoid recomputation of memory stats every frame?!
-    struct mqMemory_Stats stats = mq_memory_stats(mem);
+    struct mqMemory_Stats stats = mq_memory_stats(omem);
 
     ImGui::Text("1 MB Chunks: %d (%d buffer, %d mixed including %d pure MMIO)",
                 stats.totalChunks, stats.bufferChunks, stats.detailedChunks,
@@ -223,17 +220,18 @@ MemoryWindowAction AddMemoryWindowContents(
         ImGui::TableNextColumn();
 
         ImGui::SeparatorTextD("Chunks");
-        AddChunkList(mach, s, a);
+        AddChunkList(omem, s, a);
         ImGui::TableNextColumn();
 
         ImGui::SeparatorTextD("Pages");
         if(s.selectedChunk >= 0)
-            AddPageList(mach, s, s.selectedChunk << 20, chunkPtr, a);
+            AddPageList(s, s.selectedChunk << 20, chunkPtr, a);
         ImGui::TableNextColumn();
 
         ImGui::SeparatorTextD("MMIO");
         if(s.selectedPage >= 0)
-            AddMMIOList(mach, s, (s.selectedChunk << 20) + (s.selectedPage << 12), pagePtr, a);
+            AddMMIOList(s, (s.selectedChunk << 20) + (s.selectedPage << 12),
+                pagePtr, a);
 
         ImGui::EndTable();
     }
@@ -241,29 +239,30 @@ MemoryWindowAction AddMemoryWindowContents(
     return a;
 }
 
-MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state)
+MemoryWindowAction AddMemoryWindow(mqMachine *omach, MemoryWindowState &state)
 {
     MemoryWindowAction a;
 
-    if(ImGui::Begin("Memory tree", nullptr, ImGuiWindowFlags_HorizontalScrollbar))
-        a = AddMemoryWindowContents(mach, state);
+    if(ImGui::Begin("Memory tree", nullptr,
+        ImGuiWindowFlags_HorizontalScrollbar))
+        a = AddMemoryWindowContents(omach, state);
     ImGui::End();
 
     return a;
 }
 
 MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
-    mqMachine *mach, MemoryBuffersWindowState &state)
+    mqMachine *omach, MemoryBuffersWindowState &state)
 {
     MemoryBuffersWindowAction a;
-    mqMemory *mem = mach->memory;
+    mqMemory *omem = omach->memory;
 
     uint totalSize = 0;
-    for(int i = 0; i < mem->bufferCount; i++)
-        totalSize += mem->buffers[i].size;
+    for(int i = 0; i < omem->bufferCount; i++)
+        totalSize += omem->buffers[i].size;
 
     ImGui::Text("%d buffers (total size %.1f MB)",
-            mem->bufferCount, (float)totalSize / 1e6);
+            omem->bufferCount, (float)totalSize / 1e6);
 
     ImGui::BeginTable("membuffers", 3,
         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg);
@@ -299,9 +298,9 @@ MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
     char str[64];
     int i = 0;
 
-    while(mq_memory_findBlock(mach->memory, startAddress, &blockAddress,
+    while(mq_memory_findBlock(omem, startAddress, &blockAddress,
         &blockSize, &blockStorage)) {
-        blockBuffer = mq_memory_getBufferOwning(mach->memory, blockStorage);
+        blockBuffer = mq_memory_getBufferOwning(omem, blockStorage);
         if(blockBuffer) {
             blockOffset = (char *)blockStorage - (char *)blockBuffer->data;
             blockFits = blockOffset + blockSize <= blockBuffer->size;
@@ -365,33 +364,33 @@ MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
 }
 
 MemoryBuffersWindowAction AddMemoryBuffersWindow(
-    mqMachine *mach, MemoryBuffersWindowState &state)
+    mqMachine *omach, MemoryBuffersWindowState &state)
 {
     MemoryBuffersWindowAction a;
 
     if(ImGui::Begin("Memory buffers"))
-        a = AddMemoryBuffersWindowContents(mach, state);
+        a = AddMemoryBuffersWindowContents(omach, state);
     ImGui::End();
 
     return a;
 }
 
-MMUWindowAction AddMMUWindow(mqMachine *mach)
+MMUWindowAction AddMMUWindow(mqMachine *omach)
 {
     MMUWindowAction a;
 
     if(ImGui::Begin("MMU"))
-        a = AddMMUWindowContents(mach);
+        a = AddMMUWindowContents(omach);
     ImGui::End();
 
     return a;
 }
 
-MMUWindowAction AddMMUWindowContents(mqMachine *mach)
+MMUWindowAction AddMMUWindowContents(mqMachine *omach)
 {
     MMUWindowAction a;
 
-    mqMMU *MMU = mq_mmu_get(mach);
+    mqMMU *MMU = mq_mmu_get(omach);
     if(!MMU) {
         ImGui::Text("Machine does not have an MMU module.");
         return a;
@@ -500,21 +499,21 @@ MMUWindowAction AddMMUWindowContents(mqMachine *mach)
     return a;
 }
 
-void AddInterruptsWindow(mqMachine *mach)
+void AddInterruptsWindow(mqMachine *omach)
 {
     if(ImGui::Begin("Interrupts"))
-        AddInterruptsWindowContents(mach);
+        AddInterruptsWindowContents(omach);
     ImGui::End();
 }
 
-void AddInterruptsWindowContents(mqMachine *mach)
+void AddInterruptsWindowContents(mqMachine *omach)
 {
-    mqCpu *cpu = &mach->cpu;
+    mqCpu *cpu = &omach->cpu;
     int IMASK = (cpu->spRegs[SH_SR] >> 4) & 0xf;
     int INTMU = (cpu->CPUOPM >> 3) & 1;
 
-    mqINTC *INTC = mq_intc_get(mach);
-    mqMMU *MMU = mq_mmu_get(mach);
+    mqINTC *INTC = mq_intc_get(omach);
+    mqMMU *MMU = mq_mmu_get(omach);
 
     char const *INTEVT_name = "";
     if(cpu->INTEVT) {
@@ -670,16 +669,27 @@ void AddInterruptsWindowContents(mqMachine *mach)
 }
 
 HexViewerWindowAction AddHexViewerWindowContents(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV)
+    mqMachine *omach, HexViewerWindowState &state, ImGui::HexViewer &HV)
 {
     HexViewerWindowAction a;
-    (void)mach;
 
-    if(state.currentBuffer) {
-        ImGui::TextMono("%s", state.currentBuffer->name);
+    /* Check whether the current buffer exists */
+    mqMemory *omem = omach->memory;
+    mqMemoryBuffer const *currentBuffer = NULL;
+
+    if(state.currentBufferName != "") {
+        currentBuffer =
+            mq_memory_getBuffer(omem, state.currentBufferName.c_str());
+        /* Machine changed, selection doesn't exist anymore. */
+        if(!currentBuffer)
+            state.currentBufferName = "";
+    }
+
+    if(currentBuffer) {
+        ImGui::TextMono("%s", currentBuffer->name);
         ImGui::SameLine(0, 0);
         if(state.currentBufferOffset != 0 ||
-           state.currentBufferSize != (int)state.currentBuffer->size) {
+           state.currentBufferSize != (int)currentBuffer->size) {
             std::string startStr = memorySizeString(
                 state.currentBufferOffset);
             std::string endStr = memorySizeString(
@@ -688,8 +698,7 @@ HexViewerWindowAction AddHexViewerWindowContents(
                 startStr.c_str(), endStr.c_str());
         }
         else {
-            std::string sizeStr = memorySizeString(
-                state.currentBufferSize);
+            std::string sizeStr = memorySizeString(state.currentBufferSize);
             ImGui::Text(" (%s)", sizeStr.c_str());
         }
     }
@@ -716,12 +725,12 @@ HexViewerWindowAction AddHexViewerWindowContents(
 }
 
 HexViewerWindowAction AddHexViewerWindow(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV)
+    mqMachine *omach, HexViewerWindowState &state, ImGui::HexViewer &HV)
 {
     HexViewerWindowAction a;
 
     if(ImGui::Begin("Hex Viewer"))
-        a = AddHexViewerWindowContents(mach, state, HV);
+        a = AddHexViewerWindowContents(omach, state, HV);
     ImGui::End();
 
     return a;

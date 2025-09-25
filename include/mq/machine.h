@@ -69,10 +69,17 @@ struct mqMachine
 typedef struct mqMachine mqMachine;
 
 /* CRD functions for mqMachine. The default state is the default CPU and memory
-   state. */
+   state, not initialized, no modules or processes, no display or keyboard. */
 mqMachine *mq_machine_create(void);
 void mq_machine_reset(mqMachine *mach);
 void mq_machine_destroy(mqMachine *mach);
+
+/* Observer functions for mqMachine. These functions make and destroy an
+   "observer" copy of the machine with a snapshot of the metadata but no
+   contractual ownership of large memory buffers and no execution abilities by
+   contract (this isn't enforced API-wise). */
+mqMachine *mq_machine_createObserver(mqMachine const *mach);
+void mq_machine_destroyObserver(mqMachine *omach);
 
 enum {
     MQ_MACHINE_INITIALIZE_ADDIN_FX,

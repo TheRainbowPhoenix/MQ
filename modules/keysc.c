@@ -104,3 +104,17 @@ static void mq_keysc_cleanup(mqMachine *mach)
         free(KEYSC);
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_keysc_cleanup)
+
+static void mq_keysc_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqKEYSC));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_keysc_createObserver)
+
+static void mq_keysc_destroyObserver(mqMachine *omach)
+{
+    mqKEYSC *KEYSC = omach->modules[moduleID];
+    if(KEYSC)
+        free(KEYSC);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_keysc_destroyObserver)

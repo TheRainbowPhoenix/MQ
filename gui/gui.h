@@ -156,9 +156,9 @@ void AddInterruptsWindowContents(mqMachine *mach);
 //=== Hex Viewer window ======================================================//
 
 struct HexViewerWindowState {
-    /* If NULL, we're viewing the entire memory. Otherwise we're viewing just
+    /* If empty, we're viewing the entire memory. Otherwise we're viewing just
        that particular buffer. */
-    mqMemoryBuffer *currentBuffer = NULL;
+    std::string currentBufferName = "";
     /* Offset and size of the buffer section we're looking into. This keeps
        track of whether we're looking at the full buffer or just a subset. */
    int currentBufferOffset = 0;

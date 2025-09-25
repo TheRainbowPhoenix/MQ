@@ -74,6 +74,53 @@ void mq_machine_destroy(mqMachine *mach)
     free(mach);
 }
 
+mqMachine *mq_machine_createObserver(mqMachine const *mach)
+{
+    mqMachine *omach = memdup(mach, sizeof *mach);
+    if(!omach)
+        return NULL;
+
+    /* Create observers for the CPU and memory */
+    mq_cpu_makeObserver(&omach->cpu, &mach->cpu);
+    omach->memory = mq_memory_createObserver(mach->memory);
+
+    /* Duplicate the modules and make observers for them too */
+    if(mach->modules) {
+        omach->modules =
+            memdup(mach->modules, mq_module_count() * sizeof *mach->modules);
+        mq_callhook_module_createObserver(omach, mach);
+    }
+
+    /* Duplicate the list of processes */
+    omach->processes =
+        memdup(mach->processes, mq_process_count() * sizeof *omach->processes);
+
+    // TODO: Implement observers for display, keyboard, and modules
+    // omach->display = mq_display_createObserver(mach->display);
+    // omach->keyboard = mq_keyboard_createObserver(mach->keyboard);
+    return omach;
+}
+
+void mq_machine_destroyObserver(mqMachine *omach)
+{
+    mq_cpu_cleanupObserver(&omach->cpu);
+    mq_memory_destroyObserver(omach->memory);
+
+    if(omach->modules) {
+        mq_callhook_module_destroyObserver(omach);
+        free(omach->modules);
+    }
+    if(omach->processes)
+        free(omach->processes);
+
+    // TODO: Implement observers for display, keyboard, and modules
+    // if(omach->display)
+    //     mq_display_destroyObserver(omach->display);
+    // if(omach->keyboard)
+    //     mq_keyboard_destroyObserver(omach->keyboard);
+    free(omach);
+}
+
 static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
 {
     /* ILRAM occupies 4 kB at 0xe5200000 and repeats for 2 MB */
@@ -86,18 +133,17 @@ static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
     void *xram = xyram;
     void *yram = xram + (8 << 10);
     mq_memory_createBlock(mach->memory, 0xe500e000, 16 << 10, xyram);
-    mq_memory_createBlock(mach->memory, 0xe5007000, 8 << 10, yram);
+    mq_memory_createBlock(mach->memory, 0xe5007000, 8 << 10, xram);
     mq_memory_createBlock(mach->memory, 0xe5017000, 8 << 10, yram);
     // TODO[machine]: XYRAM @ 0xe5000000, repeat for 64k, block repeats for 4M
 }
 
 static void mq_machine_setupPeripheralModules_sh7305(
-    mqMachine *mach,
-    int initializeKind
-) {
+    mqMachine *mach, int initializeKind)
+{
     mq_cpg_setup(mach, initializeKind);
 
-    mq_intc_setup(mach);
+    mq_intc_setup(mach, initializeKind);
 
     mq_keysc_setup(mach);
 

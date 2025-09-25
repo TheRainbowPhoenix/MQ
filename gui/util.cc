@@ -107,5 +107,7 @@ std::string memorySizeString(uint size, bool shortSuffix)
     else
         asprintf(&str, "%u", size);
 
-    return str;
+    std::string ret(str);
+    free(str);
+    return ret;
 }

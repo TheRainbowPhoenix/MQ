@@ -437,6 +437,20 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     return ok;
 }
 
+static void mq_rtc_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] = memdup(mach->modules[moduleID], sizeof(mqRTC));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_rtc_createObserver)
+
+static void mq_rtc_destroyObserver(mqMachine *omach)
+{
+    mqRTC *RTC = omach->modules[moduleID];
+    if(RTC)
+        free(RTC);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_rtc_destroyObserver)
+
 //=== Utilities ==============================================================//
 
 u8 mq_rtc_bcd8(int integer)

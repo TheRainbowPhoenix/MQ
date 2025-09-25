@@ -230,3 +230,18 @@ static void mq_r61524_cleanup(mqMachine *mach)
         free(R61524);
 }
 MQ_HOOK_REGISTER(module_cleanup, mq_r61524_cleanup)
+
+static void mq_r61524_createObserver(mqMachine *omach, mqMachine const *mach)
+{
+    omach->modules[moduleID] =
+        memdup(mach->modules[moduleID], sizeof(mqR61524));
+}
+MQ_HOOK_REGISTER(module_createObserver, mq_r61524_createObserver)
+
+static void mq_r61524_destroyObserver(mqMachine *omach)
+{
+    mqR61524 *R61524 = omach->modules[moduleID];
+    if(R61524)
+        free(R61524);
+}
+MQ_HOOK_REGISTER(module_destroyObserver, mq_r61524_destroyObserver)
