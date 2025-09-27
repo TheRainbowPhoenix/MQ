@@ -130,8 +130,10 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
         R61524->VADDR = value;
         break;
     case 0x202: /* DATA */
-        if(!is_display_correct(display))
+        if(!is_display_correct(display)) {
             mq_log(MQ_LOG_ERROR, "r61524: invalid display!");
+            break;
+        }
 
         int w = R61524->rHEA - R61524->rHSA + 1;
         int h = R61524->VEA - R61524->VSA + 1;
