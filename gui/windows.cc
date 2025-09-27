@@ -3,12 +3,76 @@
 #include <stdio.h>
 #include <mq/modules/mmu.h>
 #include <mq/modules/intc.h>
+#include <mq/system/heap.h>
 
 void MQWindow::render(mqMachine *omach)
 {
-    if(ImGui::Begin(m_title))
+    if(ImGui::Begin(m_title, 0, m_flags))
         renderContents(omach);
     ImGui::End();
+}
+
+void CPUWindow::renderContents(mqMachine *omach)
+{
+    ImGui::Text("Sleeping: %d", (int)omach->cpu.sleeping);
+    ImGui::PushFont(fontMono);
+
+    ImGui::BeginGroup();
+    for(int i = 0; i < 16; i++)
+        ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", omach->cpu.r[i]);
+    ImGui::EndGroup();
+
+    ImGui::SameLine(0, 40);
+    ImGui::BeginGroup();
+    ImGui::Text("pc:    %08x", omach->cpu.pc);
+    ImGui::Text("gbr:   %08x", omach->cpu.spRegs[SH_GBR]);
+    ImGui::Text("mach:  %08x", omach->cpu.spRegs[SH_MACH]);
+    ImGui::Text("macl:  %08x", omach->cpu.spRegs[SH_MACL]);
+    ImGui::Text("pr:    %08x", omach->cpu.spRegs[SH_PR]);
+
+    u32 SR = omach->cpu.spRegs[SH_SR];
+    ImGui::Text("sr:    %08x", omach->cpu.spRegs[SH_SR]);
+    ImGui::Text(" MD=%d RB=%d BL=%d",
+        (SR >> 30) & 1, (SR >> 29 & 1), (SR >> 28) & 1);
+    ImGui::Text(" IMASK=%d",
+        (SR >> 4) & 0xf);
+    ImGui::Text(" RC=%d",
+        (SR >> 16) & 0xfff);
+    ImGui::EndGroup();
+
+    ImGui::SameLine(0, 40);
+    ImGui::BeginGroup();
+    ImGui::Text("vbr:     %08x", omach->cpu.spRegs[SH_VBR]);
+    ImGui::Text("ssr:     %08x", omach->cpu.spRegs[SH_SSR]);
+    ImGui::Text("spc:     %08x", omach->cpu.spRegs[SH_SPC]);
+    ImGui::Text("sgr:     %08x", omach->cpu.spRegs[SH_SGR]);
+    ImGui::Text("dbr:     %08x", omach->cpu.spRegs[SH_DBR]);
+    ImGui::Text("dsr:     %08x", omach->cpu.spRegs[SH_DSR]);
+    for(int i = 0; i < 8; i++)
+        ImGui::Text("r%d_bank: %08x", i, omach->cpu.spRegs[SH_RnBANK + i]);
+    // ImGui::Text();
+    ImGui::EndGroup();
+
+    ImGui::SameLine(0, 40);
+    ImGui::BeginGroup();
+    ImGui::Text("[DSP]");
+    ImGui::Text("a0:  %02x.%08x",
+        omach->cpu.spRegs[SH_A0G], omach->cpu.spRegs[SH_A0]);
+    ImGui::Text("a1:  %02x.%08x",
+        omach->cpu.spRegs[SH_A1G], omach->cpu.spRegs[SH_A1]);
+    ImGui::Text("x0:     %08x", omach->cpu.spRegs[SH_X0]);
+    ImGui::Text("x1:     %08x", omach->cpu.spRegs[SH_X1]);
+    ImGui::Text("y0:     %08x", omach->cpu.spRegs[SH_Y0]);
+    ImGui::Text("y1:     %08x", omach->cpu.spRegs[SH_Y1]);
+    ImGui::Text("m0:     %08x", omach->cpu.spRegs[SH_M0]);
+    ImGui::Text("m1:     %08x", omach->cpu.spRegs[SH_M1]);
+    ImGui::Text("mod:    %08x", omach->cpu.spRegs[SH_MOD]);
+    ImGui::Text("rs:     %08x", omach->cpu.spRegs[SH_RS]);
+    ImGui::Text("re:     %08x", omach->cpu.spRegs[SH_RE]);
+    // ImGui::Text();
+    ImGui::EndGroup();
+
+    ImGui::PopFont();
 }
 
 void MemoryTreeWindow::AddChunkList(mqMemory const *omem)
@@ -245,7 +309,7 @@ void MemoryTreeWindow::resetState()
 void MemoryBuffersWindow::renderContents(mqMachine *omach)
 {
     mqMemory *omem = omach->memory;
-    m_action = MemoryBuffersWindowAction();
+    m_actionViewHex.disable();
 
     uint totalSize = 0;
     for(int i = 0; i < omem->bufferCount; i++)
@@ -267,11 +331,11 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
             ImGuiSelectableFlags_SpanAllColumns |
             ImGuiSelectableFlags_AllowOverlap)) {
         m_selectedBuffer = 0;
-        m_action.type = MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX;
-        m_action.buffer = NULL;
-        m_action.offset = 0;
-        m_action.size = 0xffffffff;
-        m_action.address = 0;
+        m_actionViewHex.buffer = NULL;
+        m_actionViewHex.offset = 0;
+        m_actionViewHex.size = 0xffffffff;
+        m_actionViewHex.address = 0;
+        m_actionViewHex.enable();
     }
     ImGui::TableNextColumn();
     ImGui::Text("4 GiB");
@@ -312,11 +376,11 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
                 ImGuiSelectableFlags_AllowOverlap)) {
             m_selectedBuffer = i + 1;
             if(blockBuffer) {
-                m_action.type = MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX;
-                m_action.buffer = blockBuffer;
-                m_action.offset = blockOffset;
-                m_action.size = blockSize;
-                m_action.address = blockAddress;
+                m_actionViewHex.buffer = blockBuffer;
+                m_actionViewHex.offset = blockOffset;
+                m_actionViewHex.size = blockSize;
+                m_actionViewHex.address = blockAddress;
+                m_actionViewHex.enable();
             }
         }
         ImGui::PopFont();
@@ -358,19 +422,15 @@ void MemoryBuffersWindow::resetState()
 
 void MMUWindow::renderContents(mqMachine *omach)
 {
-    m_action = MMUWindowAction();
-
     mqMMU *MMU = mq_mmu_get(omach);
     if(!MMU) {
         ImGui::Text("Machine does not have an MMU module.");
         return;
     }
 
-    if(ImGui::Button("Bind"))
-        m_action.type = MMUWindowAction::Type::MMUWA_BIND;
+    m_actionBind = ImGui::Button("Bind");
     ImGui::SameLine();
-    if(ImGui::Button("Unbind"))
-        m_action.type = MMUWindowAction::Type::MMUWA_UNBIND;
+    m_actionUnbind = ImGui::Button("Unbind");
 
     if(ImGui::BeginTable("UTLB", 13,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
@@ -712,4 +772,129 @@ void HexViewerWindow::viewBuffer(
     m_currentBufferName = bufferName;
     m_currentBufferOffset = offset;
     m_currentBufferSize = size;
+}
+
+void HeapWindow::renderContents(mqMachine *omach)
+{
+    (void)omach;
+    m_actionInitialize = false;
+
+    // TODO: Heap should be attached to Casiowin module, not a global!
+    u32 heapStart, heapEnd;
+    bool initialized = mq_heap_isInitialized(&heapStart, &heapEnd);
+    if(initialized) {
+        ImGui::Text("Heap from %08x to %08x", heapStart, heapEnd);
+
+        mq_heap_debug_t dbg = mq_heap_debuginfo();
+        #define X(NAME) \
+            ImGui::Text(#NAME ":"); \
+            ImGui::SameLine(); \
+            ImGui::Text(dbg.NAME ? "true" : "false");
+        X(sequence_covers)
+        X(sequence_terminator)
+        X(sequence_coherent_used)
+        X(sequence_footer_size)
+        X(sequence_merged_free)
+        X(list_structure)
+        X(index_covers)
+        X(index_class_separation)
+        #undef X
+    }
+    else {
+        ImGui::Text("System heap is not initialized");
+        m_actionInitialize = ImGui::Button("Initialize");
+    }
+}
+
+void DisplayWindow::render(mqMachine *omach)
+{
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    MQWindow::render(omach);
+    ImGui::PopStyleVar();
+}
+
+void DisplayWindow::renderContents(mqMachine *omach)
+{
+    (void)omach;
+
+    m_DGW.AddWindow();
+    ImVec2 TL(m_DGW.x(), m_DGW.y() + m_DGW.height());
+    ImVec2 BR(TL.x + m_DGW.width(), TL.y + m_DGW.padding().w);
+    ImGui::PushClipRect(TL, BR, false);
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    drawList->AddRectFilled(TL, BR, 0xff1c1712);
+
+    ImGui::SetCursorScreenPos({TL.x + 4, TL.y + 4});
+    ImGui::Text("%dx%d - center (%.1f,%.1f) - zoom %d%%",
+        m_DGW.width(), m_DGW.height(), m_DGW.viewX(), m_DGW.viewY(),
+        (int)(m_DGW.viewScale() * 100));
+
+    ImVec2 cursor = ImGui::GetIO().MousePos;
+    if(m_DGW.inWindow(cursor)) {
+        ImVec2 pointing = m_DGW.viewLocation(cursor.x, cursor.y);
+        ImGui::SameLine(0);
+        ImGui::Text("- pointing at (%.1f,%.1f)", pointing.x, pointing.y);
+    }
+
+    ImGui::PopClipRect();
+}
+
+// TODO: Keyboard window shouldn't access keyboard directly!
+void KeyboardWindow::renderContents(mqMachine *omach)
+{
+    mqKeyboard *kbd = omach->keyboard;
+    if(!kbd) {
+        ImGui::Text("Machine has no keyboard!");
+        return;
+    }
+
+    for(uint i = 0; i < kbd->keyCount; i++) {
+        mqKeyboardKey *key = &kbd->keyInfo[i];
+        float x = key->geometry.x, y = key->geometry.y;
+        float w = key->geometry.w, h = key->geometry.h;
+        char str[64];
+        snprintf(str, sizeof str, "%s##key%d", key->name, i);
+        ImGui::SetCursorPos({x, y});
+        if(mq_keyboard_isKeyPressed(kbd, i)) {
+            // TODO: Visual effect for keyboard-based key presses
+            // (or add a shortcut to the button-not sure what's best)
+            ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5);
+            ImGui::Button(str, {w, h});
+            ImGui::PopStyleVar();
+        }
+        else
+            ImGui::Button(str, {w, h});
+        mq_keyboard_setKeyPressed(kbd, i, ImGui::IsItemActive());
+    }
+
+    if(kbd && ImGui::IsWindowFocused()) {
+        ImGui::SetNextFrameWantCaptureKeyboard(true);
+        if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_LEFT, true);
+        if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_UP, true);
+        if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_DOWN, true);
+        if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_RIGHT, true);
+        if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_SHIFT, true);
+        if(ImGui::IsKeyDown(ImGuiKey_Enter))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXE, true);
+        if(ImGui::IsKeyDown(ImGuiKey_Escape))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXIT, true);
+        if(ImGui::IsKeyDown(ImGuiKey_F1))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F1, true);
+        if(ImGui::IsKeyDown(ImGuiKey_F2))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F2, true);
+        if(ImGui::IsKeyDown(ImGuiKey_F3))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F3, true);
+        if(ImGui::IsKeyDown(ImGuiKey_F4))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F4, true);
+        if(ImGui::IsKeyDown(ImGuiKey_F5))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F5, true);
+        if(ImGui::IsKeyDown(ImGuiKey_F6))
+            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F6, true);
+    }
 }

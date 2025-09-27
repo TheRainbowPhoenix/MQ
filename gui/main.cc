@@ -49,9 +49,6 @@ struct GUIInput {
     bool mq_initialize_addin_fx = false;
     bool mq_initialize_addin_cg = false;
     int mq_load_working_folder_addin = -1;
-    bool mq_heap_init = false;
-    bool mq_mmu_unbind = false;
-    bool mq_mmu_bind = false;
 
     bool ui_pattern_mono = false;
     bool ui_pattern_rgb = false;
@@ -113,11 +110,16 @@ static ImGui::HexViewer HV = {
     .AlignXCenter = false,
     .Cursor = 0,
 };
+
+static CPUWindow CPUW("CPU");
 static InterruptsWindow IW("Interrupts");
 static MemoryTreeWindow MTW("Memory tree");
 static MemoryBuffersWindow MBW("Memory buffers");
 static MMUWindow MMUW("MMU");
+static HeapWindow HW("Heap");
 static HexViewerWindow HVW("Hex Viewer", HV);
+static DisplayWindow DW("Display", DGW);
+static KeyboardWindow KW("Keyboard");
 
 static void resetWindowStates(void)
 {
@@ -153,6 +155,9 @@ static void render(void)
     if(previous_time != 0.0 && !(flags & SDL_WINDOW_INPUT_FOCUS)) return;
 
     /* Generate an observer for the current state of the machine */
+    if(omach)
+        mq_machine_destroyObserver(omach);
+    omach = nullptr;
     if(mach)
         omach = mq_machine_createObserver(mach);
 
@@ -256,87 +261,8 @@ static void render(void)
 
     auto dock = ImGui::DockSpaceOverViewport();
 
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    if(ImGui::Begin("Display", nullptr, 0)) {
-        DGW.AddWindow();
-        ImVec2 TL(DGW.x(), DGW.y() + DGW.height());
-        ImVec2 BR(TL.x + DGW.width(), TL.y + DGW.padding().w);
-        ImGui::PushClipRect(TL, BR, false);
-
-        ImDrawList* drawList = ImGui::GetWindowDrawList();
-        drawList->AddRectFilled(TL, BR, 0xff1c1712);
-
-        ImGui::SetCursorScreenPos({TL.x + 4, TL.y + 4});
-        ImGui::Text("%dx%d - center (%.1f,%.1f) - zoom %d%%",
-            DGW.width(), DGW.height(), DGW.viewX(), DGW.viewY(),
-            (int)(DGW.viewScale() * 100));
-
-        ImVec2 cursor = ImGui::GetIO().MousePos;
-        if(DGW.inWindow(cursor)) {
-            ImVec2 pointing = DGW.viewLocation(cursor.x, cursor.y);
-            ImGui::SameLine(0);
-            ImGui::Text("- pointing at (%.1f,%.1f)", pointing.x, pointing.y);
-        }
-
-        ImGui::PopClipRect();
-    }
-    ImGui::End();
-    ImGui::PopStyleVar();
-
-    if(ImGui::Begin("Keyboard", nullptr, 0)) {
-        mqKeyboard *kbd = mach->keyboard;
-        if(kbd) {
-            for(uint i = 0; i < kbd->keyCount; i++) {
-                mqKeyboardKey *key = &kbd->keyInfo[i];
-                float x = key->geometry.x, y = key->geometry.y;
-                float w = key->geometry.w, h = key->geometry.h;
-                char str[64];
-                snprintf(str, sizeof str, "%s##key%d", key->name, i);
-                ImGui::SetCursorPos({x, y});
-                if(mq_keyboard_isKeyPressed(kbd, i)) {
-                    // TODO: Visual effect for keyboard-based key presses
-                    // (or add a shortcut to the button-not sure what's best)
-                    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.5);
-                    ImGui::Button(str, {w, h});
-                    ImGui::PopStyleVar();
-                }
-                else
-                    ImGui::Button(str, {w, h});
-                mq_keyboard_setKeyPressed(kbd, i, ImGui::IsItemActive());
-            }
-
-            if(kbd && ImGui::IsWindowFocused()) {
-                ImGui::SetNextFrameWantCaptureKeyboard(true);
-                if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_LEFT, true);
-                if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_UP, true);
-                if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_DOWN, true);
-                if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_RIGHT, true);
-                if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_SHIFT, true);
-                if(ImGui::IsKeyDown(ImGuiKey_Enter))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXE, true);
-                if(ImGui::IsKeyDown(ImGuiKey_Escape))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXIT, true);
-                if(ImGui::IsKeyDown(ImGuiKey_F1))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F1, true);
-                if(ImGui::IsKeyDown(ImGuiKey_F2))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F2, true);
-                if(ImGui::IsKeyDown(ImGuiKey_F3))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F3, true);
-                if(ImGui::IsKeyDown(ImGuiKey_F4))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F4, true);
-                if(ImGui::IsKeyDown(ImGuiKey_F5))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F5, true);
-                if(ImGui::IsKeyDown(ImGuiKey_F6))
-                    mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F6, true);
-            }
-        }
-    }
-    ImGui::End();
+    DW.render(omach);
+    KW.render(omach);
 
     static bool show_demo_window = false;
 
@@ -447,118 +373,12 @@ static void render(void)
     }
     ImGui::End();
 
-    if(ImGui::Begin("CPU", nullptr,
-            ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::Text("Sleeping: %d", (int)omach->cpu.sleeping);
-        ImGui::PushFont(fontMono);
-
-        ImGui::BeginGroup();
-        for(int i = 0; i < 16; i++)
-            ImGui::Text("r%d:%s %08x", i, i < 10 ? " " : "", omach->cpu.r[i]);
-        ImGui::EndGroup();
-
-        ImGui::SameLine(0, 40);
-        ImGui::BeginGroup();
-        ImGui::Text("pc:    %08x", omach->cpu.pc);
-        ImGui::Text("gbr:   %08x", omach->cpu.spRegs[SH_GBR]);
-        ImGui::Text("mach:  %08x", omach->cpu.spRegs[SH_MACH]);
-        ImGui::Text("macl:  %08x", omach->cpu.spRegs[SH_MACL]);
-        ImGui::Text("pr:    %08x", omach->cpu.spRegs[SH_PR]);
-
-        u32 SR = omach->cpu.spRegs[SH_SR];
-        ImGui::Text("sr:    %08x", omach->cpu.spRegs[SH_SR]);
-        ImGui::Text(" MD=%d RB=%d BL=%d",
-            (SR >> 30) & 1, (SR >> 29 & 1), (SR >> 28) & 1);
-        ImGui::Text(" IMASK=%d",
-            (SR >> 4) & 0xf);
-        ImGui::Text(" RC=%d",
-            (SR >> 16) & 0xfff);
-        ImGui::EndGroup();
-
-        ImGui::SameLine(0, 40);
-        ImGui::BeginGroup();
-        ImGui::Text("vbr:     %08x", omach->cpu.spRegs[SH_VBR]);
-        ImGui::Text("ssr:     %08x", omach->cpu.spRegs[SH_SSR]);
-        ImGui::Text("spc:     %08x", omach->cpu.spRegs[SH_SPC]);
-        ImGui::Text("sgr:     %08x", omach->cpu.spRegs[SH_SGR]);
-        ImGui::Text("dbr:     %08x", omach->cpu.spRegs[SH_DBR]);
-        ImGui::Text("dsr:     %08x", omach->cpu.spRegs[SH_DSR]);
-        for(int i = 0; i < 8; i++)
-            ImGui::Text("r%d_bank: %08x", i, omach->cpu.spRegs[SH_RnBANK + i]);
-        // ImGui::Text();
-        ImGui::EndGroup();
-
-        ImGui::SameLine(0, 40);
-        ImGui::BeginGroup();
-        ImGui::Text("[DSP]");
-        ImGui::Text("a0:  %02x.%08x",
-            omach->cpu.spRegs[SH_A0G], omach->cpu.spRegs[SH_A0]);
-        ImGui::Text("a1:  %02x.%08x",
-            omach->cpu.spRegs[SH_A1G], omach->cpu.spRegs[SH_A1]);
-        ImGui::Text("x0:     %08x", omach->cpu.spRegs[SH_X0]);
-        ImGui::Text("x1:     %08x", omach->cpu.spRegs[SH_X1]);
-        ImGui::Text("y0:     %08x", omach->cpu.spRegs[SH_Y0]);
-        ImGui::Text("y1:     %08x", omach->cpu.spRegs[SH_Y1]);
-        ImGui::Text("m0:     %08x", omach->cpu.spRegs[SH_M0]);
-        ImGui::Text("m1:     %08x", omach->cpu.spRegs[SH_M1]);
-        ImGui::Text("mod:    %08x", omach->cpu.spRegs[SH_MOD]);
-        ImGui::Text("rs:     %08x", omach->cpu.spRegs[SH_RS]);
-        ImGui::Text("re:     %08x", omach->cpu.spRegs[SH_RE]);
-        // ImGui::Text();
-        ImGui::EndGroup();
-
-        ImGui::PopFont();
-    }
-    ImGui::End();
-
+    CPUW.render(omach);
     IW.render(omach);
     MTW.render(omach);
     MBW.render(omach);
-
-    MemoryBuffersWindowAction MBWA = MBW.action();
-    if(MBWA.type == MemoryBuffersWindowAction::Type::MBWA_VIEW_HEX) {
-        HVW.viewBuffer(MBWA.buffer ? MBWA.buffer->name : "",
-            MBWA.address, MBWA.offset, MBWA.size);
-    }
-
-    // TODO: Heap should be attached to Casiowin module, not a global!
-    if(ImGui::Begin("Heap")) {
-        u32 heapStart, heapEnd;
-        bool initialized = mq_heap_isInitialized(&heapStart, &heapEnd);
-        if(initialized) {
-            ImGui::Text("Heap from %08x to %08x", heapStart, heapEnd);
-
-            mq_heap_debug_t dbg = mq_heap_debuginfo();
-            #define X(NAME) \
-                ImGui::Text(#NAME ":"); \
-                ImGui::SameLine(); \
-                ImGui::Text(dbg.NAME ? "true" : "false");
-            X(sequence_covers)
-            X(sequence_terminator)
-            X(sequence_coherent_used)
-            X(sequence_footer_size)
-            X(sequence_merged_free)
-            X(list_structure)
-            X(index_covers)
-            X(index_class_separation)
-            #undef X
-        }
-        else {
-            ImGui::Text("System heap is not initialized");
-            if(ImGui::Button("Initialize"))
-                input.mq_heap_init = true;
-        }
-    }
-    ImGui::End();
-
+    HW.render(omach);
     MMUW.render(omach);
-
-    MMUWindowAction MMUWA = MMUW.action();
-    if(MMUWA.type == MMUWindowAction::Type::MMUWA_BIND)
-        input.mq_mmu_bind = true;
-    if(MMUWA.type == MMUWindowAction::Type::MMUWA_UNBIND)
-        input.mq_mmu_unbind = true;
-
     HVW.render(omach);
 
     static bool first_frame = true;
@@ -575,17 +395,17 @@ static void render(void)
         auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
             ImGuiDir_Down, 0.6f, nullptr, &dock);
 
-        ImGui::DockBuilderDockWindow("Display", dock);
-        ImGui::DockBuilderDockWindow("Keyboard", dock_right_bottom);
+        ImGui::DockBuilderDockWindow(DW.title(), dock);
+        ImGui::DockBuilderDockWindow(KW.title(), dock_right_bottom);
         ImGui::DockBuilderDockWindow("Control", dock_left_top);
         ImGui::DockBuilderDockWindow("Messages", dock_left_top_right);
-        ImGui::DockBuilderDockWindow("CPU", dock_left_top_right);
+        ImGui::DockBuilderDockWindow(CPUW.title(), dock_left_top_right);
         ImGui::DockBuilderDockWindow(IW.title(), dock_left_top_right);
         ImGui::DockBuilderDockWindow(MTW.title(), dock_left_bottom);
         ImGui::DockBuilderDockWindow(MBW.title(), dock_left_bottom);
-        ImGui::DockBuilderDockWindow("Heap", dock_left_bottom);
+        ImGui::DockBuilderDockWindow(HW.title(), dock_left_bottom);
         ImGui::DockBuilderDockWindow(MMUW.title(), dock_left_bottom);
-        ImGui::DockBuilderDockWindow("Hex Viewer", dock_left_bottom_right);
+        ImGui::DockBuilderDockWindow(HVW.title(), dock_left_bottom_right);
         ImGui::DockBuilderFinish(dock);
         first_frame = false;
     }
@@ -600,86 +420,7 @@ static void render(void)
     SDL_GL_SwapWindow(window);
     previous_time = time;
 
-    mq_machine_destroyObserver(omach);
-    omach = nullptr;
-
     FrameMark;
-}
-
-static bool generate_mono_pattern(mqDisplay *display)
-{
-    if(!mq_display_setFormat(display, MQ_DISPLAY_FORMAT_L8, 128, 64))
-        return false;
-
-    int r0 = rand() % 2 + 1;
-    int r1 = rand() % 3 + 1;
-    int r2 = rand() % 2;
-    int r3 = rand() % 4 + 2;
-    u8 palette[4] = { 0x00, 0x55, 0xaa, 0xff };
-    for(uint y = 0; y < display->height; y++)
-    for(uint x = 0; x < display->width; x++) {
-        int c1 = x ^ y;
-        int c2 = (x >> r3) ^ r0 * ((x - r2*y) >> 1);
-        int c3 = (y >> 1) ^ ((x+y) >> r1);
-        int c = c1 ^ c2 ^ c3;
-        ((u8 *)display->data)[display->width * y + x] = palette[c & 3];
-    }
-
-    for(uint y = 0; y < display->height; y++) {
-        ((u8 *)display->data)[display->width * y + 0] = 0xff;
-        ((u8 *)display->data)[display->width * (y+1) - 1] = 0xff;
-    }
-    for(uint x = 0; x < display->width; x++) {
-        ((u8 *)display->data)[display->width * 0 + x] = 0xff;
-        ((u8 *)display->data)[display->width * (display->height-1) + x] = 0xff;
-    }
-
-    mq_display_setDirty(display, true);
-    return true;
-}
-
-#define C_RGB(R, G, B) (((R) << 11) + ((G) << 5) + (B))
-
-static bool generate_rgb_pattern(mqDisplay *display)
-{
-    if(!mq_display_setFormat(display, MQ_DISPLAY_FORMAT_RGB565, 396, 224))
-        return false;
-
-    u16 palette[16];
-
-    /* Generate a cool looking image pattern */
-    for(int i = 0; i < 16; i++) {
-        int top = rand() & 31;
-        int bot = rand() & top;
-        int which = rand() % 3;
-        if(which == 0)
-            palette[i] = C_RGB(top, bot, bot);
-        else if(which == 1)
-            palette[i] = C_RGB(bot, top, bot);
-        else
-            palette[i] = C_RGB(bot, bot, top);
-    }
-
-    for(uint y = 0; y < display->height; y++)
-    for(uint x = 0; x < display->width; x++) {
-        int c1 = x ^ y;
-        int c2 = (x >> 5) ^ (x >> 1) ^ (x >> 6);
-        int c3 = (y >> 1) ^ (y >> 4) ^ (y >> 5);
-        int c = c1 ^ c2 ^ c3;
-        ((u16 *)display->data)[display->width * y + x] = palette[c & 15];
-    }
-
-    for(uint y = 0; y < display->height; y++) {
-        ((u16 *)display->data)[display->width * y + 0] = 0xffff;
-        ((u16 *)display->data)[display->width * (y+1) - 1] = 0xffff;
-    }
-    for(uint x = 0; x < display->width; x++) {
-        ((u16 *)display->data)[display->width * 0 + x] = 0xffff;
-        ((u16 *)display->data)[display->width * (display->height-1) + x] = 0xffff;
-    }
-
-    mq_display_setDirty(display, true);
-    return true;
 }
 
 //---
@@ -808,9 +549,8 @@ static int update(void)
         }
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_heap_init) {
+    if(HW.actionInitialize())
         mq_casiowin_initHeap(mach);
-    }
 
     bool may_enable_watch = false;
     /* Update the watch if we're loading a new program */
@@ -827,20 +567,25 @@ static int update(void)
     }
 
     if(input.ui_pattern_mono && mach->display) {
-        generate_mono_pattern(mach->display);
+        generateMonoFrame(mach->display);
         render_needed = std::max(render_needed, 1);
     }
     if(input.ui_pattern_rgb && mach->display) {
-        generate_rgb_pattern(mach->display);
+        generateRGBFrame(mach->display);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_mmu_bind && mach) {
+    if(mach && MMUW.actionBind()) {
         mq_mmu_bind(mach);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.mq_mmu_unbind && mach) {
+    if(mach && MMUW.actionUnbind()) {
         mq_mmu_unbind(mach);
         render_needed = std::max(render_needed, 1);
+    }
+
+    if(auto a = MBW.actionViewHex()) {
+        std::string bufferName = a.buffer ? a.buffer->name : "";
+        HVW.viewBuffer(bufferName, a.address, a.offset, a.size);
     }
 
     input = GUIInput();

@@ -111,3 +111,79 @@ std::string memorySizeString(uint size, bool shortSuffix)
     free(str);
     return ret;
 }
+
+bool generateMonoFrame(mqDisplay *display)
+{
+    if(!mq_display_setFormat(display, MQ_DISPLAY_FORMAT_L8, 128, 64))
+        return false;
+
+    int r0 = rand() % 2 + 1;
+    int r1 = rand() % 3 + 1;
+    int r2 = rand() % 2;
+    int r3 = rand() % 4 + 2;
+    u8 palette[4] = { 0x00, 0x55, 0xaa, 0xff };
+    for(uint y = 0; y < display->height; y++)
+    for(uint x = 0; x < display->width; x++) {
+        int c1 = x ^ y;
+        int c2 = (x >> r3) ^ r0 * ((x - r2*y) >> 1);
+        int c3 = (y >> 1) ^ ((x+y) >> r1);
+        int c = c1 ^ c2 ^ c3;
+        ((u8 *)display->data)[display->width * y + x] = palette[c & 3];
+    }
+
+    for(uint y = 0; y < display->height; y++) {
+        ((u8 *)display->data)[display->width * y + 0] = 0xff;
+        ((u8 *)display->data)[display->width * (y+1) - 1] = 0xff;
+    }
+    for(uint x = 0; x < display->width; x++) {
+        ((u8 *)display->data)[display->width * 0 + x] = 0xff;
+        ((u8 *)display->data)[display->width * (display->height-1) + x] = 0xff;
+    }
+
+    mq_display_setDirty(display, true);
+    return true;
+}
+
+#define C_RGB(R, G, B) (((R) << 11) + ((G) << 5) + (B))
+
+bool generateRGBFrame(mqDisplay *display)
+{
+    if(!mq_display_setFormat(display, MQ_DISPLAY_FORMAT_RGB565, 396, 224))
+        return false;
+
+    u16 palette[16];
+
+    /* Generate a cool looking image pattern */
+    for(int i = 0; i < 16; i++) {
+        int top = rand() & 31;
+        int bot = rand() & top;
+        int which = rand() % 3;
+        if(which == 0)
+            palette[i] = C_RGB(top, bot, bot);
+        else if(which == 1)
+            palette[i] = C_RGB(bot, top, bot);
+        else
+            palette[i] = C_RGB(bot, bot, top);
+    }
+
+    for(uint y = 0; y < display->height; y++)
+    for(uint x = 0; x < display->width; x++) {
+        int c1 = x ^ y;
+        int c2 = (x >> 5) ^ (x >> 1) ^ (x >> 6);
+        int c3 = (y >> 1) ^ (y >> 4) ^ (y >> 5);
+        int c = c1 ^ c2 ^ c3;
+        ((u16 *)display->data)[display->width * y + x] = palette[c & 15];
+    }
+
+    for(uint y = 0; y < display->height; y++) {
+        ((u16 *)display->data)[display->width * y + 0] = 0xffff;
+        ((u16 *)display->data)[display->width * (y+1) - 1] = 0xffff;
+    }
+    for(uint x = 0; x < display->width; x++) {
+        ((u16 *)display->data)[display->width * 0 + x] = 0xffff;
+        ((u16 *)display->data)[display->width * (display->height-1) + x] = 0xffff;
+    }
+
+    mq_display_setDirty(display, true);
+    return true;
+}

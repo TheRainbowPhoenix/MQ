@@ -103,7 +103,8 @@ private:
 class MQWindow
 {
 public:
-    MQWindow(char const *title): m_title {title} {}
+    MQWindow(char const *title, ImGuiWindowFlags flags = 0):
+        m_title {title}, m_flags {flags} {}
 
     /* Render the contents of the window, without Begin()/End() */
     // TODO: Give windows an [mqMachine const *] to enforce observer semantics
@@ -119,6 +120,25 @@ public:
 
 private:
     char const *m_title = "";
+    ImGuiWindowFlags m_flags = 0;
+};
+
+struct MQWindowAction
+{
+    bool m_enabled = false;
+    operator bool() { return m_enabled; }
+    void disable() { m_enabled = false; }
+    void enable() { m_enabled = true; }
+};
+
+//=== CPU ====================================================================//
+
+class CPUWindow: public MQWindow
+{
+public:
+    CPUWindow(char const *title):
+        MQWindow(title, ImGuiWindowFlags_HorizontalScrollbar) {}
+    void renderContents(mqMachine *omach) override;
 };
 
 //=== Memory tree ============================================================//
@@ -146,11 +166,6 @@ private:
 struct MemoryBuffersWindowAction {
     enum class Type { MBWA_NONE, MBWA_VIEW_HEX };
     Type type = Type::MBWA_NONE;
-    /* Region of buffer we want to visualize, and matching emulated address */
-    mqMemoryBuffer *buffer = NULL;
-    int offset = -1;
-    int size = -1;
-    u32 address = 0;
 };
 
 class MemoryBuffersWindow: public MQWindow
@@ -160,20 +175,21 @@ public:
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
-    MemoryBuffersWindowAction const &action() const { return m_action; }
+    struct ActionViewHex: public MQWindowAction {
+        /* Buffer region to visualize, and matching emulated address */
+        mqMemoryBuffer *buffer = NULL;
+        int offset = -1;
+        int size = -1;
+        u32 address = 0;
+    };
+    ActionViewHex &actionViewHex() { return m_actionViewHex; }
 
 private:
     int m_selectedBuffer = -1;
-    MemoryBuffersWindowAction m_action;
+    ActionViewHex m_actionViewHex;
 };
 
 //=== MMU window =============================================================//
-
-/* Actions emitted from the MMU window. */
-struct MMUWindowAction {
-    enum class Type { MMUWA_NONE, MMUWA_UNBIND, MMUWA_BIND };
-    Type type = Type::MMUWA_NONE;
-};
 
 class MMUWindow: public MQWindow
 {
@@ -181,10 +197,11 @@ public:
     MMUWindow(char const *title): MQWindow(title) {}
     void renderContents(mqMachine *omach) override;
 
-    MMUWindowAction const &action() const { return m_action; }
+    bool actionBind() { return m_actionBind; }
+    bool actionUnbind() { return m_actionUnbind; }
 
 private:
-    MMUWindowAction m_action;
+    bool m_actionBind, m_actionUnbind;
 };
 
 //=== Interrupts window ======================================================//
@@ -222,6 +239,43 @@ private:
        track of whether we're looking at the full buffer or just a subset. */
    int m_currentBufferOffset = 0;
    int m_currentBufferSize = 0;
+};
+
+//=== Heap ===================================================================//
+
+class HeapWindow: public MQWindow
+{
+public:
+    HeapWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+
+    bool actionInitialize() const { return m_actionInitialize; }
+
+private:
+    bool m_actionInitialize;
+};
+
+//=== Display ================================================================//
+
+class DisplayWindow: public MQWindow
+{
+public:
+    DisplayWindow(char const *title, DisplayGlWindow &DGW):
+        MQWindow(title), m_DGW{DGW} {}
+    void render(mqMachine *omach) override;
+    void renderContents(mqMachine *omach) override;
+
+private:
+    DisplayGlWindow &m_DGW;
+};
+
+//=== Keyboard ===============================================================//
+
+class KeyboardWindow: public MQWindow
+{
+public:
+    KeyboardWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
 };
 
 #endif /* MQ_UI_GUI_H */
