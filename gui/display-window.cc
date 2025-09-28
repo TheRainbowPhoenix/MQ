@@ -1,4 +1,4 @@
-#include "gui.h"
+#include "windows.h"
 #include <azur/config.h>
 
 //=== Display window =========================================================//
