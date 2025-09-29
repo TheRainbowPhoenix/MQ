@@ -326,12 +326,7 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
     fs::path path = "";
-    // TODO: Don't handle CLI initialization in regular update()
-    if(!gui.start_path.empty()) {
-        path = gui.start_path;
-        gui.start_path = "";
-        startRunning = true;
-    }
+
     if(gui.watch_enabled) {
         enum WatchEvent event;
         while((event = watch_poll(&gui.watch_info)) != MQ_WATCH_EVT_NONE) {
@@ -339,7 +334,7 @@ static int update(void)
                 mq_log(MQ_LOG_WARNING, "watch: addin has been removed");
             if(event == MQ_WATCH_EVT_UPDATED) {
                 mq_log(MQ_LOG_DEBUG, "watch: addin has been updated");
-                path = gui.watch_info.addin_path;
+                path = gui.current_program_path;
                 startRunning = true;
             }
         }
@@ -543,13 +538,14 @@ bool parse_cli_args(int argc, char **argv)
             return false;
         }
         else {
-            if(!gui.start_path.empty()) {
+            if(gui.actions.fileLoadPath) {
                 mq_log(
                     MQ_LOG_WARNING,
                     "dropping previous addin request '%s'",
-                    gui.start_path.c_str());
+                    gui.actions.fileLoadPath->c_str());
             }
-            gui.start_path = argv[i];
+            gui.actions.fileLoadPath = argv[i];
+            gui.actions.machineSetPendingCycles = -1;
         }
     }
     return true;

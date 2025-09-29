@@ -73,16 +73,29 @@ void ControlWindow::renderContents(mqMachine *omach)
     else
         ImGui::Text("Running...");
 
-    char watch_str[256];
-    if(gui.watch_info.fd < 0)
-        strcpy(watch_str, "Watch input file");
-    else
-        snprintf(watch_str, sizeof watch_str,
-            "Watching input file: %s",
-            gui.watch_info.addin_path.c_str());
+    char str[256];
+    bool disabled = gui.current_program_path.empty();
+    char const *path = gui.current_program_path.c_str();
 
-    if(ImGui::Checkbox2(watch_str, &gui.watch_enabled))
+    if(disabled)
+        ImGui::BeginDisabled();
+
+    if(gui.watch_enabled)
+        snprintf(str, sizeof str, "Watching input file: %s", path);
+    else if(!disabled)
+        snprintf(str, sizeof str, "Watch input file (%s)", path);
+    else
+        snprintf(str, sizeof str, "Watch input file");
+
+    if(ImGui::Checkbox2(str, &gui.watch_enabled))
         gui.actions.fileUpdateWatch = gui.watch_enabled;
+    if(gui.watch_info.fd >= 0) {
+        ImGui::SameLine(0, 0);
+        ImGui::TextDisabled(" (%d.%d)",
+            gui.watch_info.fd, gui.watch_info.wd);
+    }
+    if(disabled)
+        ImGui::EndDisabled();
 
     if(gui.workingFolderAddins.size() == 0)
         ImGui::Text("(No add-ins in working folder)");

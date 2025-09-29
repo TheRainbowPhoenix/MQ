@@ -12,6 +12,7 @@
 #include <string>
 #include <optional>
 
+/* The GUI state and actions can be accessed globally. */
 struct GUI;
 extern struct GUI gui;
 
@@ -64,11 +65,8 @@ struct GUI
     std::vector<std::string> workingFolderAddins;
     /* File tracked for reloading the currently active file when changed */
     bool watch_enabled = false;
-    struct WatchInfo watch_info = { .fd = -1, .wd = -1, .addin_path = "" };
+    struct WatchInfo watch_info = { .fd = -1, .wd = -1 };
 
-    /* Path of the file that's been requested to be opened from CLI
-       TODO: This shouldn't be state, right? */
-    std::filesystem::path start_path;
     /* Path of the currently-running program, "" if none. */
     std::filesystem::path current_program_path = "";
 

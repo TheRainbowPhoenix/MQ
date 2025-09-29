@@ -34,7 +34,6 @@ bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
             pathname, strerror(errno));
         return false;
     }
-    info->addin_path = pathname;
     return true;
 }
 
@@ -86,6 +85,5 @@ bool watch_quit(struct WatchInfo *info)
     }
     info->fd = -1;
     info->wd = -1;
-    info->addin_path = "";
     return true;
 }
