@@ -45,6 +45,10 @@ struct mqMachine
        automatically and must be cleared by blocking code. */
     bool internallyBlocked;
 
+    /* Number of cycles that the machine is scheduled to work for.
+       mq_machine_cycle() runs for up to that amount and subtracts it. */
+    int cyclesPending;
+
     /* Data from hardware modules; the array has size mq_module_count(). */
     void **modules;
     /* List of background processes; the array has size mq_process_count(). */

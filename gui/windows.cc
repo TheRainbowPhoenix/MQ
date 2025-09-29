@@ -1,4 +1,4 @@
-#include "windows.h"
+#include "gui.h"
 #include "imgui-util.h"
 #include <stdio.h>
 #include <mq/modules/mmu.h>
@@ -10,6 +10,108 @@ void MQWindow::render(mqMachine *omach)
     if(ImGui::Begin(m_title, 0, m_flags))
         renderContents(omach);
     ImGui::End();
+}
+
+void ControlWindow::renderContents(mqMachine *omach)
+{
+#ifndef AZUR_PLATFORM_EMSCRIPTEN
+    struct mallinfo2 mi = mallinfo2();
+    /* This info is not available with AddressSanitizer's wrapper's */
+    if(mi.arena || mi.hblkhd)
+        ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
+            (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
+
+    // TODO: Better alternative on Linux:
+    // 1. Open /proc/self/status
+    // 2. Parse for VmRSS (Resident Set Size) and VmSwap (in swap)
+    // 3. VmRSS is divided in RssAnon (± heap), RssFile (fixed), RssShmem
+    // 4. For users, we're interested in VmRSS (+ VmSwap)
+    // 5. For debugging, we're interested in RssAnon (≈ mi.arena)
+    // Reference:
+    //   top(1), "Linux Memory Types"
+    // Or, for the proper programmatic interface:
+    // 1. Open /proc/self/statm
+    // 2. Read all numbers, multiplied by sysconf(_SC_PAGESIZE)
+    // 3. [size, resident, shared, text, _, data/stack, _]
+    //    * size is VmSize -> useless
+    //    * shared won't be used
+    //    * text is fixed
+    //    * data/stack counts unmapped, non-resident pages -> useless
+    // 4. Keep using mallinfo() for memory stats
+    // Reference:
+    //   proc_pid_statm(5)
+#endif
+
+    if(omach->initialized) {
+        ImGui::Text("Cycle:");
+        ImGui::SameLine();
+        if(ImGui::Button("1"))
+            gui.actions.machineSetPendingCycles = 1;
+        ImGui::SameLine();
+        if(ImGui::Button("10"))
+            gui.actions.machineSetPendingCycles = 10;
+        ImGui::SameLine();
+        if(ImGui::Button("100"))
+            gui.actions.machineSetPendingCycles = 100;
+        ImGui::SameLine();
+        if(ImGui::Button("1000"))
+            gui.actions.machineSetPendingCycles = 1000;
+        ImGui::SameLine();
+        if(ImGui::Button("10k"))
+            gui.actions.machineSetPendingCycles = 10000;
+    }
+    else {
+        ImGui::Text("Machine is not initialized.");
+    }
+    if(omach->stuck)
+        ImGui::Text("Machine is stuck!");
+
+    if(omach->cyclesPending > 0)
+        ImGui::Text("Cycles pending: %d", omach->cyclesPending);
+    else if(omach->cyclesPending == 0)
+        ImGui::Text("Paused");
+    else
+        ImGui::Text("Running...");
+
+    char watch_str[256];
+    if(gui.watch_info.fd < 0)
+        strcpy(watch_str, "Watch input file");
+    else
+        snprintf(watch_str, sizeof watch_str,
+            "Watching input file: %s",
+            gui.watch_info.addin_path.c_str());
+
+    if(ImGui::Checkbox2(watch_str, &gui.watch_enabled))
+        gui.actions.fileUpdateWatch = gui.watch_enabled;
+
+    if(gui.workingFolderAddins.size() == 0)
+        ImGui::Text("(No add-ins in working folder)");
+    else
+        ImGui::Text("Reset and load:");
+
+    int spaceLeft = 0;
+    for(uint i = 0; i < gui.workingFolderAddins.size(); i++) {
+        char const *addin = gui.workingFolderAddins[i].c_str();
+        /* Check if we have enough space (32 for button + spacing) */
+        int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
+        if(spaceLeft < spaceNeeded)
+            spaceLeft = ImGui::GetContentRegionAvail().x;
+        else
+            ImGui::SameLine();
+
+        if(ImGui::Button(addin))
+            gui.actions.fileLoadPath = gui.workingFolderAddins[i];
+        spaceLeft -= spaceNeeded;
+    }
+
+    // ImGui::Checkbox2("Show demo window", &show_demo_window);
+}
+
+void MessagesWindow::renderContents(mqMachine *omach)
+{
+    gui.actions.appClearConsole |= ImGui::Button("Clear");
+
+    ImGui::AddRichTextFrame(gui.ConsoleText, gui.ConsoleView);
 }
 
 void CPUWindow::renderContents(mqMachine *omach)
@@ -309,7 +411,6 @@ void MemoryTreeWindow::resetState()
 void MemoryBuffersWindow::renderContents(mqMachine *omach)
 {
     mqMemory *omem = omach->memory;
-    m_actionViewHex.disable();
 
     uint totalSize = 0;
     for(int i = 0; i < omem->bufferCount; i++)
@@ -331,11 +432,7 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
             ImGuiSelectableFlags_SpanAllColumns |
             ImGuiSelectableFlags_AllowOverlap)) {
         m_selectedBuffer = 0;
-        m_actionViewHex.buffer = NULL;
-        m_actionViewHex.offset = 0;
-        m_actionViewHex.size = 0xffffffff;
-        m_actionViewHex.address = 0;
-        m_actionViewHex.enable();
+        gui.actions.setViewHex(NULL, 0, 0xffffffff, 0);
     }
     ImGui::TableNextColumn();
     ImGui::Text("4 GiB");
@@ -376,11 +473,8 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
                 ImGuiSelectableFlags_AllowOverlap)) {
             m_selectedBuffer = i + 1;
             if(blockBuffer) {
-                m_actionViewHex.buffer = blockBuffer;
-                m_actionViewHex.offset = blockOffset;
-                m_actionViewHex.size = blockSize;
-                m_actionViewHex.address = blockAddress;
-                m_actionViewHex.enable();
+                gui.actions.setViewHex(
+                    blockBuffer, blockOffset, blockSize, blockAddress);
             }
         }
         ImGui::PopFont();
@@ -428,9 +522,9 @@ void MMUWindow::renderContents(mqMachine *omach)
         return;
     }
 
-    m_actionBind = ImGui::Button("Bind");
+    gui.actions.machineMMUBind |= ImGui::Button("Bind");
     ImGui::SameLine();
-    m_actionUnbind = ImGui::Button("Unbind");
+    gui.actions.machineMMUUnbind |= ImGui::Button("Unbind");
 
     if(ImGui::BeginTable("UTLB", 13,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
@@ -777,7 +871,6 @@ void HexViewerWindow::viewBuffer(
 void HeapWindow::renderContents(mqMachine *omach)
 {
     (void)omach;
-    m_actionInitialize = false;
 
     // TODO: Heap should be attached to Casiowin module, not a global!
     u32 heapStart, heapEnd;
@@ -802,7 +895,7 @@ void HeapWindow::renderContents(mqMachine *omach)
     }
     else {
         ImGui::Text("System heap is not initialized");
-        m_actionInitialize = ImGui::Button("Initialize");
+        gui.actions.machineSystemHeapInitialize |= ImGui::Button("Initialize");
     }
 }
 

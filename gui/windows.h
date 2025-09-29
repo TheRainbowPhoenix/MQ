@@ -8,6 +8,7 @@
 #include "texture.h"
 #include <mq/machine.h>
 #include <mq/memory.h>
+#include <optional>
 
 //=== Display window =========================================================//
 
@@ -131,6 +132,24 @@ struct MQWindowAction
     void enable() { m_enabled = true; }
 };
 
+//=== Control ================================================================//
+
+class ControlWindow: public MQWindow
+{
+public:
+    ControlWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+};
+
+//=== Messages ===============================================================//
+
+class MessagesWindow: public MQWindow
+{
+public:
+    MessagesWindow(char const *title): MQWindow(title) {}
+    void renderContents(mqMachine *omach) override;
+};
+
 //=== CPU ====================================================================//
 
 class CPUWindow: public MQWindow
@@ -163,11 +182,6 @@ private:
 
 //=== Memory Buffers window ==================================================//
 
-struct MemoryBuffersWindowAction {
-    enum class Type { MBWA_NONE, MBWA_VIEW_HEX };
-    Type type = Type::MBWA_NONE;
-};
-
 class MemoryBuffersWindow: public MQWindow
 {
 public:
@@ -175,18 +189,8 @@ public:
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
-    struct ActionViewHex: public MQWindowAction {
-        /* Buffer region to visualize, and matching emulated address */
-        mqMemoryBuffer *buffer = NULL;
-        int offset = -1;
-        int size = -1;
-        u32 address = 0;
-    };
-    ActionViewHex &actionViewHex() { return m_actionViewHex; }
-
 private:
     int m_selectedBuffer = -1;
-    ActionViewHex m_actionViewHex;
 };
 
 //=== MMU window =============================================================//
@@ -196,12 +200,6 @@ class MMUWindow: public MQWindow
 public:
     MMUWindow(char const *title): MQWindow(title) {}
     void renderContents(mqMachine *omach) override;
-
-    bool actionBind() { return m_actionBind; }
-    bool actionUnbind() { return m_actionUnbind; }
-
-private:
-    bool m_actionBind, m_actionUnbind;
 };
 
 //=== Interrupts window ======================================================//
@@ -248,11 +246,6 @@ class HeapWindow: public MQWindow
 public:
     HeapWindow(char const *title): MQWindow(title) {}
     void renderContents(mqMachine *omach) override;
-
-    bool actionInitialize() const { return m_actionInitialize; }
-
-private:
-    bool m_actionInitialize;
 };
 
 //=== Display ================================================================//

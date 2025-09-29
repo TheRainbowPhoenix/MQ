@@ -288,14 +288,18 @@ bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
 
 int mq_machine_cycle(mqMachine *mach, int cycles)
 {
-    if(!mach->initialized)
+    if(!mach->initialized || mach->stuck || !mach->cyclesPending)
         return 0;
+    /* Cap to the currently-set number of cycles */
+    if(mach->cyclesPending > 0 && mach->cyclesPending < cycles)
+        cycles = mach->cyclesPending;
 
     int cyclesRequested = cycles;
     int cyclesRemaining = cycles;
     mq_timer_unfreeze();
 
     // TODO[machine]: Host system sleep for long high-level internal pauses
+    // TODO[machine]: Not counting cycles during sleep hampers determinism
     if(mach->internallyPaused) {
         int ticks = mq_timer_update(&mach->internalPauseTimer);
 
@@ -322,23 +326,33 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(mach->internallyBlocked)
         goto endRun;
 
-    while(cyclesRemaining > 4) {
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
+    /* Unroll a bit for speed, but only if the process timers are aligned,
+       because we want to invoke processes at deterministic times and it has to
+       be exactly the cycle we're checiking. */
+    if(mach->processTimer % 4 == 0 && mach->processFrequency % 4 == 0) {
+        while(cyclesRemaining > 4) {
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
 
-        if((mach->processTimer -= 4) <= 0)
-            mq_machine_runProcesses(mach, mach->processFrequency);
-        cyclesRemaining -= 4;
+            if((mach->processTimer -= 4) <= 0)
+                mq_machine_runProcesses(mach, mach->processFrequency);
+            cyclesRemaining -= 4;
+        }
+    }
+    else if(cyclesRemaining > 100) {
+        mq_log(MQ_LOG_WARNING,
+            "slow run of %d cycles due to misaligned background processes",
+            cyclesRemaining);
     }
 
     while(cyclesRemaining > 0) {
@@ -353,7 +367,10 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
 endRun:
     mq_timer_freeze();
-    return (cyclesRequested - cyclesRemaining);
+    int cyclesElapsed = (cyclesRequested - cyclesRemaining);
+    if(mach->cyclesPending >= 0)
+        mach->cyclesPending -= cyclesElapsed;
+    return cyclesElapsed;
 }
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)

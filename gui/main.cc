@@ -42,22 +42,6 @@ static mqMachine *mach = nullptr;
    the GUI and (mostly) independent from the emulation thread */
 static mqMachine *omach = nullptr;
 
-// GUI one-frame input information
-struct GUIInput {
-    bool mq_initialize_addin_fx = false;
-    bool mq_initialize_addin_cg = false;
-    int mq_load_working_folder_addin = -1;
-
-    bool ui_pattern_mono = false;
-    bool ui_pattern_rgb = false;
-
-    /* Update the inotify watch on the running add-in */
-    bool watch_update = false;
-
-    bool quit = false;
-};
-
-struct GUIInput input;
 struct GUI gui;
 
 ImFont *fontSans = nullptr;
@@ -81,6 +65,8 @@ static void handle_log(enum mq_log_priority priority, char *str)
     gui.ConsoleText.addLine(line);
 }
 
+static ControlWindow CW("Control");
+static MessagesWindow MW("Messages");
 static CPUWindow CPUW("CPU");
 static InterruptsWindow IW("Interrupts");
 static MemoryTreeWindow MTW("Memory tree");
@@ -164,7 +150,7 @@ static void render(void)
     ImGui::SetNextWindowSize(ImVec2(width, height));
 
     bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
-    input.quit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
+    gui.actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
         ImGuiInputFlags_RouteGlobal);
 
     if(ImGui::BeginCustomMenuBar()) {
@@ -178,17 +164,17 @@ static void render(void)
 
         if(ImGui::BeginCustomMenu("File")) {
             open |= ImGui::MenuItem("Open add-in...", "Ctrl+O");
-            input.quit |= ImGui::MenuItem("Quit", "Ctrl+Q");
+            gui.actions.appQuit |= ImGui::MenuItem("Quit", "Ctrl+Q");
         }
         ImGui::EndCustomMenu();
         if(ImGui::BeginCustomMenu("Machine")) {
-            input.mq_initialize_addin_fx |=
-                ImGui::MenuItem("Reset to blank FX add-in");
-            input.mq_initialize_addin_cg |=
-                ImGui::MenuItem("Reset to blank CG add-in");
-            input.ui_pattern_mono |=
+            if(ImGui::MenuItem("Reset to blank FX add-in"))
+                gui.actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_FX;
+            if(ImGui::MenuItem("Reset to blank CG add-in"))
+                gui.actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_CG;
+            gui.actions.machineGenerateMonoFrame |=
                 ImGui::MenuItem("Generate B&W frame");
-            input.ui_pattern_rgb |=
+            gui.actions.machineGenerateRGBFrame |=
                 ImGui::MenuItem("Generate RGB frame");
         }
         ImGui::EndCustomMenu();
@@ -197,23 +183,23 @@ static void render(void)
             ImGui::CustomMenuSeparator();
             ImGui::SameLine(0, 6);
 
-            ImGui::BeginDisabled(!mach->initialized);
-            bool paused = gui.mq_cycles == 0;
-            bool stuck = mach->stuck;
+            ImGui::BeginDisabled(!omach->initialized);
+            bool paused = omach->cyclesPending == 0;
+            bool stuck = omach->stuck;
 
             if(paused && ImGui::IconButton(0, "Run"))
-                gui.mq_cycles = -1;
+                gui.actions.machineSetPendingCycles = -1;
             if(!paused && ImGui::IconButton(1, "Pause"))
-                gui.mq_cycles = 0;
+                gui.actions.machineSetPendingCycles = 0;
             ImGui::SameLine(0, 6);
 
             if(ImGui::IconButton(2, "Step", !paused))
-                gui.mq_cycles = 1;
+                gui.actions.machineSetPendingCycles = 1;
             ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
             ImGui::MoveCursorScreenPos({0, 3});
-            if(!mach->initialized)
+            if(!omach->initialized)
                 ImGui::TextDisabled("Not initialized");
             else if(stuck)
                 ImGui::TextColored({1,.3,.3,1}, "Stuck!");
@@ -231,118 +217,12 @@ static void render(void)
 
     auto dock = ImGui::DockSpaceOverViewport();
 
-    DW.render(omach);
-    KW.render(omach);
-
     static bool show_demo_window = false;
 
-    if(ImGui::Begin("Control", nullptr, 0)) {
-#ifndef AZUR_PLATFORM_EMSCRIPTEN
-        struct mallinfo2 mi = mallinfo2();
-        /* This info is not available with AddressSanitizer's wrapper's */
-        if(mi.arena || mi.hblkhd)
-            ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
-                (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
-
-        // TODO: Better alternative on Linux:
-        // 1. Open /proc/self/status
-        // 2. Parse for VmRSS (Resident Set Size) and VmSwap (in swap)
-        // 3. VmRSS is divided in RssAnon (± heap), RssFile (fixed), RssShmem
-        // 4. For users, we're interested in VmRSS (+ VmSwap)
-        // 5. For debugging, we're interested in RssAnon (≈ mi.arena)
-        // Reference:
-        //   top(1), "Linux Memory Types"
-        // Or, for the proper programmatic interface:
-        // 1. Open /proc/self/statm
-        // 2. Read all numbers, multiplied by sysconf(_SC_PAGESIZE)
-        // 3. [size, resident, shared, text, _, data/stack, _]
-        //    * size is VmSize -> useless
-        //    * shared won't be used
-        //    * text is fixed
-        //    * data/stack counts unmapped, non-resident pages -> useless
-        // 4. Keep using mallinfo() for memory stats
-        // Reference:
-        //   proc_pid_statm(5)
-#endif
-
-        if(omach->initialized) {
-            ImGui::Text("Cycle:");
-            ImGui::SameLine();
-            if(ImGui::Button("1"))
-                gui.mq_cycles = 1;
-            ImGui::SameLine();
-            if(ImGui::Button("10"))
-                gui.mq_cycles = 10;
-            ImGui::SameLine();
-            if(ImGui::Button("100"))
-                gui.mq_cycles = 100;
-            ImGui::SameLine();
-            if(ImGui::Button("1000"))
-                gui.mq_cycles = 1000;
-            ImGui::SameLine();
-            if(ImGui::Button("10k"))
-                gui.mq_cycles = 10000;
-        }
-        else {
-            ImGui::Text("Machine is not initialized.");
-        }
-        if(omach->stuck) {
-            ImGui::Text("Machine is stuck!");
-            gui.mq_cycles = 0;
-        }
-        if(gui.mq_cycles) {
-            if(gui.mq_cycles > 0)
-                ImGui::Text("Cycles pending: %d", gui.mq_cycles);
-            else
-                ImGui::Text("Running...");
-        }
-
-        char watch_str[256];
-        if(gui.watch_info.fd < 0)
-            strcpy(watch_str, "Watch input file");
-        else
-            snprintf(watch_str, sizeof watch_str,
-                "Watching input file: %s",
-                gui.watch_info.addin_path.c_str());
-
-        if(ImGui::Checkbox2(watch_str, &gui.watch_enabled))
-            input.watch_update = gui.watch_enabled;
-
-        if(gui.workingFolderAddins.size() == 0)
-            ImGui::Text("(No add-ins in working folder)");
-        else
-            ImGui::Text("Reset and load:");
-
-        int spaceLeft = 0;
-        for(uint i = 0; i < gui.workingFolderAddins.size(); i++) {
-            char const *addin = gui.workingFolderAddins[i].c_str();
-            /* Check if we have enough space (32 for button + spacing) */
-            int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
-            if(spaceLeft < spaceNeeded)
-                spaceLeft = ImGui::GetContentRegionAvail().x;
-            else
-                ImGui::SameLine();
-
-            if(ImGui::Button(addin))
-                input.mq_load_working_folder_addin = i;
-            spaceLeft -= spaceNeeded;
-        }
-
-        ImGui::Checkbox2("Show demo window", &show_demo_window);
-    }
-    ImGui::End();
-
-    if(ImGui::Begin("Messages", nullptr)) {
-        static RichText::View view = {
-            .font = fontMono,
-            .scroll = 0,
-        };
-        if(ImGui::Button("Clear"))
-            gui.ConsoleText.clear();
-        ImGui::AddRichTextFrame(gui.ConsoleText, view);
-    }
-    ImGui::End();
-
+    DW.render(omach);
+    KW.render(omach);
+    CW.render(omach);
+    MW.render(omach);
     CPUW.render(omach);
     IW.render(omach);
     MTW.render(omach);
@@ -367,8 +247,8 @@ static void render(void)
 
         ImGui::DockBuilderDockWindow(DW.title(), dock);
         ImGui::DockBuilderDockWindow(KW.title(), dock_right_bottom);
-        ImGui::DockBuilderDockWindow("Control", dock_left_top);
-        ImGui::DockBuilderDockWindow("Messages", dock_left_top_right);
+        ImGui::DockBuilderDockWindow(CW.title(), dock_left_top);
+        ImGui::DockBuilderDockWindow(MW.title(), dock_left_top_right);
         ImGui::DockBuilderDockWindow(CPUW.title(), dock_left_top_right);
         ImGui::DockBuilderDockWindow(IW.title(), dock_left_top_right);
         ImGui::DockBuilderDockWindow(MTW.title(), dock_left_bottom);
@@ -420,8 +300,10 @@ static int update(void)
 
     SDL_Event e;
 
-    if(input.quit)
+    if(gui.actions.appQuit)
         return 1;
+
+    bool startRunning = false;
 
     while(SDL_PollEvent(&e)) {
         ImGui_ImplSDL2_ProcessEvent(&e);
@@ -435,21 +317,20 @@ static int update(void)
         }
     }
 
-    if(input.mq_initialize_addin_fx) {
+    if(gui.actions.appClearConsole)
+        gui.ConsoleText.clear();
+
+    if(auto i = gui.actions.machineInitialize) {
         resetWindowStates();
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
-        render_needed = std::max(render_needed, 1);
-    }
-    if(input.mq_initialize_addin_cg) {
-        resetWindowStates();
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_initialize(mach, *i);
         render_needed = std::max(render_needed, 1);
     }
     fs::path path = "";
+    // TODO: Don't handle CLI initialization in regular update()
     if(!gui.start_path.empty()) {
         path = gui.start_path;
         gui.start_path = "";
-        gui.mq_cycles = -1;
+        startRunning = true;
     }
     if(gui.watch_enabled) {
         enum WatchEvent event;
@@ -459,12 +340,12 @@ static int update(void)
             if(event == MQ_WATCH_EVT_UPDATED) {
                 mq_log(MQ_LOG_DEBUG, "watch: addin has been updated");
                 path = gui.watch_info.addin_path;
-                gui.mq_cycles = -1;
+                startRunning = true;
             }
         }
     }
-    if(input.mq_load_working_folder_addin >= 0)
-        path = gui.workingFolderAddins[input.mq_load_working_folder_addin];
+    if(auto p = gui.actions.fileLoadPath)
+        path = *p;
     if(!path.empty()) {
         long size;
         void *data = openAndReadFile(path.c_str(), &size);
@@ -477,6 +358,9 @@ static int update(void)
             path = "";
     }
 
+    if(auto c = gui.actions.machineSetPendingCycles)
+        mach->cyclesPending = *c;
+
     /* Intentional re-check */
     if(gui.inputFile.data) {
         open_addin(
@@ -484,11 +368,13 @@ static int update(void)
             gui.inputFile.data,
             gui.inputFile.size);
         free(gui.inputFile.data);
+        if(startRunning)
+            mach->cyclesPending = -1;
         gui.current_program_path = gui.inputFile.path;
         gui.inputFile = OpenFileBuffer();
         render_needed = std::max(render_needed, 1);
     }
-    else if(gui.mq_cycles) {
+    else if(mach->cyclesPending) {
         ZoneScopedN("update mq");
 
         /* Cycle until we reach 12 milliseconds */
@@ -496,7 +382,7 @@ static int update(void)
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
         // printf("ts_start=%ld\n", ts_start.tv_nsec);
 
-        while(gui.mq_cycles != 0 /* negative is infinity */) {
+        while(mach->cyclesPending != 0 /* negative is infinity */) {
             struct timespec ts_current;
             clock_gettime(CLOCK_MONOTONIC, &ts_current);
             int64_t ns_elapsed = (ts_current.tv_nsec - ts_start.tv_nsec);
@@ -506,20 +392,15 @@ static int update(void)
             if(ns_elapsed >= 12'000'000)
                 break;
 
-            int cycles = std::min(gui.mq_cycles, 100000);
-            if(cycles < 0) {
+            int cycles = std::min(mach->cyclesPending, 100000);
+            if(cycles < 0)
                 cycles = 100000;
-                // printf("gui.mq_cycles=%d, cycles=%d\n", gui.mq_cycles, cycles);
-            }
-            else {
-                // printf("gui.mq_cycles=%d, cycles=%d\n", gui.mq_cycles, cycles);
-                gui.mq_cycles -= cycles;
-            }
+
             mq_machine_cycle(mach, cycles);
         }
         render_needed = std::max(render_needed, 1);
     }
-    if(HW.actionInitialize())
+    if(gui.actions.machineSystemHeapInitialize)
         mq_casiowin_initHeap(mach);
 
     bool may_enable_watch = false;
@@ -528,7 +409,7 @@ static int update(void)
         may_enable_watch = true;
     /* Update the watch if we're clicking on the checkbox and there is a
        program running */
-    if(input.watch_update && !gui.current_program_path.empty())
+    if(gui.actions.fileUpdateWatch && !gui.current_program_path.empty())
         may_enable_watch = true;
 
     if(gui.watch_enabled && may_enable_watch) {
@@ -536,29 +417,29 @@ static int update(void)
             mq_log(MQ_LOG_ERROR, "unable to watch the file o(x_x)o");
     }
 
-    if(input.ui_pattern_mono && mach->display) {
+    if(gui.actions.machineGenerateMonoFrame && mach->display) {
         generateMonoFrame(mach->display);
         render_needed = std::max(render_needed, 1);
     }
-    if(input.ui_pattern_rgb && mach->display) {
+    if(gui.actions.machineGenerateRGBFrame && mach->display) {
         generateRGBFrame(mach->display);
         render_needed = std::max(render_needed, 1);
     }
-    if(mach && MMUW.actionBind()) {
+    if(gui.actions.machineMMUBind && mach) {
         mq_mmu_bind(mach);
         render_needed = std::max(render_needed, 1);
     }
-    if(mach && MMUW.actionUnbind()) {
+    if(gui.actions.machineMMUUnbind && mach) {
         mq_mmu_unbind(mach);
         render_needed = std::max(render_needed, 1);
     }
 
-    if(auto a = MBW.actionViewHex()) {
-        std::string bufferName = a.buffer ? a.buffer->name : "";
-        HVW.viewBuffer(bufferName, a.address, a.offset, a.size);
+    if(auto a = gui.actions.viewHex) {
+        std::string bufferName = a->buffer ? a->buffer->name : "";
+        HVW.viewBuffer(bufferName, a->address, a->offset, a->size);
     }
 
-    input = GUIInput();
+    gui.actions = GUIActions();
     return 0;
 }
 
@@ -688,6 +569,10 @@ int main(int argc, char **argv)
     gui.HV.Cursor = 0;
 
     gui.ConsoleText.alloc(65536, 256);
+
+    gui.ConsoleView.font = fontMono;
+    gui.ConsoleView.scroll = 0;
+
     mq_log_handler(handle_log);
 
     if(!parse_cli_args(argc, argv))
@@ -704,19 +589,8 @@ int main(int argc, char **argv)
 
     srand(clock());
 
-    gui.DGW.init(gui.displayTexture);
-
-    /* Generate an example display for a texture */
     gui.displayTexture.init(GL_TEXTURE_2D);
-    gui.displayTexture.bind();
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 3);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // LINEAR_MIPMAP_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    // glGenerateMipmap(GL_TEXTURE_2D);
+    gui.DGW.init(gui.displayTexture);
 
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
