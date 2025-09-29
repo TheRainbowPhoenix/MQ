@@ -138,25 +138,18 @@ static void mq_machine_setupOnChipMemory_sh4aldsp(mqMachine *mach)
     // TODO[machine]: XYRAM @ 0xe5000000, repeat for 64k, block repeats for 4M
 }
 
-static void mq_machine_setupPeripheralModules_sh7305(
-    mqMachine *mach, int initializeKind)
+static void mq_machine_setupPeripheralModules_sh7305(mqMachine *mach)
 {
-    mq_cpg_setup(mach, initializeKind);
-
-    mq_intc_setup(mach, initializeKind);
-
+    mq_cpg_setup(mach);
+    mq_intc_setup(mach);
     mq_keysc_setup(mach);
-
     mq_dma_setup(mach);
-
     mq_cmod_setup(mach);
-
     mq_tmu_setup(mach);
-
-    mq_rtc_setup(mach, initializeKind);
+    mq_rtc_setup(mach);
 }
 
-void mq_machine_initialize(mqMachine *mach, int initializeKind)
+void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
 {
     mq_machine_reset(mach);
     if(mq_module_count())
@@ -167,29 +160,10 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
     mach->processFrequency = 64;
     mach->processTimer = mach->processFrequency;
 
-    if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_FX) {
-        u32 layout_addin    = 0x80300000; /* @ 3 MB (in fs for OS 2.xx) */
-        u32 layout_uram_p1  = 0x88020000; /* @ 128 kB */
-        u32 layout_uram_p2  = 0xa8020000;
-
-        mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_FX);
+    if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX) {
         mq_cpu_setup(&mach->cpu, mach->memory);
 
         mq_machine_setupOnChipMemory_sh4aldsp(mach);
-
-        /* Set the stack pointer to be P1 instead of MMU, as the OS does */
-        mach->cpu.r[15] = layout_uram_p1 + (32 << 10);
-
-        // TODO[machine]: More precise memory setup for FX add-ins
-        // TODO[machine]: Setup for SH3 models
-
-        /* P1 program code */
-        void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 512 << 10);
-        mq_memory_createBlock(mach->memory, layout_addin, 512 << 10, addin);
-        /* P1 user RAM */
-        void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 32 << 10);
-        mq_memory_createBlock(mach->memory, layout_uram_p1, 32 << 10, uram);
-        mq_memory_createBlock(mach->memory, layout_uram_p2, 32 << 10, uram);
 
         mach->display = mq_display_create();
         mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64);
@@ -197,50 +171,15 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        // TODO[machine]: Add the NULL page to TLB
-        mq_mmu_setup(mach);
-        mq_mmu_map(mach, 0x00300000, layout_addin,    0, 0x10000, 8);
-        mq_mmu_map(mach, 0x08100000, layout_uram_p1, 55, 0x1000,  8);
-        mq_mmu_bind(mach);
-
-        mq_machine_setupPeripheralModules_sh7305(
-            mach,
-            MQ_MACHINE_INITIALIZE_ADDIN_FX
-        );
+        mq_machine_setupPeripheralModules_sh7305(mach);
 
         mq_t6k11_setup(mach);
         mq_casiowin_setup(mach, MQ_CASIOWIN_FX205);
     }
-    else if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN_CG) {
-        u32 layout_addin    = 0x81800000; /* @ 24 MB, somewhere in fs */
-        u32 layout_uram_p1  = 0x8c170000; /* @ 1.5 MB - 64 kB (contiguity) */
-        u32 layout_uram_p2  = 0xac170000;
-
-        mq_cpu_initialize(&mach->cpu, MQ_CPU_INITIALIZE_ADDIN_CG);
+    else if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG) {
         mq_cpu_setup(&mach->cpu, mach->memory);
 
         mq_machine_setupOnChipMemory_sh4aldsp(mach);
-
-        /* Set the stack pointer to be P1 instead of MMU, as the OS does */
-        mach->cpu.r[15] = layout_uram_p1 + (512 << 10);
-
-        // TODO[machine]: More precise memory setup for CG add-in
-
-        /* P1 program code */
-        void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", 2 << 20);
-        mq_memory_createBlock(mach->memory, layout_addin, 2 << 20, addin);
-        /* P1 user RAM */
-        void *uram = mq_memory_allocBuffer(mach->memory, "URAM", 512 << 10);
-        mq_memory_createBlock(mach->memory, layout_uram_p1, 512 << 10, uram);
-        mq_memory_createBlock(mach->memory, layout_uram_p2, 512 << 10, uram);
-        /* OS stack */
-        void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", 512 << 10);
-        mq_memory_createBlock(mach->memory, 0x8c0e0000, 512 << 10, ostk);
-        mq_memory_createBlock(mach->memory, 0xac0e0000, 512 << 10, ostk);
-        /* Additional RAM not used by OS */
-        void *eram = mq_memory_allocBuffer(mach->memory, "ERAM", 2 << 20);
-        mq_memory_createBlock(mach->memory, 0x8c200000, 2 << 20, eram);
-        mq_memory_createBlock(mach->memory, 0xac200000, 2 << 20, eram);
 
         mach->display = mq_display_create();
         mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);
@@ -248,16 +187,7 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        // TODO[machine]: Handle the NULL page with MMU so it shows up in TLB
-        mq_mmu_setup(mach);
-        mq_mmu_map(mach, 0x00300000, layout_addin,    0, 0x100000, 2);
-        mq_mmu_map(mach, 0x08100000, layout_uram_p1, 55,  0x10000, 8);
-        mq_mmu_bind(mach);
-
-        mq_machine_setupPeripheralModules_sh7305(
-            mach,
-            MQ_MACHINE_INITIALIZE_ADDIN_CG
-        );
+        mq_machine_setupPeripheralModules_sh7305(mach);
 
         mq_r61524_setup(mach);
         mq_casiowin_setup(mach, MQ_CASIOWIN_CG380);
@@ -265,6 +195,13 @@ void mq_machine_initialize(mqMachine *mach, int initializeKind)
 
     mach->initialized = true;
     mach->stuck = false;
+}
+
+void mq_machine_initialize(mqMachine *mach, int initializeKind)
+{
+    if(initializeKind == MQ_MACHINE_INITIALIZE_ADDIN) {
+        mq_casiowin_initialize(mach);
+    }
 }
 
 bool mq_machine_load_g1a(mqMachine *mach, void *data, long size)

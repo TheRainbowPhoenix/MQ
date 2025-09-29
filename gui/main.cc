@@ -400,13 +400,15 @@ static void open_addin(std::string const &path, void *data, long size)
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+        mq_machine_setupHardware(mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_setupHardware(mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(mach, data, size);
     }
     else {
@@ -437,12 +439,16 @@ static int update(void)
 
     if(input.mq_initialize_addin_fx) {
         resetWindowStates();
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+        //todo[main]: re-create the hardware?
+        mq_machine_setupHardware(mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN);
         render_needed = std::max(render_needed, 1);
     }
     if(input.mq_initialize_addin_cg) {
         resetWindowStates();
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        //todo[main]: re-create the hardware?
+        mq_machine_setupHardware(mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
+        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN);
         render_needed = std::max(render_needed, 1);
     }
     fs::path path = "";

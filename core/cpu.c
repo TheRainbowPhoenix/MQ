@@ -20,35 +20,6 @@ void mq_cpu_reset(mqCpu *cpu)
     memset(cpu, 0x00, sizeof *cpu);
 }
 
-void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
-{
-    mq_cpu_reset(cpu);
-    cpu->CPUOPM = 0x00000320;
-
-    // TODO: mq_cpu_initialize: Move out of this into CASIOWIN module
-    // (since this describes how CASIOWIN loads programs)
-    if(initializeKind == MQ_CPU_INITIALIZE_POWERON) {
-        cpu->spRegs[SH_SR] = 0x700000f0; // MD=1 RB=1 BL=1 IMASK=15
-        cpu->spRegs[SH_VBR] = 0x00000000;
-        cpu->spRegs[SH_DSR] = 0x0000;
-        cpu->pc = 0xa0000000;
-    }
-    else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_FX) {
-        cpu->spRegs[SH_SR] = 0x40000000; // MD=1
-        cpu->r[4] = 0; // isAppli
-        cpu->r[5] = 0; // optNum
-        cpu->pc = 0x00300200;
-    }
-    else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_CG) {
-        cpu->spRegs[SH_SR] = 0x40000000; // MD=1
-        cpu->r[4] = 0; // isAppli
-        cpu->r[5] = 0; // optNum
-        cpu->pc = 0x00300000;
-    }
-
-    /* CPU registers are initialized here (most to 0). */
-}
-
 void mq_cpu_makeObserver(mqCpu *ocpu, mqCpu const *cpu)
 {
     memcpy(ocpu, cpu, sizeof *cpu);
