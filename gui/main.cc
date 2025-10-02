@@ -304,7 +304,8 @@ void update_machine(mqMachine *mach, bool startRunning)
 
         TracyCZoneEnd(ctx)
 
-        printf("cycles this round! %d\n", totalCycles);
+        // Can vary widely based on what the host nest is!
+        // printf("cycles this round! %d\n", totalCycles);
         render_needed = std::max(render_needed, 1);
     }
 
