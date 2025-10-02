@@ -171,7 +171,7 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   endforeach()
   set_target_properties(mq PROPERTIES LINK_DEPENDS "${ASSETS_ABSOLUTE}")
 
-  azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html")
+  azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html" "mq.js")
 endif()
 
 #=== Headless executable ======================================================#
