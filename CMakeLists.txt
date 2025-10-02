@@ -104,12 +104,12 @@ add_custom_command(
 
 set(GUI_SOURCES
   gui/display-window.cc
+  gui/gui.cc
   gui/imgui-util.cc
   gui/main.cc
   gui/stb.cc
   gui/texture.cc
   gui/util.cc
-  gui/windows.cc
   gui/watch.cc)
 
 set(ASSETS

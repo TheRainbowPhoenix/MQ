@@ -23,6 +23,8 @@ struct GUIActions
     bool appQuit = false;
     /* Clear the message console. */
     bool appClearConsole = false;
+    /* Toggle the demo window. */
+    bool appToggleDemoWindow = false;
 
     /* Replace currently-running program with this file. */
     std::optional<fs::path> fileLoadPath;
@@ -48,6 +50,28 @@ struct GUIActions
     std::optional<ViewHex> viewHex;
     void setViewHex(mqMemoryBuffer *buffer, int offset, int size, u32 address) {
         viewHex = ViewHex { buffer, offset, size, address };
+    }
+};
+
+/* Set of windows. Each window type can instanced on multiple machines. */
+struct GUIWindowSet
+{
+    std::unique_ptr<ControlWindow> Control;
+    std::unique_ptr<MessagesWindow> Messages;
+    std::unique_ptr<CPUWindow> CPU;
+    std::unique_ptr<InterruptsWindow> Interrupts;
+    std::unique_ptr<MemoryTreeWindow> MemoryTree;
+    std::unique_ptr<MemoryBuffersWindow> MemoryBuffers;
+    std::unique_ptr<MMUWindow> MMU;
+    std::unique_ptr<HeapWindow> Heap;
+    std::unique_ptr<HexViewerWindow> HexViewer;
+    std::unique_ptr<DisplayWindow> Display;
+    std::unique_ptr<KeyboardWindow> Keyboard;
+
+    void resetState() {
+        MemoryTree->resetState();
+        MemoryBuffers->resetState();
+        HexViewer->resetState();
     }
 };
 
@@ -83,6 +107,14 @@ struct GUI
     RichText::Text ConsoleText;
     /* Message console view showing the data above */
     RichText::View ConsoleView;
+
+    /* Machine-related windows.
+       TODO: map<int, GUIWindowSet> + move some of the widgets in */
+    // std::map<int, GUIWindowSet> WindowSets;
+    GUIWindowSet Windows;
+
+    void Render(mqMachine *omach);
+    void DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock);
 
     //=== Miscellaneous ======================================================//
 

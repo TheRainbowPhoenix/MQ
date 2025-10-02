@@ -1,15 +1,143 @@
 #include "gui.h"
 #include "imgui-util.h"
-#include <stdio.h>
+#include <imgui_internal.h>
 #include <mq/modules/mmu.h>
 #include <mq/modules/intc.h>
 #include <mq/system/heap.h>
+#include <stdio.h>
 
-void MQWindow::render(mqMachine *omach)
+void GUIWindow::render(mqMachine *omach)
 {
-    if(ImGui::Begin(m_title, 0, m_flags))
+    char title[256];
+    snprintf(title, sizeof title, "%s##%s.%d", m_title, m_title, m_instanceId);
+
+    if(ImGui::Begin(title, 0, m_flags))
         renderContents(omach);
     ImGui::End();
+}
+
+void GUI::Render(mqMachine *omach)
+{
+    bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
+    actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
+        ImGuiInputFlags_RouteGlobal);
+
+    if(ImGui::BeginCustomMenuBar()) {
+        if(ImGui::BeginCustomMenuChild("##menutitle", {30,0}, {1,4})) {
+            ImGui::MoveCursorScreenPos({0, 3});
+            ImGui::PushFont(fontBold);
+            ImGui::Text("MQ");
+            ImGui::PopFont();
+        }
+        ImGui::EndCustomMenuChild();
+
+        if(ImGui::BeginCustomMenu("File")) {
+            open |= ImGui::MenuItem("Open add-in...", "Ctrl+O");
+            actions.appQuit |= ImGui::MenuItem("Quit", "Ctrl+Q");
+        }
+        ImGui::EndCustomMenu();
+        if(ImGui::BeginCustomMenu("Machine")) {
+            if(ImGui::MenuItem("Reset to blank FX add-in"))
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_FX;
+            if(ImGui::MenuItem("Reset to blank CG add-in"))
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_CG;
+            actions.machineGenerateMonoFrame |=
+                ImGui::MenuItem("Generate B&W frame");
+            actions.machineGenerateRGBFrame |=
+                ImGui::MenuItem("Generate RGB frame");
+        }
+        ImGui::EndCustomMenu();
+
+        if(ImGui::BeginCustomMenuChild("##menutools", {0,0}, {1,4})) {
+            ImGui::CustomMenuSeparator();
+            ImGui::SameLine(0, 6);
+
+            ImGui::BeginDisabled(!omach->initialized);
+            bool paused = omach->cyclesPending == 0;
+            bool stuck = omach->stuck;
+
+            if(paused && ImGui::IconButton(0, "Run"))
+                actions.machineSetPendingCycles = -1;
+            if(!paused && ImGui::IconButton(1, "Pause"))
+                actions.machineSetPendingCycles = 0;
+            ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(2, "Step", !paused))
+                actions.machineSetPendingCycles = 1;
+            ImGui::SameLine(0, 6);
+            ImGui::EndDisabled();
+
+            ImGui::MoveCursorScreenPos({0, 3});
+            if(!omach->initialized)
+                ImGui::TextDisabled("Not initialized");
+            else if(stuck)
+                ImGui::TextColored({1,.3,.3,1}, "Stuck!");
+            else
+                ImGui::Text(paused ? "Paused" : "Running...");
+        }
+        ImGui::EndCustomMenuChild();
+    }
+    ImGui::EndCustomMenuBar();
+
+    /* On native builds tihs fills inputFile instantly, while on emscripten
+       this fills it asynchronously and we'll get it in a future frame */
+    if(open)
+        openFileDialog(&inputFile);
+
+    auto dock = ImGui::DockSpaceOverViewport();
+
+    Windows.Display->render(omach);
+    Windows.Keyboard->render(omach);
+    Windows.Control->render(omach);
+    Windows.Messages->render(omach);
+    Windows.CPU->render(omach);
+    Windows.Interrupts->render(omach);
+    Windows.MemoryTree->render(omach);
+    Windows.MemoryBuffers->render(omach);
+    Windows.Heap->render(omach);
+    Windows.MMU->render(omach);
+    Windows.HexViewer->render(omach);
+
+    static bool first_frame = true;
+    if(first_frame)
+        gui.DockWindowsStyle1(gui.Windows, dock);
+    first_frame = false;
+
+    if(Windows.Control->showDemoWindow())
+        ImGui::ShowDemoWindow();
+}
+void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
+{
+    auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
+        ImGuiDir_Left, 0.70, nullptr, &dock);
+    auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
+        ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
+    auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
+        ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
+    auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
+        dock_left_bottom,
+        ImGuiDir_Right, 0.48f, nullptr, &dock_left_bottom);
+    auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
+        ImGuiDir_Down, 0.6f, nullptr, &dock);
+
+    auto DB = [&](GUIWindow &w, auto &dock){
+        ImGui::DockBuilderDockWindow(
+            (std::string(w.title()) + "##" +
+             std::string(w.title()) + ".-1").c_str(),
+            dock);
+    };
+    DB(*Windows.Display, dock);
+    DB(*Windows.Keyboard, dock_right_bottom);
+    DB(*Windows.Control, dock_left_top);
+    DB(*Windows.Messages, dock_left_top_right);
+    DB(*Windows.CPU, dock_left_top_right);
+    DB(*Windows.Interrupts, dock_left_top_right);
+    DB(*Windows.MemoryTree, dock_left_bottom);
+    DB(*Windows.MemoryBuffers, dock_left_bottom);
+    DB(*Windows.Heap, dock_left_bottom);
+    DB(*Windows.MMU, dock_left_bottom);
+    DB(*Windows.HexViewer, dock_left_bottom_right);
+    ImGui::DockBuilderFinish(dock);
 }
 
 void ControlWindow::renderContents(mqMachine *omach)
@@ -117,7 +245,7 @@ void ControlWindow::renderContents(mqMachine *omach)
         spaceLeft -= spaceNeeded;
     }
 
-    // ImGui::Checkbox2("Show demo window", &show_demo_window);
+    ImGui::Checkbox2("Show demo window", &m_showDemoWindow);
 }
 
 void MessagesWindow::renderContents(mqMachine *omach)
@@ -915,7 +1043,7 @@ void HeapWindow::renderContents(mqMachine *omach)
 void DisplayWindow::render(mqMachine *omach)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    MQWindow::render(omach);
+    GUIWindow::render(omach);
     ImGui::PopStyleVar();
 }
 

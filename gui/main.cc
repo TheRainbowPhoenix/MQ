@@ -11,7 +11,6 @@
 #include <mq/modules/mmu.h>
 
 #include <imgui.h>
-#include <imgui_internal.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>
 #include <azur/azur.h>
@@ -65,23 +64,9 @@ static void handle_log(enum mq_log_priority priority, char *str)
     gui.ConsoleText.addLine(line);
 }
 
-static ControlWindow CW("Control");
-static MessagesWindow MW("Messages");
-static CPUWindow CPUW("CPU");
-static InterruptsWindow IW("Interrupts");
-static MemoryTreeWindow MTW("Memory tree");
-static MemoryBuffersWindow MBW("Memory buffers");
-static MMUWindow MMUW("MMU");
-static HeapWindow HW("Heap");
-static HexViewerWindow HVW("Hex Viewer", gui.HV);
-static DisplayWindow DW("Display", gui.DGW);
-static KeyboardWindow KW("Keyboard");
-
 static void resetWindowStates(void)
 {
-    MTW.resetState();
-    MBW.resetState();
-    HVW.resetState();
+    gui.Windows.resetState();
     gui.HV.Cursor = 0;
     gui.HV.MinAddress = 0;
     gui.HV.MaxAddress = (u32)-1;
@@ -149,119 +134,7 @@ static void render(void)
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height));
 
-    bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
-    gui.actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
-        ImGuiInputFlags_RouteGlobal);
-
-    if(ImGui::BeginCustomMenuBar()) {
-        if(ImGui::BeginCustomMenuChild("##menutitle", {30,0}, {1,4})) {
-            ImGui::MoveCursorScreenPos({0, 3});
-            ImGui::PushFont(fontBold);
-            ImGui::Text("MQ");
-            ImGui::PopFont();
-        }
-        ImGui::EndCustomMenuChild();
-
-        if(ImGui::BeginCustomMenu("File")) {
-            open |= ImGui::MenuItem("Open add-in...", "Ctrl+O");
-            gui.actions.appQuit |= ImGui::MenuItem("Quit", "Ctrl+Q");
-        }
-        ImGui::EndCustomMenu();
-        if(ImGui::BeginCustomMenu("Machine")) {
-            if(ImGui::MenuItem("Reset to blank FX add-in"))
-                gui.actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_FX;
-            if(ImGui::MenuItem("Reset to blank CG add-in"))
-                gui.actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_CG;
-            gui.actions.machineGenerateMonoFrame |=
-                ImGui::MenuItem("Generate B&W frame");
-            gui.actions.machineGenerateRGBFrame |=
-                ImGui::MenuItem("Generate RGB frame");
-        }
-        ImGui::EndCustomMenu();
-
-        if(ImGui::BeginCustomMenuChild("##menutools", {0,0}, {1,4})) {
-            ImGui::CustomMenuSeparator();
-            ImGui::SameLine(0, 6);
-
-            ImGui::BeginDisabled(!omach->initialized);
-            bool paused = omach->cyclesPending == 0;
-            bool stuck = omach->stuck;
-
-            if(paused && ImGui::IconButton(0, "Run"))
-                gui.actions.machineSetPendingCycles = -1;
-            if(!paused && ImGui::IconButton(1, "Pause"))
-                gui.actions.machineSetPendingCycles = 0;
-            ImGui::SameLine(0, 6);
-
-            if(ImGui::IconButton(2, "Step", !paused))
-                gui.actions.machineSetPendingCycles = 1;
-            ImGui::SameLine(0, 6);
-            ImGui::EndDisabled();
-
-            ImGui::MoveCursorScreenPos({0, 3});
-            if(!omach->initialized)
-                ImGui::TextDisabled("Not initialized");
-            else if(stuck)
-                ImGui::TextColored({1,.3,.3,1}, "Stuck!");
-            else
-                ImGui::Text(paused ? "Paused" : "Running...");
-        }
-        ImGui::EndCustomMenuChild();
-    }
-    ImGui::EndCustomMenuBar();
-
-    /* On native builds tihs fills inputFile instantly, while on emscripten
-       this fills it asynchronously and we'll get it in a future frame */
-    if(open)
-        openFileDialog(&gui.inputFile);
-
-    auto dock = ImGui::DockSpaceOverViewport();
-
-    static bool show_demo_window = false;
-
-    DW.render(omach);
-    KW.render(omach);
-    CW.render(omach);
-    MW.render(omach);
-    CPUW.render(omach);
-    IW.render(omach);
-    MTW.render(omach);
-    MBW.render(omach);
-    HW.render(omach);
-    MMUW.render(omach);
-    HVW.render(omach);
-
-    static bool first_frame = true;
-    if(first_frame) {
-        auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
-            ImGuiDir_Left, 0.70, nullptr, &dock);
-        auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
-            ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
-        auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
-            ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
-        auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
-            dock_left_bottom,
-            ImGuiDir_Right, 0.48f, nullptr, &dock_left_bottom);
-        auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
-            ImGuiDir_Down, 0.6f, nullptr, &dock);
-
-        ImGui::DockBuilderDockWindow(DW.title(), dock);
-        ImGui::DockBuilderDockWindow(KW.title(), dock_right_bottom);
-        ImGui::DockBuilderDockWindow(CW.title(), dock_left_top);
-        ImGui::DockBuilderDockWindow(MW.title(), dock_left_top_right);
-        ImGui::DockBuilderDockWindow(CPUW.title(), dock_left_top_right);
-        ImGui::DockBuilderDockWindow(IW.title(), dock_left_top_right);
-        ImGui::DockBuilderDockWindow(MTW.title(), dock_left_bottom);
-        ImGui::DockBuilderDockWindow(MBW.title(), dock_left_bottom);
-        ImGui::DockBuilderDockWindow(HW.title(), dock_left_bottom);
-        ImGui::DockBuilderDockWindow(MMUW.title(), dock_left_bottom);
-        ImGui::DockBuilderDockWindow(HVW.title(), dock_left_bottom_right);
-        ImGui::DockBuilderFinish(dock);
-        first_frame = false;
-    }
-
-    if(show_demo_window)
-        ImGui::ShowDemoWindow();
+    gui.Render(omach);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -431,7 +304,8 @@ static int update(void)
 
     if(auto a = gui.actions.viewHex) {
         std::string bufferName = a->buffer ? a->buffer->name : "";
-        HVW.viewBuffer(bufferName, a->address, a->offset, a->size);
+        gui.Windows.HexViewer->viewBuffer(
+            bufferName, a->address, a->offset, a->size);
     }
 
     gui.actions = GUIActions();
@@ -568,6 +442,20 @@ int main(int argc, char **argv)
 
     gui.ConsoleView.font = fontMono;
     gui.ConsoleView.scroll = 0;
+
+    gui.Windows.Control = std::make_unique<ControlWindow>("Control");
+    gui.Windows.Messages = std::make_unique<MessagesWindow>("Messages");
+    gui.Windows.CPU = std::make_unique<CPUWindow>("CPU");
+    gui.Windows.Interrupts = std::make_unique<InterruptsWindow>("Interrupts");
+    gui.Windows.MemoryTree = std::make_unique<MemoryTreeWindow>("Memory tree");
+    gui.Windows.MemoryBuffers =
+        std::make_unique<MemoryBuffersWindow>("Memory buffers");
+    gui.Windows.MMU = std::make_unique<MMUWindow>("MMU");
+    gui.Windows.Heap = std::make_unique<HeapWindow>("Heap");
+    gui.Windows.HexViewer =
+        std::make_unique<HexViewerWindow>("Hex Viewer", gui.HV);
+    gui.Windows.Display = std::make_unique<DisplayWindow>("Display", gui.DGW);
+    gui.Windows.Keyboard = std::make_unique<KeyboardWindow>("Keyboard");
 
     mq_log_handler(handle_log);
 

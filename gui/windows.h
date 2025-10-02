@@ -99,18 +99,18 @@ private:
     Texture const *m_texture = nullptr;
 };
 
-//=== GUI windows ============================================================//
-
-class MQWindow
+/* Class of an instanced window along with some automation. */
+class GUIWindow
 {
 public:
-    MQWindow(char const *title, ImGuiWindowFlags flags = 0):
-        m_title {title}, m_flags {flags} {}
+    GUIWindow(int instanceId, char const *title, ImGuiWindowFlags flags = 0):
+        m_instanceId{instanceId}, m_title{title}, m_flags{flags} {}
 
     /* Render the contents of the window, without Begin()/End() */
     // TODO: Give windows an [mqMachine const *] to enforce observer semantics
     virtual void renderContents(mqMachine *omach) = 0;
-    /* Render entire window, with Begin()/End(). Defaults to no settings */
+    /* Render entire window, with Begin()/End() and the flags given when
+       construced. This handles generating a unique instance-based window ID */
     virtual void render(mqMachine *omach);
     /* Reset state after changing the underlying machine */
     virtual void resetState() {}
@@ -120,52 +120,50 @@ public:
     void setTitle(char const *title) { m_title = title ? title : ""; }
 
 private:
+    int m_instanceId = -1;
     char const *m_title = "";
     ImGuiWindowFlags m_flags = 0;
 };
 
-struct MQWindowAction
-{
-    bool m_enabled = false;
-    operator bool() { return m_enabled; }
-    void disable() { m_enabled = false; }
-    void enable() { m_enabled = true; }
-};
-
 //=== Control ================================================================//
 
-class ControlWindow: public MQWindow
+class ControlWindow: public GUIWindow
 {
 public:
-    ControlWindow(char const *title): MQWindow(title) {}
+    ControlWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
+
+    bool showDemoWindow() const { return m_showDemoWindow; }
+
+private:
+    bool m_showDemoWindow = false;
 };
 
 //=== Messages ===============================================================//
 
-class MessagesWindow: public MQWindow
+class MessagesWindow: public GUIWindow
 {
 public:
-    MessagesWindow(char const *title): MQWindow(title) {}
+    MessagesWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
 };
 
 //=== CPU ====================================================================//
 
-class CPUWindow: public MQWindow
+class CPUWindow: public GUIWindow
 {
 public:
     CPUWindow(char const *title):
-        MQWindow(title, ImGuiWindowFlags_HorizontalScrollbar) {}
+        GUIWindow(-1, title, ImGuiWindowFlags_HorizontalScrollbar) {}
     void renderContents(mqMachine *omach) override;
 };
 
 //=== Memory tree ============================================================//
 
-class MemoryTreeWindow: public MQWindow
+class MemoryTreeWindow: public GUIWindow
 {
 public:
-    MemoryTreeWindow(char const *title): MQWindow(title) {}
+    MemoryTreeWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
@@ -182,10 +180,10 @@ private:
 
 //=== Memory Buffers window ==================================================//
 
-class MemoryBuffersWindow: public MQWindow
+class MemoryBuffersWindow: public GUIWindow
 {
 public:
-    MemoryBuffersWindow(char const *title): MQWindow(title) {}
+    MemoryBuffersWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
@@ -195,29 +193,29 @@ private:
 
 //=== MMU window =============================================================//
 
-class MMUWindow: public MQWindow
+class MMUWindow: public GUIWindow
 {
 public:
-    MMUWindow(char const *title): MQWindow(title) {}
+    MMUWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
 };
 
 //=== Interrupts window ======================================================//
 
-class InterruptsWindow: public MQWindow
+class InterruptsWindow: public GUIWindow
 {
 public:
-    InterruptsWindow(char const *title): MQWindow(title) {}
+    InterruptsWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
 };
 
 //=== Hex Viewer window ======================================================//
 
-class HexViewerWindow: public MQWindow
+class HexViewerWindow: public GUIWindow
 {
 public:
     HexViewerWindow(char const *title, ImGui::HexViewer &HV):
-        MQWindow(title), m_HexViewer {HV} {}
+        GUIWindow(-1, title), m_HexViewer {HV} {}
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
@@ -241,20 +239,20 @@ private:
 
 //=== Heap ===================================================================//
 
-class HeapWindow: public MQWindow
+class HeapWindow: public GUIWindow
 {
 public:
-    HeapWindow(char const *title): MQWindow(title) {}
+    HeapWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
 };
 
 //=== Display ================================================================//
 
-class DisplayWindow: public MQWindow
+class DisplayWindow: public GUIWindow
 {
 public:
     DisplayWindow(char const *title, DisplayGlWindow &DGW):
-        MQWindow(title), m_DGW{DGW} {}
+        GUIWindow(-1, title), m_DGW{DGW} {}
     void render(mqMachine *omach) override;
     void renderContents(mqMachine *omach) override;
 
@@ -264,10 +262,10 @@ private:
 
 //=== Keyboard ===============================================================//
 
-class KeyboardWindow: public MQWindow
+class KeyboardWindow: public GUIWindow
 {
 public:
-    KeyboardWindow(char const *title): MQWindow(title) {}
+    KeyboardWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
 };
 
