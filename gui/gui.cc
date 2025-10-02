@@ -250,6 +250,8 @@ void ControlWindow::renderContents(mqMachine *omach)
 
 void MessagesWindow::renderContents(mqMachine *omach)
 {
+    (void)omach;
+
     gui.actions.appClearConsole |= ImGui::Button("Clear");
 
     ImGui::AddRichTextFrame(gui.ConsoleText, gui.ConsoleView);

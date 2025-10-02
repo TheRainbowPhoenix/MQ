@@ -13,6 +13,7 @@
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
 #include <mq/interfaces/timer.h>
+#include <pthread.h>
 MQ_START_DEFS
 
 struct mqMemory;
@@ -26,6 +27,16 @@ struct mqMachine
 {
     mqCpu cpu;
     struct mqMemory *memory;
+
+    /* Mutex for access to the main structure. */
+    pthread_mutex_t lock_access;
+    /* Waiting room for lock_access. To get access, acquire lock_waiting, then
+       acquire lock_access, then release lock_access. This prevents the
+       emulation thread, which pretty much tries to acquire lock_access all the
+       time, from denying the UI thread to use it. The UI thread will acquire
+       lock_waiting while the emulation thread has lock_access but not
+       lock_waiting. */
+    pthread_mutex_t lock_waiting;
 
     /* Machine is initialized to a reasonable state. */
     bool initialized;
@@ -77,6 +88,13 @@ typedef struct mqMachine mqMachine;
 mqMachine *mq_machine_create(void);
 void mq_machine_reset(mqMachine *mach);
 void mq_machine_destroy(mqMachine *mach);
+
+/* Acquire or release the lock to use the machine. This is needed for all
+   operations. Creating an observer must also be done while holding the lock,
+   but once the observer is created it can be used with the lock released.
+   (Some information, like memory contents, can be inaccurate in that case.) */
+void mq_machine_lock(mqMachine *mach);
+void mq_machine_unlock(mqMachine *mach);
 
 /* Observer functions for mqMachine. These functions make and destroy an
    "observer" copy of the machine with a snapshot of the metadata but no

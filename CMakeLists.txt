@@ -128,13 +128,13 @@ azur_embed_assets(
 
 add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} "${AUTOGEN}/gui-assets.cc")
 target_compile_options(mq PRIVATE
-  ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith)
+  ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith -pthread)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
-target_link_options(mq PRIVATE ${MQ_OPT_LD})
+target_link_options(mq PRIVATE ${MQ_OPT_LD} -pthread)
 
 # TODO: Use Tracy's CMake integration just to make things a bit cleaner.
 if(MQ_PROFILING_TRACY)

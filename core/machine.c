@@ -28,6 +28,8 @@ mqMachine *mq_machine_create(void)
     mqMachine *mach = calloc(1, sizeof *mach);
     mq_cpu_reset(&mach->cpu);
     mach->memory = mq_memory_create();
+    pthread_mutex_init(&mach->lock_access, NULL);
+    pthread_mutex_init(&mach->lock_waiting, NULL);
     return mach;
 }
 
@@ -71,7 +73,24 @@ void mq_machine_destroy(mqMachine *mach)
         mq_display_destroy(mach->display);
     if(mach->keyboard)
         mq_keyboard_destroy(mach->keyboard);
+
+    pthread_mutex_destroy(&mach->lock_access);
+    pthread_mutex_destroy(&mach->lock_waiting);
     free(mach);
+}
+
+void mq_machine_lock(mqMachine *mach)
+{
+    TracyCZoneN(ctx, "lock machine", true)
+    pthread_mutex_lock(&mach->lock_waiting);
+    pthread_mutex_lock(&mach->lock_access);
+    pthread_mutex_unlock(&mach->lock_waiting);
+    TracyCZoneEnd(ctx)
+}
+
+void mq_machine_unlock(mqMachine *mach)
+{
+    pthread_mutex_unlock(&mach->lock_access);
 }
 
 mqMachine *mq_machine_createObserver(mqMachine const *mach)

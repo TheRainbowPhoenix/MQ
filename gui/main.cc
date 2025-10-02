@@ -47,6 +47,8 @@ ImFont *fontSans = nullptr;
 ImFont *fontMono = nullptr;
 ImFont *fontBold = nullptr;
 
+void update_machine(mqMachine *mach, bool startRunning);
+
 static void handle_log(enum mq_log_priority priority, char *str)
 {
     /* Print to terminal */
@@ -95,36 +97,43 @@ static void render(void)
     Uint32 flags = SDL_GetWindowFlags(window);
     if(previous_time != 0.0 && !(flags & SDL_WINDOW_INPUT_FOCUS)) return;
 
-    /* Generate an observer for the current state of the machine */
     if(omach)
         mq_machine_destroyObserver(omach);
     omach = nullptr;
-    if(mach)
+
+    /*** Wait to acquire access to the machine so we can generate an observer
+         and update the display texture.
+         TODO: Put a separate lock on the display ***/
+    if(mach) {
+        mq_machine_lock(mach);
         omach = mq_machine_createObserver(mach);
 
-    if(mach && mach->display && mach->display->dirty) {
-        mqDisplay *d = mach->display;
-        gui.displayTexture.bind();
-        if(d->format == MQ_DISPLAY_FORMAT_L8) {
+        if(mach->display && mach->display->dirty) {
+            mqDisplay *d = mach->display;
+            gui.displayTexture.bind();
+            if(d->format == MQ_DISPLAY_FORMAT_L8) {
 #if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
-            gui.displayTexture.setFormat(GL_LUMINANCE, GL_UNSIGNED_BYTE,
-                                     d->width, d->height);
+                gui.displayTexture.setFormat(GL_LUMINANCE, GL_UNSIGNED_BYTE,
+                                         d->width, d->height);
 #elif AZUR_GRAPHICS_OPENGL_3_3
-            gui.displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
-                                     d->width, d->height);
+                gui.displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
+                                         d->width, d->height);
 #endif
-            gui.displayTexture.setData(d->data);
-        }
-        else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
-            gui.displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                                     d->width, d->height);
-            gui.displayTexture.setData(d->data);
-        }
-        else
-            printf("warning: display not updated, unknown format!\n");
+                gui.displayTexture.setData(d->data);
+            }
+            else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
+                gui.displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
+                                         d->width, d->height);
+                gui.displayTexture.setData(d->data);
+            }
+            else
+                printf("warning: display not updated, unknown format!\n");
 
-        gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
-        mq_display_setDirty(d, false);
+            gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
+            mq_display_setDirty(d, false);
+        }
+
+        mq_machine_unlock(mach);
     }
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -193,12 +202,7 @@ static int update(void)
     if(gui.actions.appClearConsole)
         gui.ConsoleText.clear();
 
-    if(auto i = gui.actions.machineInitialize) {
-        resetWindowStates();
-        mq_machine_initialize(mach, *i);
-        render_needed = std::max(render_needed, 1);
-    }
-    fs::path path = "";
+    fs::path loadPath = "";
 
     if(gui.watch_enabled) {
         enum WatchEvent event;
@@ -207,23 +211,48 @@ static int update(void)
                 mq_log(MQ_LOG_WARNING, "watch: addin has been removed");
             if(event == MQ_WATCH_EVT_UPDATED) {
                 mq_log(MQ_LOG_DEBUG, "watch: addin has been updated");
-                path = gui.current_program_path;
+                loadPath = gui.current_program_path;
                 startRunning = true;
             }
         }
     }
     if(auto p = gui.actions.fileLoadPath)
-        path = *p;
-    if(!path.empty()) {
+        loadPath = *p;
+    if(!loadPath.empty()) {
         long size;
-        void *data = openAndReadFile(path.c_str(), &size);
+        void *data = openAndReadFile(loadPath.c_str(), &size);
         if(data) {
-            gui.inputFile.path = path;
+            gui.inputFile.path = loadPath;
             gui.inputFile.data = data;
             gui.inputFile.size = size;
         }
         else
-            path = "";
+            loadPath = "";
+    }
+
+    if(auto a = gui.actions.viewHex) {
+        std::string bufferName = a->buffer ? a->buffer->name : "";
+        gui.Windows.HexViewer->viewBuffer(
+            bufferName, a->address, a->offset, a->size);
+    }
+
+    /* Now acquire a lock to the machine so we can run complex actions. */
+    mq_machine_lock(mach);
+    update_machine(mach, startRunning);
+    mq_machine_unlock(mach);
+
+    gui.actions = GUIActions();
+    return 0;
+}
+
+void update_machine(mqMachine *mach, bool startRunning)
+{
+    bool may_enable_watch = false;
+
+    if(auto i = gui.actions.machineInitialize) {
+        resetWindowStates();
+        mq_machine_initialize(mach, *i);
+        render_needed = std::max(render_needed, 1);
     }
 
     if(auto c = gui.actions.machineSetPendingCycles)
@@ -236,6 +265,8 @@ static int update(void)
             gui.inputFile.data,
             gui.inputFile.size);
         free(gui.inputFile.data);
+        /* Update the watch if we're loading a new program */
+        may_enable_watch = true;
         if(startRunning)
             mach->cyclesPending = -1;
         gui.current_program_path = gui.inputFile.path;
@@ -243,12 +274,14 @@ static int update(void)
         render_needed = std::max(render_needed, 1);
     }
     else if(mach->cyclesPending) {
-        ZoneScopedN("update mq");
+        TracyCZoneN(ctx, "cycle machine", true)
 
         /* Cycle until we reach 12 milliseconds */
         struct timespec ts_start;
         clock_gettime(CLOCK_MONOTONIC, &ts_start);
         // printf("ts_start=%ld\n", ts_start.tv_nsec);
+
+        int totalCycles = 0;
 
         while(mach->cyclesPending != 0 /* negative is infinity */) {
             struct timespec ts_current;
@@ -260,21 +293,24 @@ static int update(void)
             if(ns_elapsed >= 12'000'000)
                 break;
 
-            int cycles = std::min(mach->cyclesPending, 100000);
+            int cycles = std::min(mach->cyclesPending, 20000);
             if(cycles < 0)
-                cycles = 100000;
+                cycles = 20000;
+
+            totalCycles += cycles;
 
             mq_machine_cycle(mach, cycles);
         }
+
+        TracyCZoneEnd(ctx)
+
+        printf("cycles this round! %d\n", totalCycles);
         render_needed = std::max(render_needed, 1);
     }
+
     if(gui.actions.machineSystemHeapInitialize)
         mq_casiowin_initHeap(mach);
 
-    bool may_enable_watch = false;
-    /* Update the watch if we're loading a new program */
-    if(!path.empty())
-        may_enable_watch = true;
     /* Update the watch if we're clicking on the checkbox and there is a
        program running */
     if(gui.actions.fileUpdateWatch && !gui.current_program_path.empty())
@@ -301,15 +337,6 @@ static int update(void)
         mq_mmu_unbind(mach);
         render_needed = std::max(render_needed, 1);
     }
-
-    if(auto a = gui.actions.viewHex) {
-        std::string bufferName = a->buffer ? a->buffer->name : "";
-        gui.Windows.HexViewer->viewBuffer(
-            bufferName, a->address, a->offset, a->size);
-    }
-
-    gui.actions = GUIActions();
-    return 0;
 }
 
 int *icon_rect_ids = NULL;
