@@ -31,21 +31,77 @@
 
 namespace fs = std::filesystem;
 
+struct GUI gui;
 /* Refresh request triggered by SDL events and Dear ImGui's initial frames. */
 static int render_needed = IMGUI_SETTLING_FRAMES;
-
-/* Main machine on which we're running the program. This is used in the
-   emulation thread and can't be accessed randomly by GUI. */
-static mqMachine *mach = nullptr;
-/* Observer machine containing snapshots of the main machine's state, used by
-   the GUI and (mostly) independent from the emulation thread */
-static mqMachine *omach = nullptr;
-
-struct GUI gui;
-
+/* Globally-loaded fonts */
 ImFont *fontSans = nullptr;
 ImFont *fontMono = nullptr;
 ImFont *fontBold = nullptr;
+
+struct EmulationThread
+{
+    EmulationThread(mqMachine *mach): mach{mach} {}
+
+    /* Start the thread. (Nothing will happen until the machine gets work.) */
+    bool start();
+    /* Cancel the thread brutally */
+    void cancel();
+
+    pthread_t td;
+
+    /* Machine being run by the thread. Most of the time the thread will lock
+       it, except in short periods where the GUI gets it to prepare frames.
+       This field is a constant after creating the thread. */
+    mqMachine * const mach = nullptr;
+    /* Observer machine containing snapshots of the main machine's state, used
+       by the GUI and (mostly) independent from the emulation thread. This
+       pointer is managed by the GUI and not used by the emulation thread. */
+    mqMachine *omach = nullptr;
+
+private:
+    static void *run(void *userdata);
+};
+
+std::unique_ptr<EmulationThread> emu0;
+
+bool EmulationThread::start()
+{
+    int rc = pthread_create(&this->td, NULL, EmulationThread::run, this);
+    if(rc) {
+        mq_log(MQ_LOG_ERROR, "could not start thread: %s\n", strerror(rc));
+        return false;
+    }
+    return true;
+}
+
+void EmulationThread::cancel()
+{
+    pthread_cancel(this->td);
+}
+
+void *EmulationThread::run(void *userdata)
+{
+    EmulationThread *emu = static_cast<EmulationThread *>(userdata);
+    mqMachine *mach = emu->mach;
+
+    while(true) {
+        // printf("[Emu] Locking machine for work\n");
+        mq_machine_lock(mach);
+        // printf("[Emu] Locked machine\n");
+
+        int cycles = 20000;
+        mq_machine_cycle(emu->mach, cycles);
+
+        // printf("[Emu] Unlocking machine and waiting for work\n");
+        mq_machine_unlockAndWaitForWork(mach);
+        // printf("[Emu] Work has arrived!\n");
+    }
+
+    return nullptr;
+}
+
+//============================================================================//
 
 void update_machine(mqMachine *mach, bool startRunning);
 
@@ -78,10 +134,6 @@ static void render(void)
 {
     ZoneScopedN("render");
 
-    if(!render_needed)
-        return;
-    render_needed--;
-
     SDL_Window *window = azur_sdl_window();
     int width, height;
     SDL_GetWindowSize(window, &width, &height);
@@ -97,16 +149,19 @@ static void render(void)
     Uint32 flags = SDL_GetWindowFlags(window);
     if(previous_time != 0.0 && !(flags & SDL_WINDOW_INPUT_FOCUS)) return;
 
-    if(omach)
-        mq_machine_destroyObserver(omach);
-    omach = nullptr;
+    if(emu0->omach)
+        mq_machine_destroyObserver(emu0->omach);
+    emu0->omach = nullptr;
 
     /*** Wait to acquire access to the machine so we can generate an observer
          and update the display texture.
          TODO: Put a separate lock on the display ***/
+    mqMachine *mach = emu0->mach;
     if(mach) {
+        // printf("[Main] Locking machine for render\n");
         mq_machine_lock(mach);
-        omach = mq_machine_createObserver(mach);
+        // printf("[Main] Locked machine for render\n");
+        emu0->omach = mq_machine_createObserver(mach);
 
         if(mach->display && mach->display->dirty) {
             mqDisplay *d = mach->display;
@@ -131,10 +186,17 @@ static void render(void)
 
             gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
             mq_display_setDirty(d, false);
+            render_needed = std::max(render_needed, 1);
         }
 
+        // printf("[Main] Unlocking machine after render\n");
         mq_machine_unlock(mach);
+        // printf("[Main] Unlocked machine after render\n");
     }
+
+    if(!render_needed)
+        return;
+    render_needed--;
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -143,7 +205,7 @@ static void render(void)
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height));
 
-    gui.Render(omach);
+    gui.Render(emu0->omach);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -162,14 +224,14 @@ static void open_addin(std::string const &path, void *data, long size)
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
-        mq_machine_load_g1a(mach, data, size);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+        mq_machine_load_g1a(emu0->mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
-        mq_machine_load_g3a(mach, data, size);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_load_g3a(emu0->mach, data, size);
     }
     else {
         azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
@@ -237,14 +299,19 @@ static int update(void)
     }
 
     /* Now acquire a lock to the machine so we can run complex actions. */
-    mq_machine_lock(mach);
-    update_machine(mach, startRunning);
-    mq_machine_unlock(mach);
+    // printf("[Main] Locking machine for update\n");
+    mq_machine_lock(emu0->mach);
+    // printf("[Main] Locked machine for update\n");
+    update_machine(emu0->mach, startRunning);
+    // printf("[Main] Unlocking machine after update\n");
+    mq_machine_unlock(emu0->mach);
+    // printf("[Main] Unlocked machine after update\n");
 
     gui.actions = GUIActions();
     return 0;
 }
 
+/* The machine is locked during this function. */
 void update_machine(mqMachine *mach, bool startRunning)
 {
     bool may_enable_watch = false;
@@ -256,7 +323,7 @@ void update_machine(mqMachine *mach, bool startRunning)
     }
 
     if(auto c = gui.actions.machineSetPendingCycles)
-        mach->cyclesPending = *c;
+        mq_machine_setCyclesPending(mach, *c);
 
     /* Intentional re-check */
     if(gui.inputFile.data) {
@@ -268,44 +335,9 @@ void update_machine(mqMachine *mach, bool startRunning)
         /* Update the watch if we're loading a new program */
         may_enable_watch = true;
         if(startRunning)
-            mach->cyclesPending = -1;
+            mq_machine_setCyclesPending(mach, -1);
         gui.current_program_path = gui.inputFile.path;
         gui.inputFile = OpenFileBuffer();
-        render_needed = std::max(render_needed, 1);
-    }
-    else if(mach->cyclesPending) {
-        TracyCZoneN(ctx, "cycle machine", true)
-
-        /* Cycle until we reach 12 milliseconds */
-        struct timespec ts_start;
-        clock_gettime(CLOCK_MONOTONIC, &ts_start);
-        // printf("ts_start=%ld\n", ts_start.tv_nsec);
-
-        int totalCycles = 0;
-
-        while(mach->cyclesPending != 0 /* negative is infinity */) {
-            struct timespec ts_current;
-            clock_gettime(CLOCK_MONOTONIC, &ts_current);
-            int64_t ns_elapsed = (ts_current.tv_nsec - ts_start.tv_nsec);
-            int64_t s_elapsed = (ts_current.tv_sec - ts_start.tv_sec);
-            ns_elapsed += 1'000'000'000ull * s_elapsed;
-            // printf("ts_current=%ld ns_elapsed=%ld\n", ts_current.tv_nsec, ns_elapsed);
-            if(ns_elapsed >= 12'000'000)
-                break;
-
-            int cycles = std::min(mach->cyclesPending, 20000);
-            if(cycles < 0)
-                cycles = 20000;
-
-            totalCycles += cycles;
-
-            mq_machine_cycle(mach, cycles);
-        }
-
-        TracyCZoneEnd(ctx)
-
-        // Can vary widely based on what the host nest is!
-        // printf("cycles this round! %d\n", totalCycles);
         render_needed = std::max(render_needed, 1);
     }
 
@@ -492,7 +524,9 @@ int main(int argc, char **argv)
 
     mq_init();
 
-    mach = mq_machine_create();
+    mqMachine *mach = mq_machine_create();
+    emu0 = std::make_unique<EmulationThread>(mach);
+    emu0->start();
 
     if(azur_init("MQ", 1500, 850) != 0)
         return 1;
@@ -524,6 +558,7 @@ int main(int argc, char **argv)
     find_cwd_addins(gui.workingFolderAddins);
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
+    emu0->cancel();
 
     gui.DGW.cleanup();
 
@@ -531,8 +566,8 @@ int main(int argc, char **argv)
 
     azur_quit();
     if(mach) {
-        mq_machine_destroy(mach);
-        mach = nullptr;
+        mq_machine_destroy(emu0->mach);
+        emu0.reset();
     }
     mq_quit();
     return rc;

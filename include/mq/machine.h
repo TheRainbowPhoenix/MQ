@@ -37,6 +37,9 @@ struct mqMachine
        lock_waiting while the emulation thread has lock_access but not
        lock_waiting. */
     pthread_mutex_t lock_waiting;
+    /* Condition variable triggered when the machine had no work and now has
+       work. This wakes the emulating up from sleep. Linked to lock_access. */
+    pthread_cond_t cond_work_arrived;
 
     /* Machine is initialized to a reasonable state. */
     bool initialized;
@@ -95,6 +98,16 @@ void mq_machine_destroy(mqMachine *mach);
    (Some information, like memory contents, can be inaccurate in that case.) */
 void mq_machine_lock(mqMachine *mach);
 void mq_machine_unlock(mqMachine *mach);
+/* If there is more work to do, unlock the machine. Otherwise, unlock the
+   machine and wait on the condition variable (atomically). */
+void mq_machine_unlockAndWaitForWork(mqMachine *mach);
+
+/* Set the number of pending cycles. This controls the execution of the
+   machine. Setting 0 pauses it. Setting a negative number makes it run with no
+   limit. Setting a positive integer makes it run for that number of cycles.
+   (Given the concurrent nature of emulation, setting a finite number is only
+   really useful if the machine was previously paused.) */
+void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending);
 
 /* Observer functions for mqMachine. These functions make and destroy an
    "observer" copy of the machine with a snapshot of the metadata but no
