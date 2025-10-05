@@ -119,7 +119,10 @@ static void handle_log(enum mq_log_priority priority, char *str)
         line = RichText::Line::make((std::string("error: ") + str).c_str());
     else
         line = RichText::Line::make(str);
+
+    gui.ConsoleText.lock();
     gui.ConsoleText.addLine(line);
+    gui.ConsoleText.unlock();
 }
 
 static void resetWindowStates(void)
@@ -261,8 +264,11 @@ static int update(void)
         }
     }
 
-    if(gui.actions.appClearConsole)
+    if(gui.actions.appClearConsole) {
+        gui.ConsoleText.lock();
         gui.ConsoleText.clear();
+        gui.ConsoleText.unlock();
+    }
 
     fs::path loadPath = "";
 

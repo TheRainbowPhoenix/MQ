@@ -254,7 +254,9 @@ void MessagesWindow::renderContents(mqMachine *omach)
 
     gui.actions.appClearConsole |= ImGui::Button("Clear");
 
+    gui.ConsoleText.lock();
     ImGui::AddRichTextFrame(gui.ConsoleText, gui.ConsoleView);
+    gui.ConsoleText.unlock();
 }
 
 void CPUWindow::renderContents(mqMachine *omach)
