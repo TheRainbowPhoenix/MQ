@@ -22,12 +22,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 
 mqMachine *mq_machine_create(void)
 {
     mqMachine *mach = calloc(1, sizeof *mach);
     mq_cpu_reset(&mach->cpu);
     mach->memory = mq_memory_create();
+
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&mach->lock_access, &attr);
+    pthread_mutex_init(&mach->lock_waiting, &attr);
+    pthread_mutexattr_destroy(&attr);
+    pthread_cond_init(&mach->cond_work_arrived, NULL);
     return mach;
 }
 
@@ -71,7 +80,55 @@ void mq_machine_destroy(mqMachine *mach)
         mq_display_destroy(mach->display);
     if(mach->keyboard)
         mq_keyboard_destroy(mach->keyboard);
+
+    pthread_cond_destroy(&mach->cond_work_arrived);
+    pthread_mutex_destroy(&mach->lock_waiting);
+    pthread_mutex_destroy(&mach->lock_access);
     free(mach);
+}
+
+void mq_machine_lock(mqMachine *mach)
+{
+    TracyCZoneN(ctx, "lock machine", true)
+    // printf("[%d] Acquiring lock_waiting\n", gettid());
+    pthread_mutex_lock(&mach->lock_waiting);
+    // printf("[%d] Got lock_waiting, acquiring lock_access\n", gettid());
+    pthread_mutex_lock(&mach->lock_access);
+    // printf("[%d] Got lock_access, unlocking lock_waiting\n", gettid());
+    pthread_mutex_unlock(&mach->lock_waiting);
+    TracyCZoneEnd(ctx)
+}
+
+void mq_machine_unlock(mqMachine *mach)
+{
+    // printf("[%d] Unlocking lock_access\n", gettid());
+    pthread_mutex_unlock(&mach->lock_access);
+}
+
+void mq_machine_unlockAndWaitForWork(mqMachine *mach)
+{
+    bool hasWork = mach->cyclesPending < 0 || mach->cyclesPending > 0;
+    if(hasWork) {
+        // printf("[%d] Unlocking lock_access\n", gettid());
+        pthread_mutex_unlock(&mach->lock_access);
+    }
+    else {
+        // printf("[%d] Waiting for cond (& unlocking lock_access)\n", gettid());
+        pthread_cond_wait(&mach->cond_work_arrived, &mach->lock_access);
+        pthread_mutex_unlock(&mach->lock_access);
+    }
+}
+
+void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending)
+{
+    /* Signal the condition variable for new work if we went from zero to a
+       non-zero value. */
+    bool hadWorkBefore = (mach->cyclesPending != 0);
+    bool hasWorkNow = (cyclesPending != 0);
+
+    mach->cyclesPending = cyclesPending;
+    if(!hadWorkBefore && hasWorkNow)
+        pthread_cond_signal(&mach->cond_work_arrived);
 }
 
 mqMachine *mq_machine_createObserver(mqMachine const *mach)
@@ -225,14 +282,19 @@ bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
 
 int mq_machine_cycle(mqMachine *mach, int cycles)
 {
-    if(!mach->initialized)
+    // printf("mq_machine_cycle: %d / %d\n", cycles, mach->cyclesPending);
+    if(!mach->initialized || mach->stuck || !mach->cyclesPending)
         return 0;
+    /* Cap to the currently-set number of cycles */
+    if(mach->cyclesPending > 0 && mach->cyclesPending < cycles)
+        cycles = mach->cyclesPending;
 
     int cyclesRequested = cycles;
     int cyclesRemaining = cycles;
     mq_timer_unfreeze();
 
     // TODO[machine]: Host system sleep for long high-level internal pauses
+    // TODO[machine]: Not counting cycles during sleep hampers determinism
     if(mach->internallyPaused) {
         int ticks = mq_timer_update(&mach->internalPauseTimer);
 
@@ -259,23 +321,33 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(mach->internallyBlocked)
         goto endRun;
 
-    while(cyclesRemaining > 4) {
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
-        mq_cpu_cycle(mach, &mach->cpu);
+    /* Unroll a bit for speed, but only if the process timers are aligned,
+       because we want to invoke processes at deterministic times and it has to
+       be exactly the cycle we're checiking. */
+    if(mach->processTimer % 4 == 0 && mach->processFrequency % 4 == 0) {
+        while(cyclesRemaining > 4) {
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
+            if(MQ_UNLIKELY(mach->stuck))
+                break;
+            mq_cpu_cycle(mach, &mach->cpu);
 
-        if((mach->processTimer -= 4) <= 0)
-            mq_machine_runProcesses(mach, mach->processFrequency);
-        cyclesRemaining -= 4;
+            if((mach->processTimer -= 4) <= 0)
+                mq_machine_runProcesses(mach, mach->processFrequency);
+            cyclesRemaining -= 4;
+        }
+    }
+    else if(cyclesRemaining > 100) {
+        mq_log(MQ_LOG_WARNING,
+            "slow run of %d cycles due to misaligned background processes",
+            cyclesRemaining);
     }
 
     while(cyclesRemaining > 0) {
@@ -290,7 +362,10 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
 endRun:
     mq_timer_freeze();
-    return (cyclesRequested - cyclesRemaining);
+    int cyclesElapsed = (cyclesRequested - cyclesRemaining);
+    if(mach->cyclesPending >= 0)
+        mach->cyclesPending -= cyclesElapsed;
+    return cyclesElapsed;
 }
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)

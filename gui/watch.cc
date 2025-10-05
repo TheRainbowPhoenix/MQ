@@ -1,11 +1,14 @@
+#include <azur/defs.h>
+#include "watch.h"
+#include <mq/mq.h>
+
+#if AZUR_PLATFORM_LINUX
+
 #include <errno.h>
 #include <sys/inotify.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <string.h>
-
-#include "watch.h"
-#include <mq/mq.h>
 
 bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
 {
@@ -34,7 +37,6 @@ bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
             pathname, strerror(errno));
         return false;
     }
-    info->addin_path = pathname;
     return true;
 }
 
@@ -86,6 +88,28 @@ bool watch_quit(struct WatchInfo *info)
     }
     info->fd = -1;
     info->wd = -1;
-    info->addin_path = "";
     return true;
 }
+
+#else
+
+bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
+{
+    (void)info;
+    (void)pathname;
+    return false;
+}
+
+enum WatchEvent watch_poll(struct WatchInfo *info)
+{
+    (void)info;
+    return MQ_WATCH_EVT_NONE;
+}
+
+bool watch_quit(struct WatchInfo *info)
+{
+    (void)info;
+    return true;
+}
+
+#endif /* AZUR_PLATFORM_LINUX */

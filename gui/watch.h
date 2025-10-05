@@ -8,7 +8,6 @@
 struct WatchInfo {
     int fd;
     int wd;
-    std::filesystem::path addin_path;
 };
 enum WatchEvent {
     MQ_WATCH_EVT_NONE    = 0,

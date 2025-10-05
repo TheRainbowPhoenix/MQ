@@ -1,15 +1,260 @@
-#include "windows.h"
+#include "gui.h"
 #include "imgui-util.h"
-#include <stdio.h>
+#include <imgui_internal.h>
 #include <mq/modules/mmu.h>
 #include <mq/modules/intc.h>
 #include <mq/system/heap.h>
+#include <stdio.h>
 
-void MQWindow::render(mqMachine *omach)
+void GUIWindow::render(mqMachine *omach)
 {
-    if(ImGui::Begin(m_title, 0, m_flags))
+    char title[256];
+    snprintf(title, sizeof title, "%s##%s.%d", m_title, m_title, m_instanceId);
+
+    if(ImGui::Begin(title, 0, m_flags))
         renderContents(omach);
     ImGui::End();
+}
+
+void GUI::Render(mqMachine *omach)
+{
+    bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
+    actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
+        ImGuiInputFlags_RouteGlobal);
+
+    if(ImGui::BeginCustomMenuBar()) {
+        if(ImGui::BeginCustomMenuChild("##menutitle", {30,0}, {1,4})) {
+            ImGui::MoveCursorScreenPos({0, 3});
+            ImGui::PushFont(fontBold);
+            ImGui::Text("MQ");
+            ImGui::PopFont();
+        }
+        ImGui::EndCustomMenuChild();
+
+        if(ImGui::BeginCustomMenu("File")) {
+            open |= ImGui::MenuItem("Open add-in...", "Ctrl+O");
+            actions.appQuit |= ImGui::MenuItem("Quit", "Ctrl+Q");
+        }
+        ImGui::EndCustomMenu();
+        if(ImGui::BeginCustomMenu("Machine")) {
+            if(ImGui::MenuItem("Reset to blank FX add-in"))
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
+            if(ImGui::MenuItem("Reset to blank CG add-in"))
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
+            actions.machineGenerateMonoFrame |=
+                ImGui::MenuItem("Generate B&W frame");
+            actions.machineGenerateRGBFrame |=
+                ImGui::MenuItem("Generate RGB frame");
+        }
+        ImGui::EndCustomMenu();
+
+        if(ImGui::BeginCustomMenuChild("##menutools", {0,0}, {1,4})) {
+            ImGui::CustomMenuSeparator();
+            ImGui::SameLine(0, 6);
+
+            ImGui::BeginDisabled(!omach->initialized);
+            bool paused = omach->cyclesPending == 0;
+            bool stuck = omach->stuck;
+
+            if(paused && ImGui::IconButton(0, "Run"))
+                actions.machineSetPendingCycles = -1;
+            if(!paused && ImGui::IconButton(1, "Pause"))
+                actions.machineSetPendingCycles = 0;
+            ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(2, "Step", !paused))
+                actions.machineSetPendingCycles = 1;
+            ImGui::SameLine(0, 6);
+            ImGui::EndDisabled();
+
+            ImGui::MoveCursorScreenPos({0, 3});
+            if(!omach->initialized)
+                ImGui::TextDisabled("Not initialized");
+            else if(stuck)
+                ImGui::TextColored({1,.3,.3,1}, "Stuck!");
+            else
+                ImGui::Text(paused ? "Paused" : "Running...");
+        }
+        ImGui::EndCustomMenuChild();
+    }
+    ImGui::EndCustomMenuBar();
+
+    /* On native builds tihs fills inputFile instantly, while on emscripten
+       this fills it asynchronously and we'll get it in a future frame */
+    if(open)
+        openFileDialog(&inputFile);
+
+    auto dock = ImGui::DockSpaceOverViewport();
+
+    Windows.Display->render(omach);
+    Windows.Keyboard->render(omach);
+    Windows.Control->render(omach);
+    Windows.Messages->render(omach);
+    Windows.CPU->render(omach);
+    Windows.Interrupts->render(omach);
+    Windows.MemoryTree->render(omach);
+    Windows.MemoryBuffers->render(omach);
+    Windows.Heap->render(omach);
+    Windows.MMU->render(omach);
+    Windows.HexViewer->render(omach);
+
+    static bool first_frame = true;
+    if(first_frame)
+        gui.DockWindowsStyle1(gui.Windows, dock);
+    first_frame = false;
+
+    if(Windows.Control->showDemoWindow())
+        ImGui::ShowDemoWindow();
+}
+void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
+{
+    auto dock_left_top = ImGui::DockBuilderSplitNode(dock,
+        ImGuiDir_Left, 0.70, nullptr, &dock);
+    auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
+        ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
+    auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
+        ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
+    auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
+        dock_left_bottom,
+        ImGuiDir_Right, 0.48f, nullptr, &dock_left_bottom);
+    auto dock_right_bottom = ImGui::DockBuilderSplitNode(dock,
+        ImGuiDir_Down, 0.6f, nullptr, &dock);
+
+    auto DB = [&](GUIWindow &w, auto &dock){
+        ImGui::DockBuilderDockWindow(
+            (std::string(w.title()) + "##" +
+             std::string(w.title()) + ".-1").c_str(),
+            dock);
+    };
+    DB(*Windows.Display, dock);
+    DB(*Windows.Keyboard, dock_right_bottom);
+    DB(*Windows.Control, dock_left_top);
+    DB(*Windows.Messages, dock_left_top_right);
+    DB(*Windows.CPU, dock_left_top_right);
+    DB(*Windows.Interrupts, dock_left_top_right);
+    DB(*Windows.MemoryTree, dock_left_bottom);
+    DB(*Windows.MemoryBuffers, dock_left_bottom);
+    DB(*Windows.Heap, dock_left_bottom);
+    DB(*Windows.MMU, dock_left_bottom);
+    DB(*Windows.HexViewer, dock_left_bottom_right);
+    ImGui::DockBuilderFinish(dock);
+}
+
+void ControlWindow::renderContents(mqMachine *omach)
+{
+#ifndef AZUR_PLATFORM_EMSCRIPTEN
+    struct mallinfo2 mi = mallinfo2();
+    /* This info is not available with AddressSanitizer's wrapper's */
+    if(mi.arena || mi.hblkhd)
+        ImGui::Text("Memory allocated: %.1f MB heap + %.1f MB mmap\n",
+            (float)mi.arena / 1e6, (float)mi.hblkhd / 1e6);
+
+    // TODO: Better alternative on Linux:
+    // 1. Open /proc/self/status
+    // 2. Parse for VmRSS (Resident Set Size) and VmSwap (in swap)
+    // 3. VmRSS is divided in RssAnon (± heap), RssFile (fixed), RssShmem
+    // 4. For users, we're interested in VmRSS (+ VmSwap)
+    // 5. For debugging, we're interested in RssAnon (≈ mi.arena)
+    // Reference:
+    //   top(1), "Linux Memory Types"
+    // Or, for the proper programmatic interface:
+    // 1. Open /proc/self/statm
+    // 2. Read all numbers, multiplied by sysconf(_SC_PAGESIZE)
+    // 3. [size, resident, shared, text, _, data/stack, _]
+    //    * size is VmSize -> useless
+    //    * shared won't be used
+    //    * text is fixed
+    //    * data/stack counts unmapped, non-resident pages -> useless
+    // 4. Keep using mallinfo() for memory stats
+    // Reference:
+    //   proc_pid_statm(5)
+#endif
+
+    if(omach->initialized) {
+        ImGui::Text("Cycle:");
+        ImGui::SameLine();
+        if(ImGui::Button("1"))
+            gui.actions.machineSetPendingCycles = 1;
+        ImGui::SameLine();
+        if(ImGui::Button("10"))
+            gui.actions.machineSetPendingCycles = 10;
+        ImGui::SameLine();
+        if(ImGui::Button("100"))
+            gui.actions.machineSetPendingCycles = 100;
+        ImGui::SameLine();
+        if(ImGui::Button("1000"))
+            gui.actions.machineSetPendingCycles = 1000;
+        ImGui::SameLine();
+        if(ImGui::Button("10k"))
+            gui.actions.machineSetPendingCycles = 10000;
+    }
+    else {
+        ImGui::Text("Machine is not initialized.");
+    }
+    if(omach->stuck)
+        ImGui::Text("Machine is stuck!");
+
+    if(omach->cyclesPending > 0)
+        ImGui::Text("Cycles pending: %d", omach->cyclesPending);
+    else if(omach->cyclesPending == 0)
+        ImGui::Text("Paused");
+    else
+        ImGui::Text("Running...");
+
+    char str[256];
+    bool disabled = gui.current_program_path.empty();
+    char const *path = gui.current_program_path.c_str();
+
+    if(disabled)
+        ImGui::BeginDisabled();
+
+    if(gui.watch_enabled)
+        snprintf(str, sizeof str, "Watching input file: %s", path);
+    else if(!disabled)
+        snprintf(str, sizeof str, "Watch input file (%s)", path);
+    else
+        snprintf(str, sizeof str, "Watch input file");
+
+    if(ImGui::Checkbox2(str, &gui.watch_enabled))
+        gui.actions.fileUpdateWatch = gui.watch_enabled;
+    if(gui.watch_info.fd >= 0) {
+        ImGui::SameLine(0, 0);
+        ImGui::TextDisabled(" (%d.%d)",
+            gui.watch_info.fd, gui.watch_info.wd);
+    }
+    if(disabled)
+        ImGui::EndDisabled();
+
+    if(gui.workingFolderAddins.size() == 0)
+        ImGui::Text("(No add-ins in working folder)");
+    else
+        ImGui::Text("Reset and load:");
+
+    int spaceLeft = 0;
+    for(uint i = 0; i < gui.workingFolderAddins.size(); i++) {
+        char const *addin = gui.workingFolderAddins[i].c_str();
+        /* Check if we have enough space (32 for button + spacing) */
+        int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
+        if(spaceLeft < spaceNeeded)
+            spaceLeft = ImGui::GetContentRegionAvail().x;
+        else
+            ImGui::SameLine();
+
+        if(ImGui::Button(addin))
+            gui.actions.fileLoadPath = gui.workingFolderAddins[i];
+        spaceLeft -= spaceNeeded;
+    }
+
+    ImGui::Checkbox2("Show demo window", &m_showDemoWindow);
+}
+
+void MessagesWindow::renderContents(mqMachine *omach)
+{
+    (void)omach;
+
+    gui.actions.appClearConsole |= ImGui::Button("Clear");
+
+    ImGui::AddRichTextFrame(gui.ConsoleText, gui.ConsoleView);
 }
 
 void CPUWindow::renderContents(mqMachine *omach)
@@ -309,7 +554,6 @@ void MemoryTreeWindow::resetState()
 void MemoryBuffersWindow::renderContents(mqMachine *omach)
 {
     mqMemory *omem = omach->memory;
-    m_actionViewHex.disable();
 
     uint totalSize = 0;
     for(int i = 0; i < omem->bufferCount; i++)
@@ -331,11 +575,7 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
             ImGuiSelectableFlags_SpanAllColumns |
             ImGuiSelectableFlags_AllowOverlap)) {
         m_selectedBuffer = 0;
-        m_actionViewHex.buffer = NULL;
-        m_actionViewHex.offset = 0;
-        m_actionViewHex.size = 0xffffffff;
-        m_actionViewHex.address = 0;
-        m_actionViewHex.enable();
+        gui.actions.setViewHex(NULL, 0, 0xffffffff, 0);
     }
     ImGui::TableNextColumn();
     ImGui::Text("4 GiB");
@@ -376,11 +616,8 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
                 ImGuiSelectableFlags_AllowOverlap)) {
             m_selectedBuffer = i + 1;
             if(blockBuffer) {
-                m_actionViewHex.buffer = blockBuffer;
-                m_actionViewHex.offset = blockOffset;
-                m_actionViewHex.size = blockSize;
-                m_actionViewHex.address = blockAddress;
-                m_actionViewHex.enable();
+                gui.actions.setViewHex(
+                    blockBuffer, blockOffset, blockSize, blockAddress);
             }
         }
         ImGui::PopFont();
@@ -428,9 +665,9 @@ void MMUWindow::renderContents(mqMachine *omach)
         return;
     }
 
-    m_actionBind = ImGui::Button("Bind");
+    gui.actions.machineMMUBind |= ImGui::Button("Bind");
     ImGui::SameLine();
-    m_actionUnbind = ImGui::Button("Unbind");
+    gui.actions.machineMMUUnbind |= ImGui::Button("Unbind");
 
     if(ImGui::BeginTable("UTLB", 13,
             ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersOuter |
@@ -777,7 +1014,6 @@ void HexViewerWindow::viewBuffer(
 void HeapWindow::renderContents(mqMachine *omach)
 {
     (void)omach;
-    m_actionInitialize = false;
 
     // TODO: Heap should be attached to Casiowin module, not a global!
     u32 heapStart, heapEnd;
@@ -802,14 +1038,14 @@ void HeapWindow::renderContents(mqMachine *omach)
     }
     else {
         ImGui::Text("System heap is not initialized");
-        m_actionInitialize = ImGui::Button("Initialize");
+        gui.actions.machineSystemHeapInitialize |= ImGui::Button("Initialize");
     }
 }
 
 void DisplayWindow::render(mqMachine *omach)
 {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    MQWindow::render(omach);
+    GUIWindow::render(omach);
     ImGui::PopStyleVar();
 }
 

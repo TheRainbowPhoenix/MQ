@@ -24,6 +24,7 @@
 
 #ifdef __cplusplus
 # include "tracy/Tracy.hpp"
+# include "tracy/TracyC.h"
 #else
 # include "tracy/TracyC.h"
 #endif

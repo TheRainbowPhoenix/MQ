@@ -13,6 +13,7 @@
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
 #include <mq/interfaces/timer.h>
+#include <pthread.h>
 MQ_START_DEFS
 
 struct mqMemory;
@@ -26,6 +27,19 @@ struct mqMachine
 {
     mqCpu cpu;
     struct mqMemory *memory;
+
+    /* Mutex for access to the main structure. */
+    pthread_mutex_t lock_access;
+    /* Waiting room for lock_access. To get access, acquire lock_waiting, then
+       acquire lock_access, then release lock_access. This prevents the
+       emulation thread, which pretty much tries to acquire lock_access all the
+       time, from denying the UI thread to use it. The UI thread will acquire
+       lock_waiting while the emulation thread has lock_access but not
+       lock_waiting. */
+    pthread_mutex_t lock_waiting;
+    /* Condition variable triggered when the machine had no work and now has
+       work. This wakes the emulating up from sleep. Linked to lock_access. */
+    pthread_cond_t cond_work_arrived;
 
     /* Machine is initialized to a reasonable state. */
     bool initialized;
@@ -44,6 +58,10 @@ struct mqMachine
        syscall). Unlike internal pausing, this status does not expire
        automatically and must be cleared by blocking code. */
     bool internallyBlocked;
+
+    /* Number of cycles that the machine is scheduled to work for.
+       mq_machine_cycle() runs for up to that amount and subtracts it. */
+    int cyclesPending;
 
     /* Data from hardware modules; the array has size mq_module_count(). */
     void **modules;
@@ -73,6 +91,23 @@ typedef struct mqMachine mqMachine;
 mqMachine *mq_machine_create(void);
 void mq_machine_reset(mqMachine *mach);
 void mq_machine_destroy(mqMachine *mach);
+
+/* Acquire or release the lock to use the machine. This is needed for all
+   operations. Creating an observer must also be done while holding the lock,
+   but once the observer is created it can be used with the lock released.
+   (Some information, like memory contents, can be inaccurate in that case.) */
+void mq_machine_lock(mqMachine *mach);
+void mq_machine_unlock(mqMachine *mach);
+/* If there is more work to do, unlock the machine. Otherwise, unlock the
+   machine and wait on the condition variable (atomically). */
+void mq_machine_unlockAndWaitForWork(mqMachine *mach);
+
+/* Set the number of pending cycles. This controls the execution of the
+   machine. Setting 0 pauses it. Setting a negative number makes it run with no
+   limit. Setting a positive integer makes it run for that number of cycles.
+   (Given the concurrent nature of emulation, setting a finite number is only
+   really useful if the machine was previously paused.) */
+void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending);
 
 /* Observer functions for mqMachine. These functions make and destroy an
    "observer" copy of the machine with a snapshot of the metadata but no

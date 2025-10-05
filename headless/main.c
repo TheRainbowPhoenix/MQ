@@ -74,8 +74,11 @@ int main(int argc, char **argv)
         fatal(1, "could not load %s\n", addinFile);
     free(data);
 
-    printf("Waiting 1 billion cycles...\n");
-    mq_machine_cycle(mach, 1000*1000*1000);
+    printf("Waiting 1000 million cycles...\n");
+    int c = 1000*1000*1000;
+
+    mach->cyclesPending = c;
+    mq_machine_cycle(mach, c);
 
     mq_machine_destroy(mach);
     mq_quit();

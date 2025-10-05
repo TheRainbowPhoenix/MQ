@@ -17,6 +17,7 @@
 // TODO: Proper namespacing of fonts
 extern ImFont *fontSans;
 extern ImFont *fontMono;
+extern ImFont *fontBold;
 
 namespace ImGui {
 
