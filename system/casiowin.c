@@ -302,13 +302,11 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     else
         free(Casiowin);
 
-    mq_log(MQ_LOG_DEBUG, "casiowin setup!!");
     return ok;
 }
 
 bool mq_casiowin_initialize(mqMachine *mach)
 {
-    mq_log(MQ_LOG_DEBUG, "casiowin init!!");
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
     if(!Casiowin)
         return false;
