@@ -376,6 +376,13 @@ void update_machine(mqMachine *mach, bool startRunning)
         mq_mmu_unbind(mach);
         render_needed = std::max(render_needed, 1);
     }
+
+    if(mach->keyboard) {
+        for(auto [key, pressed]: gui.actions.physicalKeysAssigned)
+            mq_keyboard_setKeyPressed(mach->keyboard, key, pressed);
+        for(auto [keycode, pressed]: gui.actions.logicalKeysAssigned)
+            mq_keyboard_setKeycodePressed(mach->keyboard, keycode, pressed);
+    }
 }
 
 int *icon_rect_ids = NULL;
