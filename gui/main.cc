@@ -3,6 +3,7 @@
 #include "watch.h"
 
 #include <mq/mq.h>
+#include <mq/controller.h>
 #include <mq/machine.h>
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
@@ -39,67 +40,7 @@ ImFont *fontSans = nullptr;
 ImFont *fontMono = nullptr;
 ImFont *fontBold = nullptr;
 
-struct EmulationThread
-{
-    EmulationThread(mqMachine *mach): mach{mach} {}
-
-    /* Start the thread. (Nothing will happen until the machine gets work.) */
-    bool start();
-    /* Cancel the thread brutally */
-    void cancel();
-
-    pthread_t td;
-
-    /* Machine being run by the thread. Most of the time the thread will lock
-       it, except in short periods where the GUI gets it to prepare frames.
-       This field is a constant after creating the thread. */
-    mqMachine * const mach = nullptr;
-    /* Observer machine containing snapshots of the main machine's state, used
-       by the GUI and (mostly) independent from the emulation thread. This
-       pointer is managed by the GUI and not used by the emulation thread. */
-    mqMachine *omach = nullptr;
-
-private:
-    static void *run(void *userdata);
-};
-
-std::unique_ptr<EmulationThread> emu0;
-
-bool EmulationThread::start()
-{
-    int rc = pthread_create(&this->td, NULL, EmulationThread::run, this);
-    if(rc) {
-        mq_log(MQ_LOG_ERROR, "could not start thread: %s\n", strerror(rc));
-        return false;
-    }
-    return true;
-}
-
-void EmulationThread::cancel()
-{
-    pthread_cancel(this->td);
-}
-
-void *EmulationThread::run(void *userdata)
-{
-    EmulationThread *emu = static_cast<EmulationThread *>(userdata);
-    mqMachine *mach = emu->mach;
-
-    while(true) {
-        // printf("[Emu] Locking machine for work\n");
-        mq_machine_lock(mach);
-        // printf("[Emu] Locked machine\n");
-
-        int cycles = 20000;
-        mq_machine_cycle(emu->mach, cycles);
-
-        // printf("[Emu] Unlocking machine and waiting for work\n");
-        mq_machine_unlockAndWaitForWork(mach);
-        // printf("[Emu] Work has arrived!\n");
-    }
-
-    return nullptr;
-}
+mqController *emu0 = NULL;
 
 //============================================================================//
 
@@ -538,8 +479,11 @@ int main(int argc, char **argv)
     mq_init();
 
     mqMachine *mach = mq_machine_create();
-    emu0 = std::make_unique<EmulationThread>(mach);
-    emu0->start();
+    emu0 = mq_controller_create();
+    if(!emu0)
+        return 1;
+
+    mq_controller_startThread(emu0, mach);
 
     if(azur_init("MQ", 1500, 850) != 0)
         return 1;
@@ -571,17 +515,15 @@ int main(int argc, char **argv)
     find_cwd_addins(gui.workingFolderAddins);
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
-    emu0->cancel();
+    mq_controller_stopThread(emu0);
 
     gui.DGW.cleanup();
 
     watch_quit(&gui.watch_info);
 
     azur_quit();
-    if(mach) {
-        mq_machine_destroy(emu0->mach);
-        emu0.reset();
-    }
+    mq_controller_destroy(emu0);
+
     mq_quit();
     return rc;
 }
