@@ -1169,21 +1169,22 @@ void RecordWindow::renderContents(mqMachine *omach)
     }
 
     /* addin selected, but no record requested */
-    if(m_backend.status == MQ_RECORD_STATUS_UNINIT) {
+    mqRecord *backend = &gui.record_info;
+    if(backend->status == MQ_RECORD_STATUS_UNINIT) {
         mqRecordRequest request = {
             .frameRate = 50,
             .scale_factor = 2,
             .filename = "record.mp4",
         };
         if(ImGui::ButtonWSized("Start", w_button, false)) {
-            if(record_init(&m_backend, &request, omach) != 0) {
-                mq_log(MQ_LOG_ERROR, "%s", m_backend.error);
+            if(record_init(backend, &request, &gui.actions.display) != 0) {
+                mq_log(MQ_LOG_ERROR, "%s", backend->error);
             } else {
-                record_set_status(&m_backend, MQ_RECORD_STATUS_START);
+                record_set_status(backend, MQ_RECORD_STATUS_START);
                 if(omach->cyclesPending == 0)
                     gui.actions.machineSetPendingCycles = -1;
             }
-            record_show(&m_backend);
+            record_show(backend);
         }
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
         ImGui::ButtonWSized("Pause", w_button, true);
@@ -1200,44 +1201,44 @@ void RecordWindow::renderContents(mqMachine *omach)
     /* start/pause/stop button */
 
     if (omach->cyclesPending == 0)
-        record_set_status(&m_backend, MQ_RECORD_STATUS_PAUSED);
+        record_set_status(backend, MQ_RECORD_STATUS_PAUSED);
 
-    bool started = (m_backend.status != MQ_RECORD_STATUS_PAUSED);
-    bool paused = (m_backend.status != MQ_RECORD_STATUS_START);
+    bool started = (backend->status != MQ_RECORD_STATUS_PAUSED);
+    bool paused = (backend->status != MQ_RECORD_STATUS_START);
     if(ImGui::ButtonWSized("Continue", w_button, started))
-        record_set_status(&m_backend, MQ_RECORD_STATUS_START);
+        record_set_status(backend, MQ_RECORD_STATUS_START);
     ImGui::SameLine(0, style.ItemInnerSpacing.x);
     if(ImGui::ButtonWSized("Pause", w_button, paused))
-        record_set_status(&m_backend, MQ_RECORD_STATUS_PAUSED);
+        record_set_status(backend, MQ_RECORD_STATUS_PAUSED);
     ImGui::SameLine(0, style.ItemInnerSpacing.x);
     if(ImGui::ButtonWSized("Stop", w_button, false)) {
-        record_quit(&m_backend);
-        record_set_status(&m_backend, MQ_RECORD_STATUS_UNINIT);
+        record_quit(backend);
+        record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
     }
-    if(record_add_frame(&m_backend, omach) != 0)
-        mq_log(MQ_LOG_ERROR, "%s", m_backend.error);
+    if(record_add_frame(backend, &gui.actions.display) != 0)
+        mq_log(MQ_LOG_ERROR, "%s", backend->error);
 
     /* recording information */
 
     ImGui::Spacing();
     ImGui::TextDisabled(
         "Start time: %02d:%02d:%02d",
-        m_backend.stats.time_min,
-        m_backend.stats.time_sec,
-        m_backend.stats.time_ms
+        backend->stats.time_min,
+        backend->stats.time_sec,
+        backend->stats.time_ms
     );
-    ImGui::TextDisabled("Elapsed: %dms", m_backend.stats.total_ms);
-    ImGui::TextDisabled("Nb. frames: %d", m_backend.stats.iframe);
-    ImGui::TextDisabled("Nb. error: %d", m_backend.stats.nb_error);
-    ImGui::TextDisabled("Output: %s", m_backend.stats.pathname_out);
-    ImGui::TextDisabled("Status: %s", m_backend.stats.status);
+    ImGui::TextDisabled("Elapsed: %dms", backend->stats.total_ms);
+    ImGui::TextDisabled("Nb. frames: %d", backend->stats.iframe);
+    ImGui::TextDisabled("Nb. error: %d", backend->stats.nb_error);
+    ImGui::TextDisabled("Output: %s", backend->stats.pathname_out);
+    ImGui::TextDisabled("Status: %s", backend->stats.status);
 
     /* recording status */
 
     ImGui::Spacing();
-    if (m_backend.status == MQ_RECORD_STATUS_PAUSED) {
+    if (backend->status == MQ_RECORD_STATUS_PAUSED) {
         ImGui::TextCenteredColor("Paused", 0x00ffff);
-    } else if(m_backend.status == MQ_RECORD_STATUS_START) {
+    } else if(backend->status == MQ_RECORD_STATUS_START) {
         ImGui::TextCenteredColor("Recording", 0x00ff00);
     } else {
         ImGui::TextCenteredColor("Error", 0xff0000);
@@ -1246,8 +1247,9 @@ void RecordWindow::renderContents(mqMachine *omach)
 
 void RecordWindow::resetState()
 {
-    if(m_backend.status == MQ_RECORD_STATUS_START) {
+    mqRecord *backend = &gui.record_info;
+    if(backend->status == MQ_RECORD_STATUS_START) {
         mq_log(MQ_LOG_WARNING, "Record: stopping current recording");
-        record_quit(&m_backend);
+        record_quit(backend);
     }
 }

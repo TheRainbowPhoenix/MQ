@@ -328,6 +328,12 @@ static int _ffmpeg_frame_add(mqRecord *record, mqDisplay *display)
     if (display != NULL)
     {
         if(ffmpeg.width_in != display->width) {
+            mq_log(
+                MQ_LOG_ERROR,
+                "ffmpeg_frame_add: width %d != %d",
+                ffmpeg.width_in,
+                display->width
+            );
             return record_set_error(
                 record, -2,
                 "ffmpeg_frame_add: mq display has changed (width)"
@@ -543,16 +549,16 @@ int record_set_pathname(mqRecord *record, char const *pathname)
 int record_init(
     mqRecord *record,
     mqRecordRequest *request,
-    mqMachine *mach
+    mqDisplay *display
 ) {
     //fixme: assert record != NULL
-    if(mach == nullptr || !mach->initialized || mach->display == nullptr)
+    if(display == nullptr)
         return record_set_error(record, -99, "Machine not initialized");
     record_set_status(record, MQ_RECORD_STATUS_UNINIT);
     record_set_error(record, 0, nullptr);
     record_set_iframe(record, 0);
     record_set_pathname(record, request->filename);
-    int ret = _ffmpeg_init(record, request, mach->display);
+    int ret = _ffmpeg_init(record, request, display);
     if(ret < 0) {
         _ffmpeg_quit(record);
         return ret;
@@ -561,16 +567,16 @@ int record_init(
     return 0;
 }
 
-int record_add_frame(mqRecord *record, mqMachine *mach)
+int record_add_frame(mqRecord *record, mqDisplay *display)
 {
     //fixme: assert record != NULL
-    if(mach == nullptr || !mach->initialized || mach->display == nullptr)
+    if(display == nullptr)
         return record_set_error(record, -99, "Machine not initialized");
     if(record->status == MQ_RECORD_STATUS_UNINIT)
         return record_set_error(record, -99, "Record not initialized");
     if(record->status != MQ_RECORD_STATUS_START)
         return 0;
-    return _ffmpeg_frame_add(record, mach->display);
+    return _ffmpeg_frame_add(record, display);
 }
 
 void record_show(mqRecord *record)

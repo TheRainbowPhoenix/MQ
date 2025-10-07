@@ -7,6 +7,7 @@
 #include "texture.h"
 #include "util.h"
 #include "watch.h"
+#include "record.h"
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -51,6 +52,9 @@ struct GUIActions
     void setViewHex(mqMemoryBuffer *buffer, int offset, int size, u32 address) {
         viewHex = ViewHex { buffer, offset, size, address };
     }
+
+    /* current frame display information */
+    mqDisplay display;
 };
 
 /* Set of windows. Each window type can instanced on multiple machines. */
@@ -95,6 +99,14 @@ struct GUI
 
     /* Path of the currently-running program, "" if none. */
     std::filesystem::path current_program_path = "";
+
+    //=== Recording ==========================================================//
+
+    mqRecord record_info = {
+        .status = MQ_RECORD_STATUS_UNINIT,
+        .error = nullptr,
+        .stats = {0, 0, 0, 0, 0, 0},
+    };
 
     //=== Widgets and co. ====================================================//
 

@@ -4,7 +4,7 @@
 #define MQ_UI_RECORD_H
 
 #include <mq/defs.h>
-#include <mq/machine.h>
+#include <mq/interfaces/display.h>
 
 /* record internal status */
 enum mqRecordStatus {
@@ -44,11 +44,11 @@ typedef struct mqRecordRequest mqRecordRequest;
 int record_init(
     mqRecord *record,
     mqRecordRequest *request,
-    mqMachine *mach
+    mqDisplay *display
 );
 
 /* add a frame to the current video */
-int record_add_frame(mqRecord *record, mqMachine *mach);
+int record_add_frame(mqRecord *record, mqDisplay *display);
 
 /* debug record backend */
 void record_show(mqRecord *record);

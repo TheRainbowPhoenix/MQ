@@ -4,6 +4,7 @@
 #include "watch.h"
 
 #include <mq/mq.h>
+#include <mq/defs.h>
 #include <mq/machine.h>
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
@@ -167,40 +168,69 @@ static void render(void)
         // printf("[Main] Locked machine for render\n");
         emu0->omach = mq_machine_createObserver(mach);
 
-        if(mach->display && mach->display->dirty) {
-            mqDisplay *d = mach->display;
-            gui.displayTexture.bind();
-            if(d->format == MQ_DISPLAY_FORMAT_L8) {
-#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
-                gui.displayTexture.setFormat(GL_LUMINANCE, GL_UNSIGNED_BYTE,
-                                         d->width, d->height);
-#elif AZUR_GRAPHICS_OPENGL_3_3
-                gui.displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
-                                         d->width, d->height);
-#endif
-                gui.displayTexture.setData(d->data);
+        /* copy display information */
+        gui.actions.display.dirty = false;
+        if(mach->display) {
+            gui.actions.display.dirty = mach->display->dirty;
+            if(mach->display->dirty) {
+                gui.actions.display.format = mach->display->format;
+                gui.actions.display.width  = mach->display->width;
+                gui.actions.display.height = mach->display->height;
+                gui.actions.display.data = memdup(
+                    mach->display->data,
+                    mq_display_framebufferSize(mach->display)
+                );
+                mq_display_setDirty(mach->display, false);
+                render_needed = std::max(render_needed, 1);
             }
-            else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
-                gui.displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                                         d->width, d->height);
-                gui.displayTexture.setData(d->data);
-            }
-            else
-                printf("warning: display not updated, unknown format!\n");
-
-            gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
-            mq_display_setDirty(d, false);
-            render_needed = std::max(render_needed, 1);
         }
 
         // printf("[Main] Unlocking machine after render\n");
         mq_machine_unlock(mach);
         // printf("[Main] Unlocked machine after render\n");
+
     }
 
     if(!render_needed)
         return;
     render_needed--;
+
+    // printf("[Main] Generate display texture\n");
+    if(gui.actions.display.dirty) {
+        gui.displayTexture.bind();
+            if(gui.actions.display.format == MQ_DISPLAY_FORMAT_L8) {
+#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
+                gui.displayTexture.setFormat(
+                    GL_LUMINANCE,
+                    GL_UNSIGNED_BYTE,
+                    gui.actions.display.width,
+                    gui.actions.display.height
+                );
+#elif AZUR_GRAPHICS_OPENGL_3_3
+                gui.displayTexture.setFormat(
+                    GL_RED,
+                    GL_UNSIGNED_BYTE,
+                    gui.actions.display.width,
+                    gui.actions.display.height
+                );
+#endif
+            gui.displayTexture.setData(gui.actions.display.data);
+        }
+        else if(gui.actions.display.format == MQ_DISPLAY_FORMAT_RGB565) {
+            gui.displayTexture.setFormat(
+                    GL_RGB,
+                    GL_UNSIGNED_SHORT_5_6_5,
+                    gui.actions.display.width,
+                    gui.actions.display.height
+            );
+            gui.displayTexture.setData(gui.actions.display.data);
+        }
+        else {
+            printf("warning: display not updated, unknown format!\n");
+        }
+        gui.DGW.setInherentScale(
+            (gui.actions.display.width <= 128) ? 3 : 1);
+    }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -570,7 +600,7 @@ int main(int argc, char **argv)
 
     gui.DGW.cleanup();
 
-//    record_quit(&state.record);
+    record_quit(&gui.record_info);
     watch_quit(&gui.watch_info);
 
     azur_quit();

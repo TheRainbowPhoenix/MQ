@@ -279,14 +279,6 @@ public:
     RecordWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
     void resetState() override;
-
-private:
-    mqRecord m_backend = {
-        .status = MQ_RECORD_STATUS_UNINIT,
-        .error = nullptr,
-        .stats = {0, 0, 0, 0, 0, 0},
-    };
-
 };
 
 #endif /* MQ_UI_WINDOWS_H */
