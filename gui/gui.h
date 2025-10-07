@@ -3,173 +3,124 @@
 #ifndef MQ_UI_GUI_H
 #define MQ_UI_GUI_H
 
-#include "imgui-util.h"
-#include "shader.h"
+#include "windows.h"
 #include "texture.h"
-#include <mq/machine.h>
-#include <mq/memory.h>
+#include "util.h"
+#include "watch.h"
+#include <filesystem>
+#include <vector>
+#include <string>
+#include <optional>
 
-//=== Display window =========================================================//
+/* The GUI state and actions can be accessed globally. */
+struct GUI;
+extern struct GUI gui;
 
-/* 2D texture shader rendering subrectangles in quads. */
-
-struct ProgramTexture_Attributes {
-    vec2 vertex;      // Vertex location in OpenGL coordinate space
-    vec2 uv;          // Location within texture
-    float grayscale;  // 1.0 for grayscale mode (red is all channels)
-};
-
-struct ProgramTexture: public Shader<ProgramTexture_Attributes>
+/* All commands queued in render and executed in update. Resets every frame. */
+struct GUIActions
 {
-    void init();
-    void set_vertex_attributes() const override;
+    /* Close the entire application. */
+    bool appQuit = false;
+    /* Clear the message console. */
+    bool appClearConsole = false;
+    /* Toggle the demo window. */
+    bool appToggleDemoWindow = false;
 
-    /* Add a full texture of the specified size
-       TODO: This always uses texture #0
-       TODO: Specify sub-regions */
-    void add_texture(int x, int y, int width, int height, bool grayscale);
+    /* Replace currently-running program with this file. */
+    std::optional<fs::path> fileLoadPath;
+    /* Update the inotify watch on the currently-running add-in. */
+    bool fileUpdateWatch = false;
 
-    void add_subtexture(int x, int y, int width, int height,
-    float u, float v, float tw, float th, bool grayscale);
-};
+    /* Initialize machine with given initializeKind. */
+    std::optional<int> machineInitialize;
+    /* Set machine's pendingCycles count. */
+    std::optional<int> machineSetPendingCycles;
+    /* Generate a mono or RGB frame on the display. */
+    bool machineGenerateMonoFrame = false;
+    bool machineGenerateRGBFrame = false;
+    /* Set whether the MMU should be bound or unbound. */
+    bool machineMMUBind = false;
+    bool machineMMUUnbind = false;
+    /* Initialize the OS heap */
+    bool machineSystemHeapInitialize = false;
 
-/* Checkered background shader, rendering on full rectangles. */
-
-struct ProgramBackground_Attributes {
-    vec2 vertex;    // Vertex location
-};
-
-struct ProgramBackground: public Shader<ProgramBackground_Attributes>
-{
-    void init();
-    void set_vertex_attributes() const override;
-
-    /* Add the background at specified pixel coordinates */
-    void add_background(int x, int y, int w, int h);
-};
-
-class DisplayGlWindow: public ImGuiGlWindow
-{
-public:
-    void init(Texture const &texture);
-    void cleanup();
-
-    void render(ImDrawList const *, ImDrawCmd const *) override;
-    void AddWindow() override;
-
-    /* Marks the view as dirty when the layout changes or the view is panned/
-       zoomed by user interaction. */
-    void markViewDirty(bool resettle=false) {
-        m_needShaderUniformUpdate += resettle ? IMGUI_SETTLING_FRAMES : 1;
+    /* Set the hex editor to visualize a given region.
+       TODO: Why does this use a direct pointer into emulated structures? */
+    struct ViewHex { mqMemoryBuffer *buffer; int offset, size; u32 address; };
+    std::optional<ViewHex> viewHex;
+    void setViewHex(mqMemoryBuffer *buffer, int offset, int size, u32 address) {
+        viewHex = ViewHex { buffer, offset, size, address };
     }
-
-    /* View parameters. */
-    float viewX() const { return m_vx; }
-    float viewY() const { return m_vy; }
-    float viewScale() const { return m_vscale; }
-    float viewEffectiveScale() const { return m_vscale * m_inherentScale; }
-
-    /* View location for a global pixel position. */
-    ImVec2 viewLocation(int gx, int gy) const;
-
-    /* Get or set inherent scale, a scaling factor tied to the texture contents
-       that applies on top of standard view scale. This is to scale the 128x64
-       display more than the 396x224 by default without user interaction. */
-    void setInherentScale(float scale);
-    float inherentScale() const { return m_inherentScale; }
-
-private:
-    void updateShaderUniforms();
-
-    /* Flag to mark when the shader uniforms need to be updated. */
-    int m_needShaderUniformUpdate = IMGUI_SETTLING_FRAMES;
-
-    /* View settings. vx/vy are texture center relative to window center. */
-    float m_vx = 0.0f;
-    float m_vy = 0.0f;
-    float m_vscale = 1.0f;
-    float m_inherentScale = 1.0f;
-
-    /* Shaders used in the window (not shared) */
-    ProgramTexture shader_texture;
-    ProgramBackground shader_background;
-
-    /* Display texture */
-    Texture const *m_texture = nullptr;
 };
 
-//=== Memory window ==========================================================//
+/* Set of windows. Each window type can instanced on multiple machines. */
+struct GUIWindowSet
+{
+    std::unique_ptr<ControlWindow> Control;
+    std::unique_ptr<MessagesWindow> Messages;
+    std::unique_ptr<CPUWindow> CPU;
+    std::unique_ptr<InterruptsWindow> Interrupts;
+    std::unique_ptr<MemoryTreeWindow> MemoryTree;
+    std::unique_ptr<MemoryBuffersWindow> MemoryBuffers;
+    std::unique_ptr<MMUWindow> MMU;
+    std::unique_ptr<HeapWindow> Heap;
+    std::unique_ptr<HexViewerWindow> HexViewer;
+    std::unique_ptr<DisplayWindow> Display;
+    std::unique_ptr<KeyboardWindow> Keyboard;
+    std::unique_ptr<RecordWindow> Record;
 
-/* State retained from one frame to the next in the memory window. */
-struct MemoryWindowState {
-    /* Current selection */
-    int selectedChunk = -1;
-    int selectedPage = -1;
-    int selectedIO = -1;
-};
-/* Actions emitted from the memory window. */
-struct MemoryWindowAction {
-};
-
-MemoryWindowAction AddMemoryWindow(mqMachine *mach, MemoryWindowState &state);
-
-MemoryWindowAction AddMemoryWindowContents(
-    mqMachine *mach, MemoryWindowState &state);
-
-//=== Memory Buffers window ==================================================//
-
-struct MemoryBuffersWindowState {
-    int selectedBuffer = -1;
-};
-struct MemoryBuffersWindowAction {
-    enum class Type { MBWA_NONE, MBWA_VIEW_HEX };
-    Type type = Type::MBWA_NONE;
-    /* Region of buffer we want to visualize, and matching emulated address */
-    mqMemoryBuffer *buffer = NULL;
-    int offset = -1;
-    int size = -1;
-    u32 address = 0;
+    void resetState() {
+        MemoryTree->resetState();
+        MemoryBuffers->resetState();
+        HexViewer->resetState();
+        Record->resetState();
+    }
 };
 
-MemoryBuffersWindowAction AddMemoryBuffersWindow(
-    mqMachine *mach, MemoryBuffersWindowState &state);
+/* All dynamic UI data. The state doesn't consist only of the data directly in
+   this structure, windows have internal state too. */
+struct GUI
+{
+    struct GUIActions actions;
 
-MemoryBuffersWindowAction AddMemoryBuffersWindowContents(
-    mqMachine *mach, MemoryBuffersWindowState &state);
+    //=== Controlling files ==================================================//
 
-//=== MMU window =============================================================//
+    /* File that just got opened. Filled asynchronously by dialog */
+    struct OpenFileBuffer inputFile;
+    /* List of add-ins in CWD (detected at startup) */
+    std::vector<std::string> workingFolderAddins;
+    /* File tracked for reloading the currently active file when changed */
+    bool watch_enabled = false;
+    struct WatchInfo watch_info = { .fd = -1, .wd = -1 };
 
-/* Actions emitted from the MMU window. */
-struct MMUWindowAction {
-    enum class Type { MMUWA_NONE, MMUWA_UNBIND, MMUWA_BIND };
-    Type type = Type::MMUWA_NONE;
+    /* Path of the currently-running program, "" if none. */
+    std::filesystem::path current_program_path = "";
+
+    //=== Widgets and co. ====================================================//
+
+    /* OpenGL logic for the display window */
+    DisplayGlWindow DGW;
+    /* OpenGL texture for the mono or RGB display */
+    Texture displayTexture;
+
+    /* Hexadecimal viewer widget */
+    ImGui::HexViewer HV;
+    /* Message console data where logs are collected */
+    RichText::Text ConsoleText;
+    /* Message console view showing the data above */
+    RichText::View ConsoleView;
+
+    /* Machine-related windows.
+       TODO: map<int, GUIWindowSet> + move some of the widgets in */
+    // std::map<int, GUIWindowSet> WindowSets;
+    GUIWindowSet Windows;
+
+    void Render(mqMachine *omach);
+    void DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock);
+
+    //=== Miscellaneous ======================================================//
+
+    /* ... add here ... */
 };
-
-MMUWindowAction AddMMUWindow(mqMachine *mach);
-MMUWindowAction AddMMUWindowContents(mqMachine *mach);
-
-//=== Interrupts window ======================================================//
-
-void AddInterruptsWindow(mqMachine *mach);
-void AddInterruptsWindowContents(mqMachine *mach);
-
-//=== Hex Viewer window ======================================================//
-
-struct HexViewerWindowState {
-    /* If empty, we're viewing the entire memory. Otherwise we're viewing just
-       that particular buffer. */
-    std::string currentBufferName = "";
-    /* Offset and size of the buffer section we're looking into. This keeps
-       track of whether we're looking at the full buffer or just a subset. */
-   int currentBufferOffset = 0;
-   int currentBufferSize = 0;
-};
-struct HexViewerWindowAction {
-};
-
-HexViewerWindowAction AddHexViewerWindow(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV);
-HexViewerWindowAction AddHexViewerWindowContents(
-    mqMachine *mach, HexViewerWindowState &state, ImGui::HexViewer &HV);
 
 #endif /* MQ_UI_GUI_H */

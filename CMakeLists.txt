@@ -104,12 +104,12 @@ add_custom_command(
 
 set(GUI_SOURCES
   gui/display-window.cc
+  gui/gui.cc
   gui/imgui-util.cc
   gui/main.cc
   gui/stb.cc
   gui/texture.cc
   gui/util.cc
-  gui/windows.cc
   gui/record.cc
   gui/watch.cc)
 
@@ -129,14 +129,14 @@ azur_embed_assets(
 
 add_executable(mq ${LIB_SOURCES} ${GUI_SOURCES} "${AUTOGEN}/gui-assets.cc")
 target_compile_options(mq PRIVATE
-  ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith)
+  ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith -pthread)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
-target_link_options(mq PRIVATE ${MQ_OPT_LD})
 target_link_libraries(mq PRIVATE -lswscale -lavutil -lavformat -lavcodec)
+target_link_options(mq PRIVATE ${MQ_OPT_LD} -pthread)
 
 # TODO: Use Tracy's CMake integration just to make things a bit cleaner.
 if(MQ_PROFILING_TRACY)
@@ -173,7 +173,7 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   endforeach()
   set_target_properties(mq PROPERTIES LINK_DEPENDS "${ASSETS_ABSOLUTE}")
 
-  azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html")
+  azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html" "mq.js")
 endif()
 
 #=== Headless executable ======================================================#

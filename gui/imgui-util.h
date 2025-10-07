@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include <pthread.h>
 
 /* Number of frames we expect Dear ImGui to need to settle its layout after
    starting for the first time, resizing windows, etc. */
@@ -17,6 +18,7 @@
 // TODO: Proper namespacing of fonts
 extern ImFont *fontSans;
 extern ImFont *fontMono;
+extern ImFont *fontBold;
 
 namespace ImGui {
 
@@ -167,7 +169,8 @@ struct HexViewer {
     int InputType;
 
     /* [Function]: Read function */
-    bool (*ReadByte)(u64 address, u8 *value) = nullptr;
+    bool (*ReadByte)(u64 address, u8 *value, void *userdata) = nullptr;
+    void *ReadByteUserdata = nullptr;
 
     /* [Buffer]: Input buffer and its size */
     void *BufferPointer = nullptr;
@@ -398,6 +401,13 @@ struct Text {
 
     /* Initiale state has zero capacity. */
     Text();
+    ~Text();
+
+    /* Multi-threaded locks */
+    mutable pthread_mutex_t mutex;
+    void lock() const;
+    void unlock() const;
+
     /* Initialize with specified storage limits. */
     // TODO: In principle, could be called multiple times. Not coded yet.
     bool alloc(int backlogSize, int maximumLineCount);

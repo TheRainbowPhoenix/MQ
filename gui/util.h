@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include <mq/defs.h>
+#include <mq/interfaces/display.h>
 #include <filesystem>
 #include <string>
 
@@ -34,3 +35,7 @@ void openFileDialog(OpenFileBuffer *ofb);
 /* String describing a memory size, using kiB/MiB suffixes if the size is a
    perfect multiple of 2^10 or 2^20. With shortSuffix, appends k/M. */
 std::string memorySizeString(uint size, bool shortSuffix=false);
+
+/* Generate random frames on the given display. */
+bool generateMonoFrame(mqDisplay *display);
+bool generateRGBFrame(mqDisplay *display);
