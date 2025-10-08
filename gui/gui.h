@@ -55,6 +55,12 @@ struct GUIActions
 
     /* current frame display information */
     mqDisplay display;
+
+    /* Keys whose status should be reassigned this frame, identified by key
+       numbers from the keyboard structure */
+    std::map<uint, bool> physicalKeysAssigned;
+    /* Keys whose status should be reassigned, identified by logical keycode */
+    std::map<mqKeyboardKeycode, bool> logicalKeysAssigned;
 };
 
 /* Set of windows. Each window type can instanced on multiple machines. */

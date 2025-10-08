@@ -451,11 +451,10 @@ static int _ffmpeg_quit(mqRecord *record)
                 break;
             }
         }
+        if(ffmpeg.format_ctx != NULL)
+            av_write_trailer(ffmpeg.format_ctx);
     }
 
-    // Writing the end of the file.
-    if(ffmpeg.format_ctx != NULL)
-        av_write_trailer(ffmpeg.format_ctx);
 
     // Closing the file.
     if(ffmpeg.format_out != NULL && ffmpeg.format_ctx != NULL) {

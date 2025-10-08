@@ -41,6 +41,7 @@ else()
 endif()
 
 set(LIB_SOURCES
+  core/controller.c
   core/cpu.c
   core/defs.c
   core/hooks.c

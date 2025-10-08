@@ -1080,7 +1080,6 @@ void DisplayWindow::renderContents(mqMachine *omach)
     ImGui::PopClipRect();
 }
 
-// TODO: Keyboard window shouldn't access keyboard directly!
 void KeyboardWindow::renderContents(mqMachine *omach)
 {
     mqKeyboard *kbd = omach->keyboard;
@@ -1105,37 +1104,37 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         }
         else
             ImGui::Button(str, {w, h});
-        mq_keyboard_setKeyPressed(kbd, i, ImGui::IsItemActive());
+        gui.actions.physicalKeysAssigned[i] = ImGui::IsItemActive();
     }
 
-    if(kbd && ImGui::IsWindowFocused()) {
+    if(ImGui::IsWindowFocused()) {
         ImGui::SetNextFrameWantCaptureKeyboard(true);
         if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_LEFT, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_LEFT] = true;
         if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_UP, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_UP] = true;
         if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_DOWN, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_DOWN] = true;
         if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_RIGHT, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_RIGHT] = true;
         if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_SHIFT, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_SHIFT] = true;
         if(ImGui::IsKeyDown(ImGuiKey_Enter))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXE, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_EXE] = true;
         if(ImGui::IsKeyDown(ImGuiKey_Escape))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_EXIT, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_EXIT] = true;
         if(ImGui::IsKeyDown(ImGuiKey_F1))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F1, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_F1] = true;
         if(ImGui::IsKeyDown(ImGuiKey_F2))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F2, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_F2] = true;
         if(ImGui::IsKeyDown(ImGuiKey_F3))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F3, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_F3] = true;
         if(ImGui::IsKeyDown(ImGuiKey_F4))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F4, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_F4] = true;
         if(ImGui::IsKeyDown(ImGuiKey_F5))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F5, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_F5] = true;
         if(ImGui::IsKeyDown(ImGuiKey_F6))
-            mq_keyboard_setKeycodePressed(kbd, MQ_KEY_F6, true);
+            gui.actions.logicalKeysAssigned[MQ_KEY_F6] = true;
     }
 }
 
@@ -1215,8 +1214,10 @@ void RecordWindow::renderContents(mqMachine *omach)
         record_quit(backend);
         record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
     }
-    if(record_add_frame(backend, &gui.actions.display) != 0)
-        mq_log(MQ_LOG_ERROR, "%s", backend->error);
+    if(gui.actions.display.dirty) {
+        if(record_add_frame(backend, &gui.actions.display) != 0)
+            mq_log(MQ_LOG_ERROR, "%s", backend->error);
+    }
 
     /* recording information */
 
