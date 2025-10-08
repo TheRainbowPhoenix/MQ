@@ -13,6 +13,9 @@ static void *thread_run(void *userdata)
     mqController *controller = userdata;
     mqMachine *mach = controller->mach;
 
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
     while(true) {
         // printf("[Emu] Locking machine for work\n");
         mq_machine_lock(mach);
