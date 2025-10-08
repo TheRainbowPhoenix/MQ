@@ -118,6 +118,13 @@ public:
     /* Window title */
     char const *title() const { return m_title; }
     void setTitle(char const *title) { m_title = title ? title : ""; }
+    std::string uniqueTitle() const {
+        return (
+            std::string(title()) + "##" +
+            std::string(title()) + "." +
+            std::to_string(m_instanceId)
+        );
+    }
 
 private:
     int m_instanceId = -1;

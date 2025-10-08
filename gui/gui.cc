@@ -8,10 +8,7 @@
 
 void GUIWindow::render(mqMachine *omach)
 {
-    char title[256];
-    snprintf(title, sizeof title, "%s##%s.%d", m_title, m_title, m_instanceId);
-
-    if(ImGui::Begin(title, 0, m_flags))
+    if(ImGui::Begin(uniqueTitle().c_str(), 0, m_flags))
         renderContents(omach);
     ImGui::End();
 }
@@ -122,10 +119,7 @@ void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
         ImGuiDir_Down, 0.6f, nullptr, &dock);
 
     auto DB = [&](GUIWindow &w, auto &dock){
-        ImGui::DockBuilderDockWindow(
-            (std::string(w.title()) + "##" +
-             std::string(w.title()) + ".-1").c_str(),
-            dock);
+        ImGui::DockBuilderDockWindow(w.uniqueTitle().c_str(), dock);
     };
     DB(*Windows.Display, dock);
     DB(*Windows.Keyboard, dock_right_bottom);
@@ -139,6 +133,14 @@ void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
     DB(*Windows.Heap, dock_left_bottom);
     DB(*Windows.MMU, dock_left_bottom);
     DB(*Windows.HexViewer, dock_left_bottom_right);
+
+    ImGui::SetWindowFocus(Windows.Control->uniqueTitle().c_str());
+    ImGui::SetWindowFocus(Windows.Messages->uniqueTitle().c_str());
+    ImGui::SetWindowFocus(Windows.MemoryTree->uniqueTitle().c_str());
+    ImGui::SetWindowFocus(Windows.Keyboard->uniqueTitle().c_str());
+    ImGui::SetWindowFocus(Windows.Display->uniqueTitle().c_str());
+    ImGui::SetWindowFocus(Windows.HexViewer->uniqueTitle().c_str());
+
     ImGui::DockBuilderFinish(dock);
 }
 
@@ -1213,10 +1215,11 @@ void RecordWindow::renderContents(mqMachine *omach)
     if(ImGui::ButtonWSized("Stop", w_button, false)) {
         record_quit(backend);
         record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
-    }
-    if(gui.actions.display.dirty) {
-        if(record_add_frame(backend, &gui.actions.display) != 0)
+    } else {
+        if(gui.actions.display.dirty) {
+            if(record_add_frame(backend, &gui.actions.display) != 0)
             mq_log(MQ_LOG_ERROR, "%s", backend->error);
+        }
     }
 
     /* recording information */
