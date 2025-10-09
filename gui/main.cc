@@ -112,11 +112,11 @@ static void render(void)
         /* copy display information */
         gui.actions.display.dirty = false;
         if(mach->display) {
-            gui.actions.display.dirty = mach->display->dirty;
+            gui.actions.display.dirty  = mach->display->dirty;
+            gui.actions.display.format = mach->display->format;
+            gui.actions.display.width  = mach->display->width;
+            gui.actions.display.height = mach->display->height;
             if(mach->display->dirty) {
-                gui.actions.display.format = mach->display->format;
-                gui.actions.display.width  = mach->display->width;
-                gui.actions.display.height = mach->display->height;
                 gui.actions.display.data = memdup(
                     mach->display->data,
                     mq_display_framebufferSize(mach->display)

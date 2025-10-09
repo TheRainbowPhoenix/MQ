@@ -254,6 +254,33 @@ void CustomMenuSeparator()
     ImGui::Dummy(ImVec2(1, 1));
 }
 
+void HelpMarker(char const *title, char const *desc)
+{
+    float available_x = ImGui::GetContentRegionAvail().x;
+    float title_width = ImGui::CalcTextSize(title).x;
+    ImGui::SameLine(available_x - title_width);
+    ImGui::TextDisabled(title);
+    if(ImGui::BeginItemTooltip()) {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+void ComboAnon(int id, int *index, const char *selector[], bool disabled)
+{
+    int size = 0;
+    while(selector[size] != nullptr)
+        size += 1;
+    if(disabled)
+        ImGui::BeginDisabled();
+    ImGui::Combo(
+        ("##combo" + std::to_string(id)).c_str(), index, selector, size);
+    if(disabled)
+        ImGui::EndDisabled();
+}
+
 } /* namespace ImGui */
 
 //============================================================================//

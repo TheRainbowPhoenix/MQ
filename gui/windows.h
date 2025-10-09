@@ -279,6 +279,7 @@ public:
 //=== Record =================================================================//
 
 #include "record.h"
+#include <sys/stat.h>
 
 class RecordWindow: public GUIWindow
 {
@@ -286,6 +287,32 @@ public:
     RecordWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
     void resetState() override;
+
+    mqRecordRequest request();
+    uint scale() const {
+        return (m_record_scale == 3) ? 8 : (unsigned)m_record_scale + 2;
+    }
+    std::string &filename();
+    bool filenameExists() {
+        struct stat buffer;
+        return (stat(filename().c_str(), &buffer) == 0);
+    }
+
+    //move me
+    void replace_all(
+        std::string &text,
+        std::string const &toReplace,
+        std::string const &replaceWith
+    ) const;
+
+private:
+    char m_record_filename_format[128] = "mq_%ADDIN%_%TIME%";
+    std::string m_record_filename = "";
+    int m_record_scale = 0;
+    int m_record_encoder = 0;
+    int m_record_start_opt = 0;
+    int m_record_reset_opt = 0;
+    bool m_dirty = true;
 };
 
 #endif /* MQ_UI_WINDOWS_H */

@@ -520,6 +520,14 @@ int record_set_status(mqRecord *record, mqRecordStatus status)
         record->status = status;
         record->stats.status = "not initialized";
         return 0;
+    case MQ_RECORD_STATUS_INIT:
+        record->status = status;
+        record->stats.status = "initialization...";
+        return 0;
+    case MQ_RECORD_STATUS_INIT_DELAY:
+        record->status = status;
+        record->stats.status = "initialization (delay)...";
+        return 0;
     case MQ_RECORD_STATUS_START:
         record->status = status;
         record->stats.status = "recording...";
@@ -553,6 +561,7 @@ int record_init(
     //fixme: assert record != NULL
     if(display == nullptr)
         return record_set_error(record, -99, "Machine not initialized");
+    mq_log(MQ_LOG_DEBUG, "filename == %s", request->filename);
     record_set_status(record, MQ_RECORD_STATUS_UNINIT);
     record_set_error(record, 0, nullptr);
     record_set_iframe(record, 0);

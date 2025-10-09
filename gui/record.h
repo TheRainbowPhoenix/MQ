@@ -8,9 +8,11 @@
 
 /* record internal status */
 enum mqRecordStatus {
-    MQ_RECORD_STATUS_UNINIT = 0,
-    MQ_RECORD_STATUS_START = 1,
-    MQ_RECORD_STATUS_PAUSED = 2,
+    MQ_RECORD_STATUS_UNINIT     = 0,
+    MQ_RECORD_STATUS_INIT       = 1,
+    MQ_RECORD_STATUS_INIT_DELAY = 2,
+    MQ_RECORD_STATUS_START      = 3,
+    MQ_RECORD_STATUS_PAUSED     = 4,
 };
 
 /* record information */

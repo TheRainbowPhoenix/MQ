@@ -65,6 +65,13 @@ bool Checkbox2(Args... args) {
     return b;
 }
 
+/* Help mark tooltips */
+void HelpMarker(const char *title, const char* desc);
+
+/* anonym combo */
+void ComboAnon(
+    int id, int *index, const char *selector[], bool disabled);
+
 } /* namespace ImGui */
 
 void ImGui_LoadMQStyle(ImGuiStyle &style);
