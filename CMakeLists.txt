@@ -109,7 +109,6 @@ set(GUI_SOURCES
   gui/imgui-util.cc
   gui/main.cc
   gui/stb.cc
-  gui/texture.cc
   gui/util.cc
   gui/watch.cc)
 

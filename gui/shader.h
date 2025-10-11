@@ -33,12 +33,12 @@ struct Shader
     void set_uniform(char const *name, float f);
     void set_uniform(char const *name, float f1, float f2);
     void set_uniform(char const *name, float f1, float f2, float f3);
-    void set_uniform(char const *name, vec2 const &v2);
-    void set_uniform(char const *name, vec3 const &v3);
-    void set_uniform(char const *name, vec4 const &v4);
-    void set_uniform(char const *name, mat2 const &m2);
-    void set_uniform(char const *name, mat3 const &m3);
-    void set_uniform(char const *name, mat4 const &m4);
+    void set_uniform(char const *name, glm::vec2 const &v2);
+    void set_uniform(char const *name, glm::vec3 const &v3);
+    void set_uniform(char const *name, glm::vec4 const &v4);
+    void set_uniform(char const *name, glm::mat2 const &m2);
+    void set_uniform(char const *name, glm::mat3 const &m3);
+    void set_uniform(char const *name, glm::mat4 const &m4);
 
     /* Program ID */
     GLuint prog = 0;
@@ -125,39 +125,39 @@ void Shader<T>::set_uniform(char const *name, float f1, float f2, float f3)
 }
 
 template<typename T>
-void Shader<T>::set_uniform(char const *name, vec2 const &v2)
+void Shader<T>::set_uniform(char const *name, glm::vec2 const &v2)
 {
     glUniform2fv(glGetUniformLocation(this->prog, name), 1, &v2[0]);
 }
 
 template<typename T>
-void Shader<T>::set_uniform(char const *name, vec3 const &v3)
+void Shader<T>::set_uniform(char const *name, glm::vec3 const &v3)
 {
     glUniform3fv(glGetUniformLocation(this->prog, name), 1, &v3[0]);
 }
 
 template<typename T>
-void Shader<T>::set_uniform(char const *name, vec4 const &v4)
+void Shader<T>::set_uniform(char const *name, glm::vec4 const &v4)
 {
     glUniform4fv(glGetUniformLocation(this->prog, name), 1, &v4[0]);
 }
 
 template<typename T>
-void Shader<T>::set_uniform(char const *name, mat2 const &m2)
+void Shader<T>::set_uniform(char const *name, glm::mat2 const &m2)
 {
     glUniformMatrix2fv(glGetUniformLocation(this->prog, name), 1, GL_FALSE,
         &m2[0][0]);
 }
 
 template<typename T>
-void Shader<T>::set_uniform(char const *name, mat3 const &m3)
+void Shader<T>::set_uniform(char const *name, glm::mat3 const &m3)
 {
     glUniformMatrix3fv(glGetUniformLocation(this->prog, name), 1, GL_FALSE,
         &m3[0][0]);
 }
 
 template<typename T>
-void Shader<T>::set_uniform(char const *name, mat4 const &m4)
+void Shader<T>::set_uniform(char const *name, glm::mat4 const &m4)
 {
     glUniformMatrix4fv(glGetUniformLocation(this->prog, name), 1, GL_FALSE,
         &m4[0][0]);

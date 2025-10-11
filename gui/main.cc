@@ -109,21 +109,16 @@ static void render(void)
 
         if(mach->display && mach->display->dirty) {
             mqDisplay *d = mach->display;
-            gui.displayTexture.bind();
+            gui.displayTexture->bind();
             if(d->format == MQ_DISPLAY_FORMAT_L8) {
-#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
-                gui.displayTexture.setFormat(GL_LUMINANCE, GL_UNSIGNED_BYTE,
-                                         d->width, d->height);
-#elif AZUR_GRAPHICS_OPENGL_3_3
-                gui.displayTexture.setFormat(GL_RED, GL_UNSIGNED_BYTE,
-                                         d->width, d->height);
-#endif
-                gui.displayTexture.setData(d->data);
+                gui.displayTexture->setFormat(GL_R8, d->width, d->height);
+                gui.displayTexture->loadData(
+                    d->data, GL_RED, GL_UNSIGNED_BYTE, d->width, 0);
             }
             else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
-                gui.displayTexture.setFormat(GL_RGB, GL_UNSIGNED_SHORT_5_6_5,
-                                         d->width, d->height);
-                gui.displayTexture.setData(d->data);
+                gui.displayTexture->setFormat(GL_RGB565, d->width, d->height);
+                gui.displayTexture->loadData(
+                    d->data, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, d->width, 0);
             }
             else
                 printf("warning: display not updated, unknown format!\n");
@@ -492,8 +487,8 @@ int main(int argc, char **argv)
 
     srand(clock());
 
-    gui.displayTexture.init(GL_TEXTURE_2D);
-    gui.DGW.init(gui.displayTexture);
+    gui.DGW.init();
+    gui.displayTexture = &gui.DGW.texture();
 
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
