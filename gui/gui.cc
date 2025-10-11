@@ -1168,7 +1168,7 @@ void RecordWindow::replace_all(
     text.swap(buf);
 }
 
-std::string &RecordWindow::filename()
+std::string &RecordWindow::filename(std::string const &ext)
 {
     m_record_filename = std::string(m_record_filename_format);
     auto t = std::time(nullptr);
@@ -1177,15 +1177,15 @@ std::string &RecordWindow::filename()
     oss << std::put_time(&tm, "%Y%d%m%H%M%S");
     replace_all(m_record_filename, "%ADDIN%", gui.current_program_path.stem());
     replace_all(m_record_filename, "%TIME%", oss.str());
-    m_record_filename += ".mp4";
+    m_record_filename += ext;
     return m_record_filename;
 }
-mqRecordRequest RecordWindow::request()
+mqRecordRequest RecordWindow::request(std::string const &ext)
 {
     mqRecordRequest request = {
         .frameRate    = 60,
         .scale_factor = scale(),
-        .filename     = filename().c_str()
+        .filename     = filename(ext).c_str()
     };
     return request;
 }
@@ -1198,6 +1198,9 @@ void RecordWindow::renderContents(mqMachine *omach)
     bool uninit = !omach->initialized;
     bool record_started = gui.record_info.status != MQ_RECORD_STATUS_UNINIT;
     bool disabled = uninit || record_started;
+
+    mqRecord *backend = &gui.record_info;
+    mqDisplay *display = &gui.actions.display;
 
     /* common section */
     {
@@ -1264,12 +1267,14 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::Spacing();
         if(uninit) {
             ImGui::TextCenteredColor("No addin selected", 0xff0000);
-        } else if(filenameExists()) {
-            auto warning = (
-                "\"" + filename() + "\" already exists (will be overwritten)"
-            );
-            ImGui::TextCenteredColor(warning.c_str(), 0xffbf00);
-        } else {
+        }
+        // else if(filenameExists()) {
+        //     auto warning = (
+        //         "\"" + filename() + "\" already exists (will be overwritten)"
+        //     );
+        //     ImGui::TextCenteredColor(warning.c_str(), 0xffbf00);
+        // }
+        else {
             ImGui::Spacing();
         }
     }
@@ -1283,7 +1288,10 @@ void RecordWindow::renderContents(mqMachine *omach)
             "the generated image in the COMMON section above"
         );
         ImGui::Spacing();
-        ImGui::ButtonWSized("Take Screenshot", -1, uninit);
+        if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
+            mqRecordRequest _request = request(".png");
+            record_screenshot(backend, &_request, display);
+        }
     }
 
     ImGui::Spacing();
@@ -1374,9 +1382,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         }
 
         /* delayed initialisation */
-        mqRecord *backend = &gui.record_info;
-        mqDisplay *display = &gui.actions.display;
-        mqRecordRequest request = this->request();
+        mqRecordRequest request = this->request(".mp4");
         if(backend->status == MQ_RECORD_STATUS_INIT) {
             if(record_init(backend, &request, display) != 0) {
                 record_set_status(backend, MQ_RECORD_STATUS_UNINIT);

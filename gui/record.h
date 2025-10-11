@@ -42,6 +42,13 @@ typedef struct mqRecordRequest mqRecordRequest;
 
 //=== Record API ============================================================//
 
+/* take a screenshot */
+int record_screenshot(
+    mqRecord *record,
+    mqRecordRequest *request,
+    mqDisplay *display
+);
+
 /* initialize the record backend */
 int record_init(
     mqRecord *record,

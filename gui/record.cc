@@ -10,6 +10,8 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavutil/dict.h>
 #include <libavutil/opt.h>
+
+#include <stb_image_write.h>
 }
 
 #include <mq/defs.h>
@@ -489,7 +491,6 @@ static int _ffmpeg_quit(mqRecord *record)
 
 //=== Record setter =========================================================//
 
-
 int record_set_iframe(mqRecord *record, uint iframe)
 {
     //fixme: assert record != NULL
@@ -551,7 +552,63 @@ int record_set_pathname(mqRecord *record, char const *pathname)
     return 0;
 }
 
-//=== Record interface ======================================================//
+//=== Record interface =======================================================//
+
+int record_screenshot(
+    mqRecord *record,
+    mqRecordRequest *request,
+    mqDisplay *display
+) {
+    if(request == nullptr || display == nullptr)
+        return record_set_error(record, -99, "Arguments error");
+    mq_log(MQ_LOG_DEBUG, "try to create a screenshot...");
+    int i = 0;
+    int comp = 3;
+    size_t r_width = display->width * request->scale_factor;
+    size_t r_height = display->height * request->scale_factor;
+    u8 *vram_data = (u8*)malloc((r_width * comp) * r_height);
+    if(!vram_data)
+        return record_set_error(record, -1, "screenshot: image alloc fail");
+    mq_log(MQ_LOG_DEBUG, "- convert data...");
+    if(display->format == MQ_DISPLAY_FORMAT_L8) {
+        u8 *data = (u8*)display->data;
+        for (size_t y = 0 ; y < r_height ; y++) {
+            for (size_t x = 0 ; x < r_width ; x++) {
+                size_t src_y = y / request->scale_factor;
+                size_t src_x = x / request->scale_factor;
+                vram_data[i] = data[(display->width*src_y) + src_x];
+                i += 1;
+            }
+        }
+        comp = 1;
+    }
+    else {
+        u16 *data = (u16*)display->data;
+        for (size_t y = 0 ; y < r_height ; y++) {
+            for (size_t x = 0 ; x < r_width ; x++) {
+                size_t src_y = y / request->scale_factor;
+                size_t src_x = x / request->scale_factor;
+                u16 color = data[(display->width*src_y) + src_x];
+                vram_data[(i * 3) + 0] = ((color >> 11) & 0b011111) << 3;
+                vram_data[(i * 3) + 1] = ((color >> 5)  & 0b111111) << 2;
+                vram_data[(i * 3) + 2] = ((color >> 0)  & 0b011111) << 3;
+                i += 1;
+            }
+        }
+    }
+    mq_log(MQ_LOG_DEBUG, "screenshot: exported at \"%s\"", request->filename);
+    stbi_write_png(
+        request->filename,
+        r_width,
+        r_height,
+        comp,
+        vram_data,
+        0
+    );
+    mq_log(MQ_LOG_DEBUG, "try to create a screenshot...SUCCESS");
+    free(vram_data);
+    return 0;
+}
 
 int record_init(
     mqRecord *record,
@@ -559,8 +616,8 @@ int record_init(
     mqDisplay *display
 ) {
     //fixme: assert record != NULL
-    if(display == nullptr)
-        return record_set_error(record, -99, "Machine not initialized");
+    if(request == nullptr || display == nullptr)
+        return record_set_error(record, -99, "Arguments error");
     mq_log(MQ_LOG_DEBUG, "filename == %s", request->filename);
     record_set_status(record, MQ_RECORD_STATUS_UNINIT);
     record_set_error(record, 0, nullptr);
@@ -586,6 +643,7 @@ int record_add_frame(mqRecord *record, mqDisplay *display)
         return 0;
     return _ffmpeg_frame_add(record, display);
 }
+
 
 void record_show(mqRecord *record)
 {

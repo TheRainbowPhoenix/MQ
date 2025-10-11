@@ -288,14 +288,17 @@ public:
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
-    mqRecordRequest request();
+    mqRecordRequest request(std::string const &ext);
     uint scale() const {
         return (m_record_scale == 3) ? 8 : (unsigned)m_record_scale + 2;
     }
-    std::string &filename();
+    std::string &filename(std::string const &ext);
     bool filenameExists() {
         struct stat buffer;
-        return (stat(filename().c_str(), &buffer) == 0);
+        return (
+            stat(filename(".png").c_str(), &buffer) == 0 ||
+            stat(filename(".mp4").c_str(), &buffer) == 0
+        );
     }
 
     //move me
