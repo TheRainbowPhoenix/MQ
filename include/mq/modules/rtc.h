@@ -48,7 +48,7 @@ struct mqRTC {
 typedef struct mqRTC mqRTC;
 
 /* Setup the RTC module for a given machine. */
-bool mq_rtc_setup(mqMachine *mach, int initializeKind);
+bool mq_rtc_setup(mqMachine *mach);
 
 /* Get the RTC module for a machine, NULL if there is none. */
 mqRTC *mq_rtc_get(mqMachine *mach);

@@ -129,7 +129,7 @@ typedef struct mqINTC mqINTC;
 typedef struct mqINTC_InterruptInfo mqINTC_InterruptInfo;
 
 /* Setup the INTC module for a given machine. */
-bool mq_intc_setup(mqMachine *mach, int initializeKind);
+bool mq_intc_setup(mqMachine *mach);
 
 /* Get the INTC module for a machine, NULL if there is none. */
 mqINTC *mq_intc_get(mqMachine *mach);

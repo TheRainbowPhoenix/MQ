@@ -136,8 +136,6 @@ enum {
 
 void mq_cpu_reset(mqCpu *cpu);
 
-/* Initialize the CPU state for the given emulation scenario. */
-void mq_cpu_initialize(mqCpu *cpu, int initializeKind);
 /* Setup module IO for the CPU's internal mechanisms. */
 bool mq_cpu_setup(mqCpu *cpu, struct mqMemory *mem);
 

@@ -163,13 +163,15 @@ static void open_addin(std::string const &path, void *data, long size)
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+        mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(emu0->mach, data, size);
     }
     else {
@@ -207,7 +209,6 @@ static int update(void)
     }
 
     fs::path loadPath = "";
-
     if(gui.watch_enabled) {
         enum WatchEvent event;
         while((event = watch_poll(&gui.watch_info)) != MQ_WATCH_EVT_NONE) {

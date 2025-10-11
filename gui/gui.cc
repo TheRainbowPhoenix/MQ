@@ -38,9 +38,9 @@ void GUI::Render(mqMachine *omach)
         ImGui::EndCustomMenu();
         if(ImGui::BeginCustomMenu("Machine")) {
             if(ImGui::MenuItem("Reset to blank FX add-in"))
-                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_FX;
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
             if(ImGui::MenuItem("Reset to blank CG add-in"))
-                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_CG;
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
             actions.machineGenerateMonoFrame |=
                 ImGui::MenuItem("Generate B&W frame");
             actions.machineGenerateRGBFrame |=

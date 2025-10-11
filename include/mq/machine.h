@@ -117,10 +117,16 @@ mqMachine *mq_machine_createObserver(mqMachine const *mach);
 void mq_machine_destroyObserver(mqMachine *omach);
 
 enum {
-    MQ_MACHINE_INITIALIZE_ADDIN_FX,
-    MQ_MACHINE_INITIALIZE_ADDIN_CG,
+    MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX,
+    MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG,
+};
+enum {
+    MQ_MACHINE_INITIALIZE_ADDIN,
+    //MQ_MACHINE_INITIALIZE_POWERON_RESET,
+    //MQ_MACHINE_INITIALIZE_MANUAL_RESET,
 };
 
+void mq_machine_setupHardware(mqMachine *mach, int hardwareKind);
 void mq_machine_initialize(mqMachine *mach, int initializeKind);
 
 bool mq_machine_load_g1a(mqMachine *mach, void *data, long size);
