@@ -219,6 +219,7 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
 
     if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX) {
         mq_cpu_setup(&mach->cpu, mach->memory);
+        mq_mmu_setup(mach);
 
         mq_machine_setupOnChipMemory_sh4aldsp(mach);
 
@@ -235,8 +236,14 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
     }
     else if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG) {
         mq_cpu_setup(&mach->cpu, mach->memory);
+        mq_mmu_setup(mach);
 
         mq_machine_setupOnChipMemory_sh4aldsp(mach);
+
+        /* Additional RAM not used by OS */
+        void *eram = mq_memory_allocBuffer(mach->memory, "ERAM", 2 << 20);
+        mq_memory_createBlock(mach->memory, 0x8c200000, 2 << 20, eram);
+        mq_memory_createBlock(mach->memory, 0xac200000, 2 << 20, eram);
 
         mach->display = mq_display_create();
         mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_RGB565, 396, 224);

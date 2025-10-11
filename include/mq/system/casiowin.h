@@ -43,7 +43,7 @@ enum mqCasiowin_Version {
    addresses are set in P1. */
 struct mqCasiowin_OSInfo {
     /* OS series */
-    int OSSerie;
+    int OSSeries;
     /* OS base and footer addresses */
     u32 OSBaseAddress;
     u32 OSFooterAddress;
@@ -129,7 +129,7 @@ typedef struct mqCasiowin mqCasiowin;
 bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version);
 
 /* initialize CASIOWIN interface (e.g set registers' default value) */
-bool mq_casiowin_initialize(mqMachine *mach);
+void mq_casiowin_initialize(mqMachine *mach);
 
 /* Get the CASIOWIN module for a machine, NULL if there's none. */
 mqCasiowin *mq_casiowin_get(mqMachine *mach);

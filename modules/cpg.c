@@ -18,6 +18,11 @@ static void inithook(void)
 }
 MQ_HOOK_REGISTER(init, inithook)
 
+mqCPG *mq_cpg_get(mqMachine *mach)
+{
+    return mach->modules ? mach->modules[moduleID] : NULL;
+}
+
 static void write_FRQCR(struct mqCPG *CPG, u32 value)
 {
     CPG->FRQCR = value & 0xbff0ff0f;
@@ -109,11 +114,6 @@ bool mq_cpg_setup(mqMachine *mach)
     else
         free(CPG);
     return ok;
-}
-
-mqCPG *mq_cpg_get(mqMachine *mach)
-{
-    return mach->modules ? mach->modules[moduleID] : NULL;
 }
 
 static void mq_cpg_cleanup(mqMachine *mach)

@@ -49,7 +49,7 @@ static int keymap_fx[7 * 12] = {
 };
 
 static struct mqCasiowin_OSInfo OSInfo_FX205 = {
-    .OSSerie                = MQ_CASIOWIN_SERIES_FX,
+    .OSSeries               = MQ_CASIOWIN_SERIES_FX,
     .OSBaseAddress          = 0x80010000,
     .OSFooterAddress        = 0x8024ff18,
     .versionString          = "02.05.0000",
@@ -75,7 +75,7 @@ static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .dataVramCount          = 4,
 };
 static struct mqCasiowin_OSInfo OSInfo_CG380 = {
-    .OSSerie                = MQ_CASIOWIN_SERIES_CG,
+    .OSSeries               = MQ_CASIOWIN_SERIES_CG,
     .OSBaseAddress          = 0x80020000,
     .OSFooterAddress        = 0x80b5ffe0,
     .versionString          = "03.80.0000",
@@ -160,30 +160,6 @@ static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin, void *buffer)
     }
 }
 
-static void setupCPU(mqMachine *mach, const mqCasiowin_OSInfo *info)
-{
-    mach->cpu.CPUOPM = 0x00000320;
-
-    /* Export some of the data to other components for optimization purposes */
-    mach->cpu.syscallHandler = info->syscallStubAddress;
-
-    /* Set the stack pointer to be P1 instead of MMU, as the OS does */
-    mach->cpu.r[15] = info->uramAddress + info->uramSize;
-
-    /* Series-specific CPU configuration */
-    if(info->OSSerie == MQ_CASIOWIN_SERIES_FX) {
-        mach->cpu.spRegs[SH_SR] = 0x40000000; // MD=1
-        mach->cpu.r[4] = 0; // isAppli
-        mach->cpu.r[5] = 0; // optNum
-        mach->cpu.pc = 0x00300200;
-    } else if(info->OSSerie == MQ_CASIOWIN_SERIES_CG) {
-        mach->cpu.spRegs[SH_SR] = 0x40000000; // MD=1
-        mach->cpu.r[4] = 0; // isAppli
-        mach->cpu.r[5] = 0; // optNum
-        mach->cpu.pc = 0x00300000;
-    }
-}
-
 bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
 {
     mqCasiowin_OSInfo const *info = mq_casiowin_getOSInfo(version);
@@ -252,15 +228,15 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     u32 addinSize = info->addinSize;
     u32 addinAddr = info->addinAddress;
     void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", addinSize);
-    ok = !mq_memory_createBlock(mach->memory, addinAddr, addinSize, addin);
+    ok &= mq_memory_createBlock(mach->memory, addinAddr, addinSize, addin);
 
     /* User RAM area */
     u32 uramSize = info->uramSize;
     u32 uramP1 = info->uramAddress;
     u32 uramP2 = (uramP1 & 0x1fffffff) | 0xa0000000;
     void *uram = mq_memory_allocBuffer(mach->memory, "URAM", uramSize);
-    ok = mq_memory_createBlock(mach->memory, uramP1, uramSize, uram);
-    ok = mq_memory_createBlock(mach->memory, uramP2, uramSize, uram);
+    ok &= mq_memory_createBlock(mach->memory, uramP1, uramSize, uram);
+    ok &= mq_memory_createBlock(mach->memory, uramP2, uramSize, uram);
 
     /* system Stack, used only for other device than fx */
     if(info->systemStackAddress != 0x00000000) {
@@ -268,34 +244,9 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
         u32 ostkP1 = info->systemStackAddress;
         u32 ostkP2 = (ostkP1 & 0x1fffffff) | 0xa0000000;
         void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", ostkSize);
-        ok = mq_memory_createBlock(mach->memory, ostkP1, ostkSize, ostk);
-        ok = mq_memory_createBlock(mach->memory, ostkP2, ostkSize, ostk);
+        ok &= mq_memory_createBlock(mach->memory, ostkP1, ostkSize, ostk);
+        ok &= mq_memory_createBlock(mach->memory, ostkP2, ostkSize, ostk);
     }
-
-    /* additional RAM, if available */
-    if(info->eramAddress != 0x00000000) {
-        u32 eramSize = info->eramSize;
-        u32 eramP1 = info->eramAddress;
-        u32 eramP2 = (eramP1 & 0x1fffffff) | 0xa0000000;
-        void *eram = mq_memory_allocBuffer(mach->memory, "ERAM", eramSize);
-        ok = mq_memory_createBlock(mach->memory, eramP1, eramSize, eram);
-        ok = mq_memory_createBlock(mach->memory, eramP2, eramSize, eram);
-    }
-
-    // TODO[casiowin]: Handle the NULL page with MMU so it shows up in TLB
-    // TODO[casiowin]: Use more realistic address
-    mq_mmu_setup(mach);
-    if(info->OSSerie == MQ_CASIOWIN_SERIES_FX) {
-        mq_mmu_map(mach, 0x00300000, info->addinAddress, 0, 0x10000, 8);
-        mq_mmu_map(mach, 0x08100000, info->uramAddress, 55,  0x1000, 8);
-    } else if(info->OSSerie == MQ_CASIOWIN_SERIES_CG) {
-        mq_mmu_map(mach, 0x00300000, info->addinAddress, 0, 0x100000, 2);
-        mq_mmu_map(mach, 0x08100000, info->uramAddress, 55,  0x10000, 8);
-    }
-    mq_mmu_bind(mach);
-
-    /* CPU intialisation */
-    setupCPU(mach, info);
 
     if(ok)
         mach->modules[moduleID] = Casiowin;
@@ -305,12 +256,31 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     return ok;
 }
 
-bool mq_casiowin_initialize(mqMachine *mach)
+void mq_casiowin_initialize(mqMachine *mach)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
-    if(!Casiowin)
-        return false;
-    if(Casiowin->info->OSSerie == MQ_CASIOWIN_SERIES_FX) {
+    mqCasiowin_OSInfo const *info = Casiowin->info;
+
+    mach->cpu.CPUOPM = 0x00000320;
+
+    /* Export some of the data to other components for optimization purposes */
+    mach->cpu.syscallHandler = info->syscallStubAddress;
+
+    /* Set the stack pointer to be P1 instead of MMU, as the OS does */
+    mach->cpu.r[15] = info->uramAddress + info->uramSize;
+
+    // TODO[casiowin]: Handle the NULL page with MMU so it shows up in TLB
+
+    if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_FX) {
+        mach->cpu.spRegs[SH_SR] = 0x40000000; // MD=1
+        mach->cpu.r[4] = 0; // isAppli
+        mach->cpu.r[5] = 0; // optNum
+        mach->cpu.pc = 0x00300200;
+
+        mq_mmu_map(mach, 0x00300000, info->addinAddress, 0, 0x10000, 8);
+        mq_mmu_map(mach, 0x08100000, info->uramAddress, 55,  0x1000, 8);
+        mq_mmu_bind(mach);
+
         /* CPG
          * - fixed Graph35+E configuration (OS 02.05) */
         mqCPG *CPG = mq_cpg_get(mach);
@@ -357,7 +327,17 @@ bool mq_casiowin_initialize(mqMachine *mach)
         RTC->RDAYCNT    = 0x01;
         RTC->RMONCNT    = 0x11;
         RTC->RYRCNT     = 0x2010;
-    } else if(Casiowin->info->OSSerie == MQ_CASIOWIN_SERIES_CG) {
+    }
+    else if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_CG) {
+        mach->cpu.spRegs[SH_SR] = 0x40000000; // MD=1
+        mach->cpu.r[4] = 0; // isAppli
+        mach->cpu.r[5] = 0; // optNum
+        mach->cpu.pc = 0x00300000;
+
+        mq_mmu_map(mach, 0x00300000, info->addinAddress, 0, 0x100000, 2);
+        mq_mmu_map(mach, 0x08100000, info->uramAddress, 55,  0x10000, 8);
+        mq_mmu_bind(mach);
+
         /* CPG
          * - fixed fx-CG 50 configuration (from OS 3.80) */
         mqCPG *CPG = mq_cpg_get(mach);
@@ -401,7 +381,6 @@ bool mq_casiowin_initialize(mqMachine *mach)
         RTC->RMONCNT    = 0x11;
         RTC->RYRCNT     = 0x2010;
     }
-    return true;
 }
 
 static void mq_casiowin_cleanup(mqMachine *mach)
