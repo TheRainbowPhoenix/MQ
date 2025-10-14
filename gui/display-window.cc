@@ -1,5 +1,53 @@
 #include "windows.h"
-#include <azur/config.h>
+#include <azur/resources.h>
+#include <azur/log.h>
+
+namespace azur::gl {
+
+bool Buffer::init()
+{
+    glGenBuffers(1, m_id.get());
+    return true;
+}
+
+void Buffer::reset()
+{
+    glDeleteBuffers(1, m_id.get());
+    m_id = 0;
+}
+
+void Buffer::bind() const
+{
+    glBindBuffer(m_target, m_id);
+}
+
+void Buffer::alloc(void const *data, size_t size, GLenum usage)
+{
+    glBufferData(m_target, size, data, usage);
+    m_gpuSize = size;
+}
+
+void Buffer::load(size_t offset, void const *data, size_t size)
+{
+    if(offset + size > m_gpuSize) {
+        azlog(ERROR, "Loading %zu bytes at offset %zu into a buffer of "
+            "size %zu (%zu + %zu > %zu)",
+            size, offset, m_gpuSize, offset, size, m_gpuSize);
+    }
+    glBufferSubData(m_target, offset, size, data);
+}
+
+void Buffer::assign(void const *data, size_t size, GLenum usage)
+{
+    /* If the size of the VBO is too small or much larger than needed, resize
+       it; otherwise, simply swap the data without reallocating */
+    if(m_gpuSize < size || m_gpuSize > size * 2)
+        alloc(data, size, usage);
+    else
+        load(0, data, size);
+}
+
+} /* namespace azur::gl */
 
 //=== Display window =========================================================//
 
@@ -24,8 +72,8 @@ void DisplayGlWindow::init()
 
 void DisplayGlWindow::cleanup(void)
 {
-    shader_texture.cleanup();
-    shader_background.cleanup();
+    shader_texture.reset();
+    shader_background.reset();
     m_texture.reset();
 }
 
@@ -62,26 +110,31 @@ void DisplayGlWindow::updateShaderUniforms()
     glm::mat3 tr_pixel2gl = windowToOpenGLMatrix();
     glm::mat3 tr_world2gl = tr_pixel2gl * tr_world2pixel;
 
-    glUseProgram(shader_texture.prog);
-    shader_texture.set_uniform("u_transform", tr_world2gl);
+    shader_texture.useProgram();
+    shader_texture.setUniform("u_transform", tr_world2gl);
 
-    glUseProgram(shader_background.prog);
-    shader_background.set_uniform("u_pixel2gl", tr_pixel2gl);
-    shader_background.set_uniform("u_view", m_vx, m_vy, esc);
+    shader_background.useProgram();
+    shader_background.setUniform("u_pixel2gl", tr_pixel2gl);
+
+    shader_background.setUniform("u_view",
+        glm::vec3(m_vx - width() / 2 / esc,
+                  m_vy - height() / 2 / esc, esc));
 }
 
 void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
 {
+    // TODO: shader uniforms just before rendering for less context swtiches?
     if(m_needShaderUniformUpdate > 0) {
         updateShaderUniforms();
         m_needShaderUniformUpdate--;
     }
 
-    shader_texture.vertices.clear();
-    shader_background.vertices.clear();
+    shader_texture.clear();
+    shader_background.clear();
 
     /* Draw background */
-    shader_background.add_background(0, 0, width(), height());
+    shader_background.addBackground({0, 0, width(), height()});
+    shader_background.useProgram();
     shader_background.draw();
 
     if(m_texture.isValid()) {
@@ -98,11 +151,11 @@ void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
         float v0 = 0.25 / sh / esc;
         float tw = w / sw;
         float th = h / sh;
-        shader_texture.add_subtexture(
-            -w/2, -h/2, w, h,
-            u0, v0, tw, th,
-            m_texture.format() == GL_R8);
+        shader_texture.addTexture(
+            {-w/2, -h/2, w, h},
+            {u0, v0, tw, th});
 
+        shader_texture.useProgram();
         m_texture.bind();
         shader_texture.draw();
     }
@@ -154,103 +207,104 @@ void DisplayGlWindow::AddWindow()
 
 //=== 2D texture shader ======================================================//
 
-void ProgramTexture::init()
+bool ShaderTexture::init()
 {
-    Shader::init();
-    glBindVertexArray(this->vao);
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glEnableVertexAttribArray(2);
+    if(!azur::gl::Program::init() || !m_vbo.init())
+        return false;
 
-    // TODO: Better way to access Azur's internal shaders
-    extern char const *azur_glsl__vs_tex2d;
-    extern char const *azur_glsl__fs_tex2d;
+    glGenVertexArrays(1, &m_vao);
 
-    this->prog = azur::gl::loadProgramSources("<built-in tex2d>",
-        GL_VERTEX_SHADER,   azur_glsl__vs_tex2d,
-        GL_FRAGMENT_SHADER, azur_glsl__fs_tex2d,
-        0);
+    setName("texture");
+    addPrelude(GL_VERTEX_SHADER);
+    addSourceFile(GL_VERTEX_SHADER, "@azur:glsl/vs_tex2d.glsl");
+    addPrelude(GL_FRAGMENT_SHADER);
+    addSourceFile(GL_FRAGMENT_SHADER, "@azur:glsl/fs_tex2d.glsl");
+    /* Attribute locations are already given in GLSL code */
+    if(!compile() || !link())
+        return false;
+
+    glBindVertexArray(m_vao);
+    m_vbo.bind();
+    bindVertexAttribute(&VA::vertex, 0);
+    bindVertexAttribute(&VA::uv, 1);
+    return true;
 }
 
-void ProgramTexture::set_vertex_attributes() const
+void ShaderTexture::reset()
 {
-    glVertexAttribPointer(glGetAttribLocation(this->prog, "a_vertex"),
-        2, GL_FLOAT, GL_FALSE,
-        sizeof(ProgramTexture_Attributes),
-        (void *)offsetof(ProgramTexture_Attributes, vertex)
-    );
-    glVertexAttribPointer(glGetAttribLocation(this->prog, "a_texture_pos"),
-        2, GL_FLOAT, GL_FALSE,
-        sizeof(ProgramTexture_Attributes),
-        (void *)offsetof(ProgramTexture_Attributes, uv)
-    );
-    glVertexAttribPointer(glGetAttribLocation(this->prog, "a_grayscale"),
-        1, GL_FLOAT, GL_FALSE,
-        sizeof(ProgramTexture_Attributes),
-        (void *)offsetof(ProgramTexture_Attributes, grayscale)
-    );
+    glDeleteVertexArrays(1, &m_vao);
+    m_vbo.reset();
+    azur::gl::Program::reset();
 }
 
-void ProgramTexture::add_texture(
-    int x, int y, int width, int height, bool grayscale)
+void ShaderTexture::draw()
 {
-    return add_subtexture(x, y, width, height, 0.0, 0.0, 1.0, 1.0, grayscale);
+    m_vbo.bind();
+    m_vbo.update();
+    glBindVertexArray(m_vao);
+    glDrawArrays(GL_TRIANGLES, 0, m_vbo.size());
 }
 
-void ProgramTexture::add_subtexture(int x, int y, int width, int height,
-    float u, float v, float tw, float th, bool grayscale)
+void ShaderTexture::addTexture(rect<float> dst, rect<float> tex)
 {
-    ProgramTexture_Attributes attr[4] = {
-        { {x,       y},        {u, v},       (float)(int)grayscale },
-        { {x+width, y},        {u+tw, v},    (float)(int)grayscale },
-        { {x,       y+height}, {u, v+th},    (float)(int)grayscale },
-        { {x+width, y+height}, {u+tw, v+th}, (float)(int)grayscale },
+    if(tex.width() == 0 && tex.height() == 0)
+        tex = rect<float>(0.f, 0.f, 1.f, 1.f);
+
+    VA attr[4] = {
+        { {dst.left(),  dst.top()},    {tex.left(),  tex.top()},   },
+        { {dst.right(), dst.top()},    {tex.right(), tex.top()},   },
+        { {dst.left(),  dst.bottom()}, {tex.left(),  tex.bottom()} },
+        { {dst.right(), dst.bottom()}, {tex.right(), tex.bottom()} },
     };
-
-    this->vertices.push_back(attr[0]);
-    this->vertices.push_back(attr[1]);
-    this->vertices.push_back(attr[2]);
-    this->vertices.push_back(attr[1]);
-    this->vertices.push_back(attr[2]);
-    this->vertices.push_back(attr[3]);
+    m_vbo.addUnfoldedQuad(attr);
 }
 
 //=== Checkered background shader ============================================//
 
-void ProgramBackground::init()
+bool ShaderBackground::init()
 {
-    Shader::init();
-    glBindVertexArray(this->vao);
-    glEnableVertexAttribArray(0);
+    if(!azur::gl::Program::init() || !m_vbo.init())
+        return false;
 
-    this->prog = azur::gl::loadProgramFiles(
-        GL_VERTEX_SHADER,   "@mqgui:glsl/vs_tiles.glsl",
-        GL_FRAGMENT_SHADER, "@mqgui:glsl/fs_tiles.glsl",
-        0);
+    glGenVertexArrays(1, &m_vao);
+
+    setName("checkerboard");
+    addPrelude(GL_VERTEX_SHADER);
+    addSourceFile(GL_VERTEX_SHADER, "@mqgui:glsl/vs_tiles.glsl");
+    addPrelude(GL_FRAGMENT_SHADER);
+    addSourceFile(GL_FRAGMENT_SHADER, "@mqgui:glsl/fs_tiles.glsl");
+    /* Attribute locations are already given in GLSL code */
+    if(!compile() || !link())
+        return false;
+
+    glBindVertexArray(m_vao);
+    m_vbo.bind();
+    bindVertexAttribute(&VA::vertex, 0);
+    return true;
 }
 
-void ProgramBackground::set_vertex_attributes() const
+void ShaderBackground::reset()
 {
-    glVertexAttribPointer(glGetAttribLocation(this->prog, "a_vertex"),
-        2, GL_FLOAT, GL_FALSE,
-        sizeof(ProgramBackground_Attributes),
-        (void *)offsetof(ProgramBackground_Attributes, vertex)
-    );
+    glDeleteVertexArrays(1, &m_vao);
+    m_vbo.reset();
+    azur::gl::Program::reset();
 }
 
-void ProgramBackground::add_background(int x, int y, int w, int h)
+void ShaderBackground::draw()
 {
-    ProgramBackground_Attributes attr[4] = {
-        { {x,   y}   },
-        { {x+w, y}   },
-        { {x,   y+h} },
-        { {x+w, y+h} },
+    m_vbo.bind();
+    m_vbo.update();
+    glBindVertexArray(m_vao);
+    glDrawArrays(GL_TRIANGLES, 0, m_vbo.size());
+}
+
+void ShaderBackground::addBackground(rect<int> coord)
+{
+    VA attr[4] = {
+        { {coord.left(),  coord.top()},    },
+        { {coord.right(), coord.top()},    },
+        { {coord.left(),  coord.bottom()}, },
+        { {coord.right(), coord.bottom()}, },
     };
-
-    this->vertices.push_back(attr[0]);
-    this->vertices.push_back(attr[1]);
-    this->vertices.push_back(attr[2]);
-    this->vertices.push_back(attr[1]);
-    this->vertices.push_back(attr[2]);
-    this->vertices.push_back(attr[3]);
+    m_vbo.addUnfoldedQuad(attr);
 }

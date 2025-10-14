@@ -4,49 +4,160 @@
 #define MQ_UI_WINDOWS_H
 
 #include "imgui-util.h"
-#include "shader.h"
 #include <azur/opengl.h>
 #include <mq/machine.h>
 #include <mq/memory.h>
 #include <optional>
 
+/* Azur utility; move to Azur later */
+namespace azur::gl {
+
+/* A GPU buffer, such as a VBO. */
+class Buffer
+{
+public:
+    Buffer(GLuint target): m_target{target} {}
+    ~Buffer() { reset(); }
+
+    virtual bool init();
+    virtual void reset();
+    virtual void update() = 0;
+
+    GLuint target() const { return m_target; }
+    GLuint id() const { return m_id; }
+
+    /* Bind the buffer to its set target. */
+    void bind() const;
+
+    /* [While bound]
+       Allocate the buffer to `size` bytes and initialize it with `data`
+       (unless `data` is null, in which case no initialization). `usage` is the
+       usage hint to the GPU for (maybe) optimizing allocation strategies. */
+    void alloc(void const *data, size_t size, GLenum usage);
+
+    /* [While bound]
+       Load `size` bytes from `data` into the buffer at position `offset`. No
+       allocation is performed. The designated interval must be in bounds. */
+    void load(size_t offset, void const *data, size_t size);
+
+    /* [While bound]
+       Assign the contents of the buffer and resize it if needed, according to
+       the resize policy. This is similar to alloc() but avoids reallocations
+       if within the policy.
+       TODO: Configurable policies, currently allows up to 2x the size. */
+    void assign(void const *data, size_t size, GLenum usage);
+
+private:
+    Resource<GLuint> m_id = 0;
+    /* Buffer type */
+    GLuint const m_target;
+    /* Size of the allocated VBO on the GPU */
+    size_t m_gpuSize = 0;
+};
+
+/* A VBO backed by a vector on the CPU side. */
+template<typename T>
+class VectorVBO: public Buffer
+{
+public:
+    VectorVBO(): Buffer(GL_ARRAY_BUFFER) {}
+    void reset() override;
+    void update() override;
+    void clear() { m_vertices.clear(); }
+
+    size_t size() const { return m_vertices.size(); }
+    void *data() { return m_vertices.data(); }
+    void const *data() const { return m_vertices.data(); }
+
+    void addTriangle(T const *vertices3);
+    void addUnfoldedQuad(T const *vertices4);
+
+private:
+    /* CPU-side storage */
+    std::vector<T> m_vertices;
+};
+
+template<typename T>
+void VectorVBO<T>::reset()
+{
+    Buffer::reset();
+    m_vertices.clear();
+}
+
+template<typename T>
+void VectorVBO<T>::update()
+{
+    assign(m_vertices.data(), m_vertices.size() * sizeof(T), GL_DYNAMIC_DRAW);
+}
+
+template<typename T>
+void VectorVBO<T>::addTriangle(T const *verts)
+{
+    m_vertices.push_back(verts[0]);
+    m_vertices.push_back(verts[1]);
+    m_vertices.push_back(verts[2]);
+}
+
+template<typename T>
+void VectorVBO<T>::addUnfoldedQuad(T const *verts)
+{
+    m_vertices.push_back(verts[0]);
+    m_vertices.push_back(verts[1]);
+    m_vertices.push_back(verts[2]);
+    m_vertices.push_back(verts[1]);
+    m_vertices.push_back(verts[2]);
+    m_vertices.push_back(verts[3]);
+}
+
+}
+
 //=== Display window =========================================================//
 
 /* 2D texture shader rendering subrectangles in quads. */
 
-struct ProgramTexture_Attributes {
-    glm::vec2 vertex; // Vertex location in OpenGL coordinate space
-    glm::vec2 uv;     // Location within texture
-    float grayscale;  // 1.0 for grayscale mode (red is all channels)
-};
-
-struct ProgramTexture: public Shader<ProgramTexture_Attributes>
+class ShaderTexture: public azur::gl::Program
 {
-    void init();
-    void set_vertex_attributes() const override;
+    struct VA {
+        glm::vec2 vertex;   // Vertex location in world view space
+        glm::vec2 uv;       // Location within texture (normalized)
+    };
+
+public:
+    bool init() override;
+    void reset() override;
+
+    void clear() { m_vbo.clear(); }
+    void draw();
 
     /* Add a full texture of the specified size
-       TODO: This always uses texture #0
-       TODO: Specify sub-regions */
-    void add_texture(int x, int y, int width, int height, bool grayscale);
+       TODO: This always uses texture #0 */
+    void addTexture(rect<float> screenRect, rect<float> texRect);
 
-    void add_subtexture(int x, int y, int width, int height,
-    float u, float v, float tw, float th, bool grayscale);
+private:
+    GLuint m_vao = 0;
+    azur::gl::VectorVBO<VA> m_vbo;
 };
 
 /* Checkered background shader, rendering on full rectangles. */
 
-struct ProgramBackground_Attributes {
-    glm::vec2 vertex; // Vertex location
-};
-
-struct ProgramBackground: public Shader<ProgramBackground_Attributes>
+class ShaderBackground: public azur::gl::Program
 {
-    void init();
-    void set_vertex_attributes() const override;
+    struct VA { glm::vec2 vertex; };
+
+public:
+    bool init() override;
+    void reset() override;
+
+    void clear() { m_vbo.clear(); }
+    void draw();
 
     /* Add the background at specified pixel coordinates */
-    void add_background(int x, int y, int w, int h);
+    void addBackground(rect<int> coord);
+
+private:
+    GLuint m_vao = 0;
+    azur::gl::VectorVBO<VA> m_vbo;
+
 };
 
 class DisplayGlWindow: public ImGuiGlWindow
@@ -94,8 +205,8 @@ private:
     float m_inherentScale = 1.0f;
 
     /* Shaders used in the window (not shared) */
-    ProgramTexture shader_texture;
-    ProgramBackground shader_background;
+    ShaderTexture shader_texture;
+    ShaderBackground shader_background;
 
     /* Display texture */
     azur::gl::Texture2D m_texture;

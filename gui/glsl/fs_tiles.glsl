@@ -6,7 +6,7 @@ out vec4 color;
 /* Diamond diagonal size (pixels) */
 const float diamond_size = 80.0;
 /* Pattern opacity */
-const float alpha = 0.015;
+const float alpha = 0.020;
 
 void main(void)
 {
