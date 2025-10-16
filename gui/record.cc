@@ -610,6 +610,57 @@ int record_screenshot(
     return 0;
 }
 
+bool record_encoder_check(mqRecord *record, std::string const&encoder)
+{
+    char const *command_template = NULL;
+    char buffer[256];
+
+    (void)record;
+    if(encoder == "hevc_qsv") {
+        command_template = (
+            "ffmpeg -hide_banner -f lavfi -i color=s=640x360 -frames 1 -an "
+            "-load_plugin hevc_hw "
+            "-c:v %s -f rawvideo pipe: "
+            "-- > /dev/null 2>&1"
+        );
+    }
+    else if(encoder.ends_with("_vaapi")) {
+        command_template = (
+            "ffmpeg -hide_banner -f lavfi -i color=s=640x360 -frames 1 -an "
+            "-init_hw_device vaapi=vaapi0: -filter_hw_device vaapi0 -vf "
+            "format=nv12,hwupload "
+            "-c:v %s -f rawvideo pipe: "
+            "-- > /dev/null 2>&1"
+        );
+    }
+    else if(encoder.ends_with("_videotoolbox")) {
+        command_template = (
+            "ffmpeg -hide_banner -f lavfi -i color=s=640x360 -frames 1 -an "
+            "-pix_fmt nv12 "
+            "-c:v %s -f rawvideo pipe: "
+            "-- > /dev/null 2>&1"
+        );
+    }
+    else if(encoder.ends_with("_mf")) {
+        command_template = (
+            "ffmpeg -hide_banner -f lavfi -i color=s=640x360 -frames 1 -an "
+            "-pix_fmt nv12 -hw_encoding true "
+            "-c:v %s -f rawvideo pipe: "
+            "-- > /dev/null 2>&1"
+        );
+    }
+    else {
+        command_template = (
+            "ffmpeg -hide_banner -f lavfi -i color=s=640x360 -frames 1 -an "
+            "-c:v %s -f rawvideo pipe: "
+            "-- > /dev/null 2>&1"
+        );
+    }
+    snprintf(buffer, 256, command_template, encoder.c_str());
+    mq_log(MQ_LOG_DEBUG, buffer);
+    return (system(buffer) == 0);
+}
+
 int record_init(
     mqRecord *record,
     mqRecordRequest *request,

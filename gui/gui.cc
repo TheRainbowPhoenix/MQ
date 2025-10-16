@@ -1311,9 +1311,27 @@ void RecordWindow::renderContents(mqMachine *omach)
         };
         static const char *record_encoder_selector[] = {
             "No encoder",
+            "h264_mf",
+            "hevc_mf",
             "h264_nvenc",
+            "hevc_nvenc",
+            "av1_nvenc",
+            "h264_amf",
+            "hevc_amf",
+            "av1_amf",
+            "h264_qsv",
+            "hevc_qsv",
+            "vp9_qsv",
+            "av1_qsv",
+            "h264_videotoolbox",
+            "hevc_videotoolbox",
+            "av1_nvenc",
+            "h264_nvenc",
+            "hevc_nvenc",
             "h264_vaapi",
-            "h264_vulkan",
+            "hevc_vaapi",
+            "av1_vaapi",
+            "vp9",
             nullptr,
         };
         ImGui::SeparatorTextD("Video recorder");
@@ -1362,8 +1380,19 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SetCursorPosX(14);
         ImGui::Text("Encoder");
         ImGui::SameLine(64);
-        ImGui::ComboAnon(
-            3, &m_record_encoder, record_encoder_selector, disabled);
+        if(ImGui::ComboAnon(
+                3, &m_record_encoder, record_encoder_selector, disabled)) {
+            mq_log(
+                MQ_LOG_ERROR,
+                "encoder changed for %d -> %s",
+                m_record_encoder,
+                record_encoder_selector[m_record_encoder]
+            );
+            m_record_encoder_is_valid = record_encoder_check(
+                backend,
+                record_encoder_selector[m_record_encoder]
+            );
+        }
         ImGui::HelpMarker(
             "(?)",
             "Hardware encoder\n"
@@ -1378,6 +1407,18 @@ void RecordWindow::renderContents(mqMachine *omach)
             ImGui::ButtonWSized("Pause", w_button, true);
             ImGui::SameLine(0, style.ItemInnerSpacing.x);
             ImGui::ButtonWSized("Stop", w_button, true);
+            return;
+        }
+
+        /* potential encoder error */
+        if(!m_record_encoder_is_valid) {
+            ImGui::ButtonWSized("Start", w_button, true);
+            ImGui::SameLine(0, style.ItemInnerSpacing.x);
+            ImGui::ButtonWSized("Pause", w_button, true);
+            ImGui::SameLine(0, style.ItemInnerSpacing.x);
+            ImGui::ButtonWSized("Stop", w_button, true);
+            ImGui::TextCenteredColor(
+                    "Selected encoder not available", 0xff0000);
             return;
         }
 

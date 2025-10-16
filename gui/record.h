@@ -3,6 +3,9 @@
 #ifndef MQ_UI_RECORD_H
 #define MQ_UI_RECORD_H
 
+#include <string>
+using namespace std;
+
 #include <mq/defs.h>
 #include <mq/interfaces/display.h>
 
@@ -48,6 +51,8 @@ int record_screenshot(
     mqRecordRequest *request,
     mqDisplay *display
 );
+
+bool record_encoder_check(mqRecord *record, std::string const&encoder);
 
 /* initialize the record backend */
 int record_init(

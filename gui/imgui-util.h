@@ -69,7 +69,7 @@ bool Checkbox2(Args... args) {
 void HelpMarker(const char *title, const char* desc);
 
 /* anonym combo */
-void ComboAnon(
+bool ComboAnon(
     int id, int *index, const char *selector[], bool disabled);
 
 } /* namespace ImGui */

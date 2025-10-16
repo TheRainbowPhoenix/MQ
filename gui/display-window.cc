@@ -206,10 +206,10 @@ void ProgramTexture::add_subtexture(int x, int y, int width, int height,
     float u, float v, float tw, float th, bool grayscale)
 {
     ProgramTexture_Attributes attr[4] = {
-        { vec2(x,       y),        vec2(u, v),       (float)(int)grayscale },
-        { vec2(x+width, y),        vec2(u+tw, v),    (float)(int)grayscale },
-        { vec2(x,       y+height), vec2(u, v+th),    (float)(int)grayscale },
-        { vec2(x+width, y+height), vec2(u+tw, v+th), (float)(int)grayscale },
+        { glm::vec2(x,       y),        glm::vec2(u, v),       (float)(int)grayscale },
+        { glm::vec2(x+width, y),        glm::vec2(u+tw, v),    (float)(int)grayscale },
+        { glm::vec2(x,       y+height), glm::vec2(u, v+th),    (float)(int)grayscale },
+        { glm::vec2(x+width, y+height), glm::vec2(u+tw, v+th), (float)(int)grayscale },
     };
 
     this->vertices.push_back(attr[0]);
@@ -246,10 +246,10 @@ void ProgramBackground::set_vertex_attributes() const
 void ProgramBackground::add_background(int x, int y, int w, int h)
 {
     ProgramBackground_Attributes attr[4] = {
-        { vec2(x,   y)   },
-        { vec2(x+w, y)   },
-        { vec2(x,   y+h) },
-        { vec2(x+w, y+h) },
+        { glm::vec2(x,   y)   },
+        { glm::vec2(x+w, y)   },
+        { glm::vec2(x,   y+h) },
+        { glm::vec2(x+w, y+h) },
     };
 
     this->vertices.push_back(attr[0]);

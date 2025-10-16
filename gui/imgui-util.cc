@@ -268,17 +268,18 @@ void HelpMarker(char const *title, char const *desc)
     }
 }
 
-void ComboAnon(int id, int *index, const char *selector[], bool disabled)
+bool ComboAnon(int id, int *index, const char *selector[], bool disabled)
 {
     int size = 0;
     while(selector[size] != nullptr)
         size += 1;
     if(disabled)
         ImGui::BeginDisabled();
-    ImGui::Combo(
+    bool status = ImGui::Combo(
         ("##combo" + std::to_string(id)).c_str(), index, selector, size);
     if(disabled)
         ImGui::EndDisabled();
+    return status;
 }
 
 } /* namespace ImGui */

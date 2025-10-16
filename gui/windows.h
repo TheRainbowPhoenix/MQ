@@ -15,8 +15,8 @@
 /* 2D texture shader rendering subrectangles in quads. */
 
 struct ProgramTexture_Attributes {
-    vec2 vertex;      // Vertex location in OpenGL coordinate space
-    vec2 uv;          // Location within texture
+    glm::vec2 vertex;      // Vertex location in OpenGL coordinate space
+    glm::vec2 uv;          // Location within texture
     float grayscale;  // 1.0 for grayscale mode (red is all channels)
 };
 
@@ -37,7 +37,7 @@ struct ProgramTexture: public Shader<ProgramTexture_Attributes>
 /* Checkered background shader, rendering on full rectangles. */
 
 struct ProgramBackground_Attributes {
-    vec2 vertex;    // Vertex location
+    glm::vec2 vertex;    // Vertex location
 };
 
 struct ProgramBackground: public Shader<ProgramBackground_Attributes>
@@ -316,6 +316,7 @@ private:
     int m_record_start_opt = 0;
     int m_record_reset_opt = 0;
     bool m_dirty = true;
+    bool m_record_encoder_is_valid = true;
 };
 
 #endif /* MQ_UI_WINDOWS_H */
