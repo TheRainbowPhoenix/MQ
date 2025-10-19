@@ -95,14 +95,15 @@ struct mqCpu
     /* Control flow: PC, whether the next instruction should be executed as a
        delay slot, and the target to jump to after said delay slot. */
     u32 pc;
+    u32 nextPC;
     bool inDelaySlot;
-    u32 delaySlotTarget;
 
     /* Mask of pending exceptions */
     u32 excMask;
     /* Exception handling registers */
     u32 TRA, EXPEVT, INTEVT;
-    /* Address of the instruction that last raised an exception */
+    /* Address of the instruction that last raised an exception (or, if it was
+       in a delay slot, its preceding delayed branch) */
     u32 excPC;
     /* Extra register storing the priority of the interrupt set in INTEVT */
     u32 INTPRIO;
@@ -225,8 +226,7 @@ void mq_cpu_setSR(mqCpu *cpu, u32 SR);
 MQ_INLINE void mq_cpu_setDelaySlot(mqCpu *cpu, u32 targetAddress)
 {
     cpu->inDelaySlot = true;
-    cpu->delaySlotTarget = targetAddress;
-    cpu->pc += 2;
+    cpu->nextPC = targetAddress;
 }
 /* Check if the current instructions is running in a delay slot. This is only
    for instruction emulation functions. */

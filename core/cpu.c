@@ -275,6 +275,8 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     // printf("Cycle: pc=%08x\n", cpu->pc);
 
     /* Check if this is the last instruction in a repeat control loop. */
+    // TODO: The DSP loop end is currently incorrect if we end at the delay
+    // slot of a delayed branch instruction.
     bool end_dsp_loop = false;
     if(MQ_UNLIKELY(mq_cpu_getRC(cpu)))
         end_dsp_loop = (cpu->spRegs[SH_RE] == cpu->pc + 1);
@@ -283,6 +285,8 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     // TODO: Same-basic-block prefetching optimization.
     u32 ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
     if(MQ_LIKELY(ins != 0)) {
+        cpu->nextPC = cpu->pc + 2;
+
         // printf("  -> ins=%04x\n", ins);
         /* Decode and execute the instruction. */
         TracyCZoneN(_ctx, "exec", true);
@@ -326,15 +330,16 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
         goto endCycle;
     }
 
-    /* In case of a delay slot, continue. */
+    /* In case of a delay slot, continue. Delayed branch instruction don't
+       increment PC, which is not needed: all PC-dependent instructions are
+       forbidden as delay slots. */
     if(MQ_UNLIKELY(cpu->inDelaySlot)) {
-        ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
+        ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc + 2);
         if(MQ_LIKELY(ins != 0)) {
             // printf("  -> delay ins=%04x\n", ins);
             TracyCZoneN(_ctx, "delay_slot", true);
             _mq_cpu_execute(mach, cpu, ins);
             TracyCZoneEnd(_ctx);
-            cpu->pc = cpu->delaySlotTarget;
             cpu->inDelaySlot = false;
 
             /* If an exception occurs on the delay slot instruction, cpu->excPC
