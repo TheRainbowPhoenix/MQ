@@ -438,8 +438,6 @@ MQ_INLINE void div1(mqMachine *mach, mqCpu *cpu, int n, int m) {
 
 MQ_INLINE void mova(mqMachine *mach, mqCpu *cpu, int disp) {
     /* mova pc+disp, r0 */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     cpu->r[0] = (cpu->pc & -4) + 4 + (disp << 2);
     cpu->pc += 2;
 }
@@ -533,8 +531,6 @@ MQ_INLINE void movl_r_drm_rn(
 }
 MQ_INLINE void movw_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
     /* mov.w @(disp,pc), rn */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     u32 targetAddr = cpu->pc + 4 + (disp << 1);
     if(mq_memory_read16(mach, mach->memory, targetAddr, &cpu->r[n]))
         cpu->r[n] = (i16)cpu->r[n];
@@ -542,8 +538,6 @@ MQ_INLINE void movw_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
 }
 MQ_INLINE void movl_r_dpc_rn(mqMachine *mach, mqCpu *cpu, int n, int disp) {
     /* mov.l @(disp,pc), rn */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     u32 targetAddr = (cpu->pc & -4) + 4 + (disp << 2);
     mq_memory_read32(mach, mach->memory, targetAddr, &cpu->r[n]);
     cpu->pc += 2;
@@ -704,15 +698,13 @@ MQ_INLINE void xorb_imm_r0gbr(mqMachine *mach, mqCpu *cpu, int imm) {
 }
 
 MQ_INLINE void ldc(mqMachine *mach, mqCpu *cpu, int m, int c) {
-    if(c == SH_SR) {
-        if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-            return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-        mq_cpu_setSR(cpu, cpu->r[m]);
-        cpu->pc += 2;
-        return;
-    }
     /* ldc rm, <control> */
     cpu->spRegs[c] = cpu->r[m];
+    cpu->pc += 2;
+}
+MQ_INLINE void ldc_sr(mqMachine *mach, mqCpu *cpu, int m) {
+    /* ldc rm, sr */
+    mq_cpu_setSR(cpu, cpu->r[m]);
     cpu->pc += 2;
 }
 MQ_INLINE void lds(mqMachine *mach, mqCpu *cpu, int m, int s) {
@@ -722,20 +714,17 @@ MQ_INLINE void lds(mqMachine *mach, mqCpu *cpu, int m, int s) {
 }
 MQ_INLINE void ldcl(mqMachine *mach, mqCpu *cpu, int m, int c) {
     /* ldc.l @rm+, <control> */
-    if(c == SH_SR) {
-        if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-            return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
-        u32 SR;
-        if(mq_memory_read32(mach, mach->memory, cpu->r[m], &SR)) {
-            mq_cpu_setSR(cpu, SR);
-            cpu->r[m] += 4;
-        }
-        cpu->pc += 2;
-        return;
-    }
-    /* ldc.l @rm+, <control> */
     if(mq_memory_read32(mach, mach->memory, cpu->r[m], &cpu->spRegs[c]))
         cpu->r[m] += 4;
+    cpu->pc += 2;
+}
+MQ_INLINE void ldcl_sr(mqMachine *mach, mqCpu *cpu, int m) {
+    /* ldc.l @rm+, sr */
+    u32 SR;
+    if(mq_memory_read32(mach, mach->memory, cpu->r[m], &SR)) {
+        mq_cpu_setSR(cpu, SR);
+        cpu->r[m] += 4;
+    }
     cpu->pc += 2;
 }
 MQ_INLINE void ldsl(mqMachine *mach, mqCpu *cpu, int m, int s) {
@@ -770,15 +759,11 @@ MQ_INLINE void stsl(mqMachine *mach, mqCpu *cpu, int n, int s) {
 
 MQ_INLINE void bra(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bra pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     disp = ((i32)disp << 20) >> 20; // 12->32-bit sign extension
     mq_cpu_setDelaySlot(cpu, cpu->pc + 4 + (disp << 1));
 }
 MQ_INLINE void bsr(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bsr pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     disp = ((i32)disp << 20) >> 20; // 12->32-bit sign extension
     // TODO[insn]: bsr: Address of next instruction might be +6, not +4, if DSP
     cpu->spRegs[SH_PR] = cpu->pc + 4;
@@ -786,22 +771,16 @@ MQ_INLINE void bsr(mqMachine *mach, mqCpu *cpu, int disp) {
 }
 MQ_INLINE void braf(mqMachine *mach, mqCpu *cpu, int m) {
     /* braf rm */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     mq_cpu_setDelaySlot(cpu, cpu->pc + 4 + cpu->r[m]);
 }
 MQ_INLINE void bsrf(mqMachine *mach, mqCpu *cpu, int m) {
     /* bsrf rm */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     // TODO[insn]: bsrf: Address of next instruction might be +6 not +4 if DSP
     cpu->spRegs[SH_PR] = cpu->pc + 4;
     mq_cpu_setDelaySlot(cpu, cpu->pc + 4 + cpu->r[m]);
 }
 MQ_INLINE void bt(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bt pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     if(mq_cpu_getT(cpu))
         cpu->pc += 4 + ((i8)disp << 1);
     else
@@ -809,8 +788,6 @@ MQ_INLINE void bt(mqMachine *mach, mqCpu *cpu, int disp) {
 }
 MQ_INLINE void bf(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bf pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     if(mq_cpu_getT(cpu))
         cpu->pc += 2;
     else
@@ -818,8 +795,6 @@ MQ_INLINE void bf(mqMachine *mach, mqCpu *cpu, int disp) {
 }
 MQ_INLINE void bt_s(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bt.s pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     if(mq_cpu_getT(cpu))
         mq_cpu_setDelaySlot(cpu, cpu->pc + 4 + ((i8)disp << 1));
     else
@@ -827,8 +802,6 @@ MQ_INLINE void bt_s(mqMachine *mach, mqCpu *cpu, int disp) {
 }
 MQ_INLINE void bf_s(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bf.s pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     if(mq_cpu_getT(cpu))
         cpu->pc += 2;
     else
@@ -836,28 +809,20 @@ MQ_INLINE void bf_s(mqMachine *mach, mqCpu *cpu, int disp) {
 }
 MQ_INLINE void jmp(mqMachine *mach, mqCpu *cpu, int n) {
     /* jmp @rn */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     mq_cpu_setDelaySlot(cpu, cpu->r[n]);
 }
 MQ_INLINE void jsr(mqMachine *mach, mqCpu *cpu, int n) {
     /* jsr @rn */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     // TODO[insn]: jsr: Address of next instruction might be +6, not +4, if DSP
     cpu->spRegs[SH_PR] = cpu->pc + 4;
     mq_cpu_setDelaySlot(cpu, cpu->r[n]);
 }
 MQ_INLINE void rts(mqMachine *mach, mqCpu *cpu) {
     /* rts */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     mq_cpu_setDelaySlot(cpu, cpu->spRegs[SH_PR]);
 }
 MQ_INLINE void rte(mqMachine *mach, mqCpu *cpu) {
     /* rte */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     // TODO[rte]: Fetch the rte slot instruction with non-restored SR
     // (because it's generally gonna need to be a kernel mode fetch)
     mq_cpu_setSR(cpu, cpu->spRegs[SH_SSR]);
@@ -913,15 +878,11 @@ MQ_INLINE void movt(mqMachine *mach, mqCpu *cpu, int n) {
 
 MQ_INLINE void ldrs(mqMachine *mach, mqCpu *cpu, int disp) {
     /* ldrs pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     cpu->spRegs[SH_RS] = cpu->pc + 4 + (disp << 1);
     cpu->pc += 2;
 }
 MQ_INLINE void ldre(mqMachine *mach, mqCpu *cpu, int disp) {
     /* ldre pc+disp */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     cpu->spRegs[SH_RE] = cpu->pc + 4 + (disp << 1);
     cpu->pc += 2;
 }
@@ -973,8 +934,6 @@ MQ_INLINE void ocbwb(mqMachine *mach, mqCpu *cpu, int n) {
     cpu->pc += 2;
 }
 MQ_INLINE void prefi(mqMachine *mach, mqCpu *cpu, int n) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     static bool done = false;
     if(!done)
         mq_log(MQ_LOG_DEBUG, "prefi instruction used and ignored");
@@ -983,8 +942,6 @@ MQ_INLINE void prefi(mqMachine *mach, mqCpu *cpu, int n) {
 }
 MQ_INLINE void icbi(mqMachine *mach, mqCpu *cpu, int n) {
     /* icbi @rn */
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     static bool done = false;
     if(!done)
         mq_log(MQ_LOG_DEBUG, "icbi instruction used and ignored");
@@ -1080,8 +1037,6 @@ MQ_INLINE void setrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     mach->stuck = true;
 }
 MQ_INLINE void trapa(mqMachine *mach, mqCpu *cpu, int imm) {
-    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
     fprintf(stderr, "error: not implemented: trapa\n");
     mach->stuck = true;
 }
