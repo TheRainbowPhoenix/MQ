@@ -275,11 +275,8 @@ static void updateIncomingInterrupt(mqCpu *cpu)
 
 MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 {
-    if(MQ_UNLIKELY(cpu->sleeping)) {
-        if(MQ_UNLIKELY(cpu->excMask))
-            mq_cpu_handleException(mach, cpu);
+    if(MQ_UNLIKELY(cpu->sleeping))
         return;
-    }
 
     /* Fetch the next instruction. */
     u32 ins = mq_memory_read_opcode(mach->memory, cpu->pc);
@@ -302,24 +299,6 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         TracyCZoneN(_ctx, "exec", true);
         _mq_cpu_execute(mach, cpu, ins);
         TracyCZoneEnd(_ctx);
-
-        /* Handle the exception raised, if any.
-           TODO: Move that into instructions' semantics. */
-        if(MQ_UNLIKELY(cpu->excMask & ~(1 << SH_EXC_INTERRUPT))) {
-            mq_log(MQ_LOG_ERROR, "exception not already handled?!");
-            mach->stuck =  true;
-            return;
-        }
-        /* Interrupts are handled in instructions, except after rte, because
-           interrupts are not accepted between a branch instruction and its
-           delay slot (no other delayed branch does this). */
-        if(MQ_UNLIKELY(
-                cpu->excMask & (1 << SH_EXC_INTERRUPT))
-                && ins != 0x002b /* rte */) {
-            mq_log(MQ_LOG_ERROR, "interrupt not already handled?!");
-            mach->stuck = true;
-            return;
-        }
     }
     /* Only check for the syscall handler if the read fails. This means we can
        only emulate syscalls if we don't map the syscall stub. If we do map it,
@@ -339,8 +318,8 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 
     /* Delayed branch instruction don't increment PC, which is not needed: all
        PC-dependent instructions are forbidden as delay slots. */
-    ins = mq_memory_read_opcode(mach->memory, cpu->pc + 2);
-    if(MQ_LIKELY(ins != 0)) {
+    u32 ins2 = mq_memory_read_opcode(mach->memory, cpu->pc + 2);
+    if(MQ_LIKELY(ins2 != 0)) {
         /* Check if this is the last instruction in a repeat control loop. */
         // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
         int RC = mq_cpu_getRC(cpu);
@@ -352,14 +331,21 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         }
 
         TracyCZoneN(_ctx, "delay_slot", true);
-        _mq_cpu_execute(mach, cpu, ins);
+        _mq_cpu_execute(mach, cpu, ins2);
         TracyCZoneEnd(_ctx);
         cpu->inDelaySlot = false;
 
-        /* If an exception occurs on the delay slot instruction, cpu->excPC
-           (and thus SPC) is set to the jump's address, as per manual. */
-        if(MQ_UNLIKELY(cpu->excMask))
+        /* Handle interrupts from rte which have to wait until after the delay
+           slot is executed. */
+        // if(MQ_UNLIKELY(ins == 0x002b /* rte */) && cpu->excMask)
+        if(MQ_UNLIKELY(cpu->excMask)) {
+            if(ins != 0x002b) {
+                mq_log(MQ_LOG_ERROR, "ins: %04x", ins);
+                mach->stuck = true;
+                return;
+            }
             mq_cpu_handleException(mach, cpu);
+        }
     }
     else {
         return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc + 2);
