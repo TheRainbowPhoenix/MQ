@@ -337,15 +337,8 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 
         /* Handle interrupts from rte which have to wait until after the delay
            slot is executed. */
-        // if(MQ_UNLIKELY(ins == 0x002b /* rte */) && cpu->excMask)
-        if(MQ_UNLIKELY(cpu->excMask)) {
-            if(ins != 0x002b) {
-                mq_log(MQ_LOG_ERROR, "ins: %04x", ins);
-                mach->stuck = true;
-                return;
-            }
+        if(MQ_UNLIKELY(ins == 0x002b /* rte */) && cpu->excMask)
             mq_cpu_handleException(mach, cpu);
-        }
     }
     else {
         return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc + 2);

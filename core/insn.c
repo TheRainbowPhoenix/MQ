@@ -1050,7 +1050,7 @@ MQ_INLINE void macw(mqMachine *mach, mqCpu *cpu, int n, int m) {
 
     if(mq_cpu_getS(cpu)) {
         i64 newMACL = (i64)cpu->spRegs[SH_MACL] + prod;
-        if(newMACL < -0x80000000)
+        if(newMACL < -0x80000000ll)
             cpu->spRegs[SH_MACL] = 0x80000000;
         else if(newMACL > 0x7fffffff)
             cpu->spRegs[SH_MACL] = 0x7fffffff;
