@@ -241,6 +241,18 @@ bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value)
     return false;
 }
 
+void mq_cpu_raiseException2(mqMachine *mach, mqCpu *cpu, int exc, u32 value)
+{
+    if(cpu->excMask) {
+        mq_log(MQ_LOG_ERROR, "raiseAndHandleException: already an exception: "
+            "%08x", cpu->excMask);
+        mach->stuck = true;
+        return;
+    }
+    mq_cpu_raiseException(cpu, exc, value);
+    mq_cpu_handleException(mach, cpu);
+}
+
 static void updateIncomingInterrupt(mqCpu *cpu)
 {
     u32 SR = cpu->spRegs[SH_SR];
@@ -260,19 +272,13 @@ static void updateIncomingInterrupt(mqCpu *cpu)
     }
 }
 
-void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
+MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 {
-    TracyCZoneN(_ctx, "cpu", true);
-
-    u32 exceptionsRemaining = 0;
-
     if(MQ_UNLIKELY(cpu->sleeping)) {
         if(MQ_UNLIKELY(cpu->excMask))
             mq_cpu_handleException(mach, cpu);
-        goto endCycle;
+        return;
     }
-
-    // printf("Cycle: pc=%08x\n", cpu->pc);
 
     /* Check if this is the last instruction in a repeat control loop. */
     // TODO: The DSP loop end is currently incorrect if we end at the delay
@@ -287,7 +293,6 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     if(MQ_LIKELY(ins != 0)) {
         cpu->nextPC = cpu->pc + 2;
 
-        // printf("  -> ins=%04x\n", ins);
         /* Decode and execute the instruction. */
         TracyCZoneN(_ctx, "exec", true);
         _mq_cpu_execute(mach, cpu, ins);
@@ -313,7 +318,6 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
                 mach->stuck = true;
                 return;
             }
-            else exceptionsRemaining = (1 << SH_EXC_INTERRUPT);
         }
     }
     /* Only check for the syscall handler if the read fails. This means we can
@@ -322,12 +326,10 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
        handler to that address. */
     else if(cpu->pc == cpu->syscallHandler && cpu->pc) {
         mq_casiowin_syscall(mach);
-        goto endCycle;
+        return;
     }
     else {
-        mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
-        mq_cpu_handleException(mach, cpu);
-        goto endCycle;
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
     }
 
     /* In case of a delay slot, continue. Delayed branch instruction don't
@@ -336,7 +338,6 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     if(MQ_UNLIKELY(cpu->inDelaySlot)) {
         ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc + 2);
         if(MQ_LIKELY(ins != 0)) {
-            // printf("  -> delay ins=%04x\n", ins);
             TracyCZoneN(_ctx, "delay_slot", true);
             _mq_cpu_execute(mach, cpu, ins);
             TracyCZoneEnd(_ctx);
@@ -348,9 +349,7 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
                 mq_cpu_handleException(mach, cpu);
         }
         else {
-            mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
-            mq_cpu_handleException(mach, cpu);
-            goto endCycle;
+            return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
         }
     }
 
@@ -363,10 +362,12 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
         if(RC > 0)
             cpu->pc = cpu->spRegs[SH_RS];
     }
+}
 
-endCycle:
-    if(MQ_UNLIKELY(cpu->excMask & exceptionsRemaining))
-        mq_cpu_handleException(mach, cpu);
+void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
+{
+    TracyCZoneN(_ctx, "cpu", true);
+    mq_cpu_cycle_aux(mach, cpu);
     TracyCZoneEnd(_ctx);
 }
 

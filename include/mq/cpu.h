@@ -172,6 +172,13 @@ void mq_cpu_setIncomingInterrupt(
    should be called only if an exception is actually available. */
 void mq_cpu_handleException(struct mqMachine *mach, mqCpu *cpu);
 
+/* Raise an exception and handle it immediately. This is a combination of
+   raiseException and handleException which further checks that only one
+   exception is raised at any time. */
+// TODO: In the long run this may become raiseException.
+void mq_cpu_raiseException2(
+    struct mqMachine *mach, mqCpu *cpu, int exc, u32 value);
+
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
 void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode);

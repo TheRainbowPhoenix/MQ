@@ -1069,6 +1069,6 @@ void _mq_cpu_execute(mqMachine *mach, mqCpu *cpu, u16 opcode)
 #define _DECIDE(X, ...) return X(mach, cpu, ##__VA_ARGS__)
 #include "autogen/sh-isa.inc"
 
-    mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL, 0);
+    mq_cpu_raiseException2(mach, cpu, SH_EXC_ILLEGAL, 0);
 }
 #endif /* MQ_DECODER_SWITCH */
