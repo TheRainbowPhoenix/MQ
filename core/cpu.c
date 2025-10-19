@@ -280,18 +280,22 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         return;
     }
 
-    /* Check if this is the last instruction in a repeat control loop. */
-    // TODO: The DSP loop end is currently incorrect if we end at the delay
-    // slot of a delayed branch instruction.
-    bool end_dsp_loop = false;
-    if(MQ_UNLIKELY(mq_cpu_getRC(cpu)))
-        end_dsp_loop = (cpu->spRegs[SH_RE] == cpu->pc + 1);
-
     /* Fetch the next instruction. */
-    // TODO: Same-basic-block prefetching optimization.
     u32 ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
     if(MQ_LIKELY(ins != 0)) {
         cpu->nextPC = cpu->pc + 2;
+
+        /* Check if this is the last instruction in a repeat control loop. */
+        // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
+        // RC should be decremented *after* the repeat end instruction. (To fix
+        // this, generate the correct value of RC dynamically when reading SR.)
+        int RC = mq_cpu_getRC(cpu);
+        if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 1)) {
+            mq_cpu_setRC(cpu, RC - 1);
+            /* Setup the next loop iteration */
+            if(RC > 1)
+                cpu->nextPC = cpu->spRegs[SH_RS];
+        }
 
         /* Decode and execute the instruction. */
         TracyCZoneN(_ctx, "exec", true);
@@ -332,35 +336,36 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
     }
 
-    /* In case of a delay slot, continue. Delayed branch instruction don't
-       increment PC, which is not needed: all PC-dependent instructions are
-       forbidden as delay slots. */
-    if(MQ_UNLIKELY(cpu->inDelaySlot)) {
-        ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc + 2);
-        if(MQ_LIKELY(ins != 0)) {
-            TracyCZoneN(_ctx, "delay_slot", true);
-            _mq_cpu_execute(mach, cpu, ins);
-            TracyCZoneEnd(_ctx);
-            cpu->inDelaySlot = false;
+    /* Group the execution of delayed branches and their delay slots. */
+    if(MQ_LIKELY(!cpu->inDelaySlot))
+        return;
 
-            /* If an exception occurs on the delay slot instruction, cpu->excPC
-               (and thus SPC) is set to the jump's address, as per manual. */
-            if(MQ_UNLIKELY(cpu->excMask))
-                mq_cpu_handleException(mach, cpu);
-        }
-        else {
-            return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
-        }
-    }
-
-    /* If we reach the end of a DSP loop, loop back. */
-    if(end_dsp_loop) {
+    /* Delayed branch instruction don't increment PC, which is not needed: all
+       PC-dependent instructions are forbidden as delay slots. */
+    ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc + 2);
+    if(MQ_LIKELY(ins != 0)) {
+        /* Check if this is the last instruction in a repeat control loop. */
+        // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
         int RC = mq_cpu_getRC(cpu);
-        RC -= (RC > 0);
-        mq_cpu_setRC(cpu, RC);
+        if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 3)) {
+            mq_cpu_setRC(cpu, RC - 1);
+            /* Setup the next loop iteration */
+            if(RC > 1)
+                cpu->nextPC = cpu->spRegs[SH_RS];
+        }
 
-        if(RC > 0)
-            cpu->pc = cpu->spRegs[SH_RS];
+        TracyCZoneN(_ctx, "delay_slot", true);
+        _mq_cpu_execute(mach, cpu, ins);
+        TracyCZoneEnd(_ctx);
+        cpu->inDelaySlot = false;
+
+        /* If an exception occurs on the delay slot instruction, cpu->excPC
+           (and thus SPC) is set to the jump's address, as per manual. */
+        if(MQ_UNLIKELY(cpu->excMask))
+            mq_cpu_handleException(mach, cpu);
+    }
+    else {
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
     }
 }
 
