@@ -195,6 +195,16 @@ MQ_INLINE int mq_cpu_getT(mqCpu *cpu)
 {
     return cpu->spRegs[SH_SR] & 1;
 }
+/* Set/get the value of the S bit; the value provided must be 0 or 1. */
+MQ_INLINE void mq_cpu_setS(mqCpu *cpu, int S)
+{
+    cpu->spRegs[SH_SR] &= ~(1 << 1);
+    cpu->spRegs[SH_SR] |= (S != 0) << 1;
+}
+MQ_INLINE int mq_cpu_getS(mqCpu *cpu)
+{
+    return (cpu->spRegs[SH_SR] >> 1) & 1;
+}
 /* Set/get the value of the Q bit; the value provided must be 0 or 1. */
 MQ_INLINE void mq_cpu_setQ(mqCpu *cpu, int Q)
 {

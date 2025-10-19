@@ -1039,9 +1039,32 @@ MQ_INLINE void tasb(mqMachine *mach, mqCpu *cpu, int n) {
     mach->stuck = true;
 }
 MQ_INLINE void macw(mqMachine *mach, mqCpu *cpu, int n, int m) {
-    // mac.w @r4+, @r4+ -> read r4, r4+=2, read r4, r4+=2
-    fprintf(stderr, "error: not implemented: macw\n");
-    mach->stuck = true;
+    /* mac.w @rm+, @rn+ */
+    u32 LHS, RHS;
+    MEMORY_READ16(cpu->r[m], &LHS);
+    cpu->r[m] += 2;
+    MEMORY_READ16(cpu->r[n], &RHS);
+    cpu->r[n] += 2;
+
+    i32 prod = (i32)(i16)LHS * (i32)(i16)RHS;
+
+    if(mq_cpu_getS(cpu)) {
+        i64 newMACL = (i64)cpu->spRegs[SH_MACL] + prod;
+        if(newMACL < -0x80000000)
+            cpu->spRegs[SH_MACL] = 0x80000000;
+        else if(newMACL > 0x7fffffff)
+            cpu->spRegs[SH_MACL] = 0x7fffffff;
+        else
+            cpu->spRegs[SH_MACL] = newMACL;
+    }
+    else {
+        i64 MAC = ((i64)cpu->spRegs[SH_MACH] << 32) + cpu->spRegs[SH_MACL];
+        MAC += prod;
+        cpu->spRegs[SH_MACH] = MAC >> 32;
+        cpu->spRegs[SH_MACL] = MAC;
+    }
+
+    cpu->pc = cpu->nextPC;
 }
 MQ_INLINE void setrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     fprintf(stderr, "error: not implemented: setrc_imm\n");
