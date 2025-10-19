@@ -788,8 +788,10 @@ MQ_INLINE void bsrf(mqMachine *mach, mqCpu *cpu, int m) {
 }
 MQ_INLINE void bt(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bt pc+disp */
-    if(mq_cpu_getT(cpu))
+    if(mq_cpu_getT(cpu)) {
         cpu->pc += 4 + ((i8)disp << 1);
+        cpu->nextPC = cpu->pc;
+    }
     else
         cpu->pc = cpu->nextPC;
 }
@@ -797,8 +799,10 @@ MQ_INLINE void bf(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bf pc+disp */
     if(mq_cpu_getT(cpu))
         cpu->pc = cpu->nextPC;
-    else
+    else {
         cpu->pc += 4 + ((i8)disp << 1);
+        cpu->nextPC = cpu->pc;
+    }
 }
 MQ_INLINE void bt_s(mqMachine *mach, mqCpu *cpu, int disp) {
     /* bt.s pc+disp */
