@@ -800,6 +800,8 @@ void InterruptsWindow::renderContents(mqMachine *omach)
         ImGui::SameLine();
         ImGui::TextMono("TEA: %08x", MMU->TEA);
     }
+    ImGui::SameLine();
+    ImGui::TextMono("excPC: %08x", cpu->excPC);
     ImGui::TextMono("INTEVT: 0x%03x", cpu->INTEVT);
     ImGui::SameLine(0, 0);
     ImGui::Text(" %s (%d)", INTEVT_name, cpu->INTPRIO);

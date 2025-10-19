@@ -102,6 +102,8 @@ struct mqCpu
     u32 excMask;
     /* Exception handling registers */
     u32 TRA, EXPEVT, INTEVT;
+    /* Address of the instruction that last raised an exception */
+    u32 excPC;
     /* Extra register storing the priority of the interrupt set in INTEVT */
     u32 INTPRIO;
     /* CPU Operation Mode register */
@@ -158,10 +160,16 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value);
    making exception paths terminal calls, notably in memory access code. */
 bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value);
 
-/* Set the next interrput to be accepted. This function is normally called only
+/* Set the next interrupt to be accepted. This function is normally called only
    by the INTC; for sending out interrupts, use the INTC module. */
 void mq_cpu_setIncomingInterrupt(
     mqCpu *cpu, int interrupt, u32 INTEVT, int priority);
+
+/* Handle an exception or interrupt. This function used to be called every
+   cycle but is now called only in instructions that raise exceptions, or after
+   instructions (and background processes) that can cause interrupts. This
+   should be called only if an exception is actually available. */
+void mq_cpu_handleException(struct mqMachine *mach, mqCpu *cpu);
 
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 

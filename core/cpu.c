@@ -143,9 +143,19 @@ static int highestPriorityException(u32 excMask)
     return -1;
 }
 
-static bool handleException(
-    mqMachine *mach, mqCpu *cpu, int exc, u32 previousPC)
+void mq_cpu_handleException(mqMachine *mach, mqCpu *cpu)
 {
+    if(!cpu->excMask) {
+        mq_log(MQ_LOG_ERROR, "handleException but there's no exception?!");
+        return;
+    }
+    /* There shouldn't be a situation where we raise two exceptions before we
+       handle the first one. */
+    if(cpu->excMask & (cpu->excMask - 1)) {
+        mq_log(MQ_LOG_WARNING, "simultaneous exceptions! %08x", cpu->excMask);
+    }
+    int exc = highestPriorityException(cpu->excMask);
+
     /* SR.BL double-faults if an exception occurs, but simply waits in the case
        of interrupts. However interrupts are already masked by the logic in
        updateIncomingInterrupt() if SR.BL=1, so we don't worry about it.
@@ -155,7 +165,8 @@ static bool handleException(
         if(exc_isInterrupt(exc))
             mq_log(MQ_LOG_ERROR, "Handling interrupt while SR.BL=1?!");
         mq_log(MQ_LOG_ERROR, "Double fault!");
-        return false;
+        mach->stuck = true;
+        return;
     }
 
     /* Break from sleep */
@@ -173,7 +184,7 @@ static bool handleException(
             mq_cpu_exceptionName(exc));
     }
 
-    cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
+    cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? cpu->excPC : cpu->pc;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
     cpu->spRegs[SH_SGR] = cpu->r[15];
 
@@ -201,7 +212,6 @@ static bool handleException(
         cpu->pc = 0xa0000000;
 
     cpu->excMask &= ~(1 << exc);
-    return true;
 }
 
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
@@ -209,6 +219,7 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
     mq_log(MQ_LOG_DEBUG, "[PC=%08x] Exception raised! %s (%08x)", cpu->pc,
         mq_cpu_exceptionName(exc), value);
 
+    cpu->excPC = cpu->pc - 2 * cpu->inDelaySlot;
     cpu->excMask |= (1 << exc);
     if(exc == SH_EXC_INS_ADDR
        || exc == SH_EXC_INS_TLBMISS
@@ -242,6 +253,7 @@ static void updateIncomingInterrupt(mqCpu *cpu)
     else {
         // mq_log(MQ_LOG_DEBUG, "Interrupt raised! 0x%03x (prio=%d)",
         //     cpu->nextInterruptINTEVT, cpu->nextInterruptPriority);
+        cpu->excPC = cpu->pc;
         cpu->excMask |= (1 << SH_EXC_INTERRUPT);
         cpu->INTEVT = cpu->nextInterruptINTEVT;
         cpu->INTPRIO = cpu->nextInterruptPriority;
@@ -252,10 +264,13 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
 {
     TracyCZoneN(_ctx, "cpu", true);
 
-    u32 previousPC = cpu->pc;
+    u32 exceptionsRemaining = 0;
 
-    if(MQ_UNLIKELY(cpu->sleeping))
+    if(MQ_UNLIKELY(cpu->sleeping)) {
+        if(MQ_UNLIKELY(cpu->excMask))
+            mq_cpu_handleException(mach, cpu);
         goto endCycle;
+    }
 
     // printf("Cycle: pc=%08x\n", cpu->pc);
 
@@ -273,6 +288,29 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
         TracyCZoneN(_ctx, "exec", true);
         _mq_cpu_execute(mach, cpu, ins);
         TracyCZoneEnd(_ctx);
+
+        /* Handle the exception raised, if any.
+           TODO: Move that into instructions' semantics. */
+        if(MQ_UNLIKELY(cpu->excMask & ~(1 << SH_EXC_INTERRUPT)))
+            mq_cpu_handleException(mach, cpu);
+
+        if(cpu->excMask & (1 << SH_EXC_INTERRUPT)) {
+            /* Handle the interrupt raised, if any.
+               TODO: Move that into the instructions' semantics. */
+            if(!cpu->inDelaySlot)
+                mq_cpu_handleException(mach, cpu);
+            /* Interrupts are not accepted between a branch instruction and its
+               delay slot. But they don't occur anyway because no branching
+               instruction raises interrupts... *except* rte. Once we recompile
+               blocks we'll schedule an interrupt check after rte's delay slot.
+               But for now we're checking for it after every delay slot. */
+            else if(ins != 0x002b /* rte */) {
+                mq_log(MQ_LOG_ERROR, "interrupt after branch?!");
+                mach->stuck = true;
+                return;
+            }
+            else exceptionsRemaining = (1 << SH_EXC_INTERRUPT);
+        }
     }
     /* Only check for the syscall handler if the read fails. This means we can
        only emulate syscalls if we don't map the syscall stub. If we do map it,
@@ -284,6 +322,8 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     }
     else {
         mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
+        mq_cpu_handleException(mach, cpu);
+        goto endCycle;
     }
 
     /* In case of a delay slot, continue. */
@@ -296,10 +336,16 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
             TracyCZoneEnd(_ctx);
             cpu->pc = cpu->delaySlotTarget;
             cpu->inDelaySlot = false;
+
+            /* If an exception occurs on the delay slot instruction, cpu->excPC
+               (and thus SPC) is set to the jump's address, as per manual. */
+            if(MQ_UNLIKELY(cpu->excMask))
+                mq_cpu_handleException(mach, cpu);
         }
         else {
-            // TODO: Should that be illegal slot?
             mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
+            mq_cpu_handleException(mach, cpu);
+            goto endCycle;
         }
     }
 
@@ -314,14 +360,8 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
     }
 
 endCycle:
-    /* Check for exceptions or interrupts. This is done *after* running the
-       instruction because some exceptions are re-execution type. */
-    if(MQ_UNLIKELY(cpu->excMask)) {
-        int exc = highestPriorityException(cpu->excMask);
-        if(!handleException(mach, cpu, exc, previousPC))
-            mach->stuck = true;
-    }
-
+    if(MQ_UNLIKELY(cpu->excMask & exceptionsRemaining))
+        mq_cpu_handleException(mach, cpu);
     TracyCZoneEnd(_ctx);
 }
 

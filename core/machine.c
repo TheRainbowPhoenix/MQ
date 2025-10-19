@@ -386,6 +386,14 @@ void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
     }
 
     mach->processTimer += mach->processFrequency;
+
+    /* Take care of any exceptions or interrupts raised by modules. We'll clear
+       them fully before resuming execution. If there are multiple pending, the
+       next one will be accepted either after rte's delay slot or, in case the
+       interrupt handlers itself allows interrupts, when ldc is used to reset
+       BL to 0. */
+    if(mach->cpu.excMask)
+        mq_cpu_handleException(mach, &mach->cpu);
     TracyCZoneEnd(_ctx);
 }
 
