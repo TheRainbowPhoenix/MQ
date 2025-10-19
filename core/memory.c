@@ -844,7 +844,7 @@ bool _mq_chunk_read(
         return true;
     }
 
-    return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
+    return false;
 }
 
 static bool _mq_chunk_write(
@@ -922,7 +922,7 @@ bool mq_memory_write(
     mqMachine *mach, mqMemory *mem, u32 addr, int size, u32 value)
 {
     if(MQ_UNLIKELY(addr & (size - 1)))
-        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_WRITE_ADDR, addr);
+        return false;
 
     if(mq_memory_write_pure(mem, addr, size, value))
         return true;
@@ -938,9 +938,8 @@ bool mq_memory_write(
     }
     /* Memory writes outside bounds of defined memory raise TLB errors when
        accessing U0/P0 but just silently do nothing in P1-P4. */
-    // TODO: Memory access exception type: instruction read vs. data read.
     if(addr < 0x80000000)
-        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_WRITE_ADDR, addr);
+        return false;
     else
         mq_log(MQ_LOG_WARNING,
             "[PC=%08x] unhandled write @ %08x (%dB) -> ignoring",

@@ -184,7 +184,8 @@ void mq_cpu_handleException(mqMachine *mach, mqCpu *cpu)
             mq_cpu_exceptionName(exc));
     }
 
-    cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? cpu->excPC : cpu->pc;
+    cpu->spRegs[SH_SPC] =
+        exc_isReexecutionType(exc) ? cpu->excPC : cpu->nextPC;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
     cpu->spRegs[SH_SGR] = cpu->r[15];
 
@@ -281,7 +282,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
     }
 
     /* Fetch the next instruction. */
-    u32 ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
+    u32 ins = mq_memory_read_opcode(mach->memory, cpu->pc);
     if(MQ_LIKELY(ins != 0)) {
         cpu->nextPC = cpu->pc + 2;
 
@@ -304,24 +305,20 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 
         /* Handle the exception raised, if any.
            TODO: Move that into instructions' semantics. */
-        if(MQ_UNLIKELY(cpu->excMask & ~(1 << SH_EXC_INTERRUPT)))
-            mq_cpu_handleException(mach, cpu);
-
-        if(cpu->excMask & (1 << SH_EXC_INTERRUPT)) {
-            /* Handle the interrupt raised, if any.
-               TODO: Move that into the instructions' semantics. */
-            if(!cpu->inDelaySlot)
-                mq_cpu_handleException(mach, cpu);
-            /* Interrupts are not accepted between a branch instruction and its
-               delay slot. But they don't occur anyway because no branching
-               instruction raises interrupts... *except* rte. Once we recompile
-               blocks we'll schedule an interrupt check after rte's delay slot.
-               But for now we're checking for it after every delay slot. */
-            else if(ins != 0x002b /* rte */) {
-                mq_log(MQ_LOG_ERROR, "interrupt after branch?!");
-                mach->stuck = true;
-                return;
-            }
+        if(MQ_UNLIKELY(cpu->excMask & ~(1 << SH_EXC_INTERRUPT))) {
+            mq_log(MQ_LOG_ERROR, "exception not already handled?!");
+            mach->stuck =  true;
+            return;
+        }
+        /* Interrupts are handled in instructions, except after rte, because
+           interrupts are not accepted between a branch instruction and its
+           delay slot (no other delayed branch does this). */
+        if(MQ_UNLIKELY(
+                cpu->excMask & (1 << SH_EXC_INTERRUPT))
+                && ins != 0x002b /* rte */) {
+            mq_log(MQ_LOG_ERROR, "interrupt not already handled?!");
+            mach->stuck = true;
+            return;
         }
     }
     /* Only check for the syscall handler if the read fails. This means we can
@@ -342,7 +339,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 
     /* Delayed branch instruction don't increment PC, which is not needed: all
        PC-dependent instructions are forbidden as delay slots. */
-    ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc + 2);
+    ins = mq_memory_read_opcode(mach->memory, cpu->pc + 2);
     if(MQ_LIKELY(ins != 0)) {
         /* Check if this is the last instruction in a repeat control loop. */
         // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
@@ -365,7 +362,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
             mq_cpu_handleException(mach, cpu);
     }
     else {
-        return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc + 2);
     }
 }
 

@@ -35,9 +35,13 @@
 #   to support multiple processor types.
 # !dsp
 #   Only available when the DSP is on. TODO: Not used yet.
+# !int
+#   The instruction can cause an instruction to be generated.
 # !illslot
 #   The instruction is illegal in a delay slot. This adds checks automatically
 #   in the switch-decide tree and function table.
+# !delayslot
+#   The instruction has a delay slot. Implies !illslot.
 # !overload
 #   Replaces a previously-listed instruction in case of an opcode conflict.
 #
@@ -69,12 +73,12 @@ switch($[12:4]) {
 
 0000.nnnn.cccc.0010  stc
 
-0000.mmmm.0000.0011  bsrf              !illslot
+0000.mmmm.0000.0011  bsrf              !delayslot
 #
-0000.mmmm.0010.0011  braf              !illslot
+0000.mmmm.0010.0011  braf              !delayslot
 # # #
-0000.mmmm.0110.0011  movlil            !sh4
-0000.nnnn.0111.0011  movcol            !sh4
+0000.mmmm.0110.0011  movlil            !sh4 !int
+0000.nnnn.0111.0011  movcol            !sh4 !int
 0000.nnnn.1000.0011  pref
 0000.nnnn.1001.0011  ocbi              !sh4
 0000.nnnn.1010.0011  ocbp              !sh4
@@ -84,11 +88,11 @@ switch($[12:4]) {
 0000.nnnn.1110.0011  icbi              !sh4 !illslot
 #
 
-0000.nnnn.mmmm.0100  movb_w_rm_r0rn
+0000.nnnn.mmmm.0100  movb_w_rm_r0rn    !int
 
-0000.nnnn.mmmm.0101  movw_w_rm_r0rn
+0000.nnnn.mmmm.0101  movw_w_rm_r0rn    !int
 
-0000.nnnn.mmmm.0110  movl_w_rm_r0rn
+0000.nnnn.mmmm.0110  movl_w_rm_r0rn    !int
 
 0000.nnnn.mmmm.0111  mull
 
@@ -108,29 +112,29 @@ switch($[12:4]) {
 
 0000.nnnn.ssss.1010  sts
 
-0000.0000.0000.1011  rts               !illslot
+0000.0000.0000.1011  rts               !delayslot
 0000.0000.0001.1011  sleep
-0000.0000.0010.1011  rte               !illslot
-0000.0000.1010.1011  synco             !sh4
+0000.0000.0010.1011  rte               !delayslot
+0000.0000.1010.1011  synco             !sh4 !int
 
-0000.nnnn.mmmm.1100  movb_r_r0rm_rn
-0000.nnnn.mmmm.1101  movw_r_r0rm_rn
-0000.nnnn.mmmm.1110  movl_r_r0rm_rn
+0000.nnnn.mmmm.1100  movb_r_r0rm_rn    !int
+0000.nnnn.mmmm.1101  movw_r_r0rm_rn    !int
+0000.nnnn.mmmm.1110  movl_r_r0rm_rn    !int
 0000.nnnn.mmmm.1111  macl
 
 #---
 
-0001.nnnn.mmmm.dddd  movl_w_rm_drn
+0001.nnnn.mmmm.dddd  movl_w_rm_drn     !int
 
 #---
 
-0010.nnnn.mmmm.0000  movb_w
-0010.nnnn.mmmm.0001  movw_w
-0010.nnnn.mmmm.0010  movl_w
+0010.nnnn.mmmm.0000  movb_w            !int
+0010.nnnn.mmmm.0001  movw_w            !int
+0010.nnnn.mmmm.0010  movl_w            !int
 #
-0010.nnnn.mmmm.0100  movb_w_predec
-0010.nnnn.mmmm.0101  movw_w_predec
-0010.nnnn.mmmm.0110  movl_w_predec
+0010.nnnn.mmmm.0100  movb_w_predec     !int
+0010.nnnn.mmmm.0101  movw_w_predec     !int
+0010.nnnn.mmmm.0110  movl_w_predec     !int
 0010.nnnn.mmmm.0111  div0s
 0010.nnnn.mmmm.1000  tst
 0010.nnnn.mmmm.1001  and
@@ -186,7 +190,7 @@ switch($[12:4]) {
 0100.mmmm.ssss.0110  ldsl
 
 0100.mmmm.cccc.0111  ldcl
-0100.mmmm.0000.0111  ldcl_sr           !overload !illslot
+0100.mmmm.0000.0111  ldcl_sr           !overload !illslot !int
 
 0100.nnnn.0000.1000  shll2
 0100.nnnn.0001.1000  shll8
@@ -195,37 +199,37 @@ switch($[12:4]) {
 0100.nnnn.0000.1001  shlr2
 0100.nnnn.0001.1001  shlr8
 0100.nnnn.0010.1001  shlr16
-0100.mmmm.1010.1001  movual_r          !sh4
-0100.mmmm.1110.1001  movual_r_postinc  !sh4
+0100.mmmm.1010.1001  movual_r          !sh4 !int
+0100.mmmm.1110.1001  movual_r_postinc  !sh4 !int
 
 0100.mmmm.ssss.1010  lds
 
-0100.nnnn.0010.1011  jmp               !illslot
-0100.nnnn.0000.1011  jsr               !illslot
-0100.nnnn.0001.1011  tasb
+0100.nnnn.0010.1011  jmp               !delayslot
+0100.nnnn.0000.1011  jsr               !delayslot
+0100.nnnn.0001.1011  tasb              !int
 
 0100.nnnn.mmmm.1100  shad
 
 0100.nnnn.mmmm.1101  shld
 
 0100.mmmm.cccc.1110  ldc
-0100.mmmm.0000.1110  ldc_sr            !overload !illslot
+0100.mmmm.0000.1110  ldc_sr            !overload !illslot !int
 
 0100.nnnn.mmmm.1111  macw
 
 #---
 
-0101.nnnn.mmmm.dddd  movl_r_drm_rn
+0101.nnnn.mmmm.dddd  movl_r_drm_rn     !int
 
 #---
 
-0110.nnnn.mmmm.0000  movb_r
-0110.nnnn.mmmm.0001  movw_r
-0110.nnnn.mmmm.0010  movl_r
+0110.nnnn.mmmm.0000  movb_r            !int
+0110.nnnn.mmmm.0001  movw_r            !int
+0110.nnnn.mmmm.0010  movl_r            !int
 0110.nnnn.mmmm.0011  mov
-0110.nnnn.mmmm.0100  movb_r_postinc
-0110.nnnn.mmmm.0101  movw_r_postinc
-0110.nnnn.mmmm.0110  movl_r_postinc
+0110.nnnn.mmmm.0100  movb_r_postinc    !int
+0110.nnnn.mmmm.0101  movw_r_postinc    !int
+0110.nnnn.mmmm.0110  movl_r_postinc    !int
 0110.nnnn.mmmm.0111  not
 0110.nnnn.mmmm.1000  swapb
 0110.nnnn.mmmm.1001  swapw
@@ -242,21 +246,21 @@ switch($[12:4]) {
 
 #---
 
-1000.0000.nnnn.dddd  movb_w_r0_drn
-1000.0001.nnnn.dddd  movw_w_r0_drn
+1000.0000.nnnn.dddd  movb_w_r0_drn     !int
+1000.0001.nnnn.dddd  movw_w_r0_drn     !int
 1000.0010.iiii.iiii  setrc_imm         !dsp
 #
-1000.0100.mmmm.dddd  movb_r_drm_r0
-1000.0101.mmmm.dddd  movw_r_drm_r0
+1000.0100.mmmm.dddd  movb_r_drm_r0     !int
+1000.0101.mmmm.dddd  movw_r_drm_r0     !int
 # #
 1000.1000.iiii.iiii  cmp_eq_imm_r0
 1000.1001.dddd.dddd  bt                !illslot
 1000.1010.iiii.iiii  ldrc_imm          !dsp
 1000.1011.dddd.dddd  bf                !illslot
 1000.1100.dddd.dddd  ldrs              !dsp !illslot
-1000.1101.dddd.dddd  bt_s              !illslot
+1000.1101.dddd.dddd  bt_s              !delayslot
 1000.1110.dddd.dddd  ldre              !dsp !illslot
-1000.1111.dddd.dddd  bf_s              !illslot
+1000.1111.dddd.dddd  bf_s              !delayslot
 
 #---
 
@@ -264,25 +268,25 @@ switch($[12:4]) {
 
 #---
 
-1010.dddd.dddd.dddd  bra               !illslot
+1010.dddd.dddd.dddd  bra               !delayslot
 
 #---
 
-1011.dddd.dddd.dddd  bsr               !illslot
+1011.dddd.dddd.dddd  bsr               !delayslot
 
 #---
 
-1100.0000.dddd.dddd  movb_w_r0_dgbr
-1100.0001.dddd.dddd  movw_w_r0_dgbr
-1100.0010.dddd.dddd  movl_w_r0_dgbr
-1100.0100.dddd.dddd  movb_r_dgbr_r0
-1100.0101.dddd.dddd  movw_r_dgbr_r0
-1100.0110.dddd.dddd  movl_r_dgbr_r0
+1100.0000.dddd.dddd  movb_w_r0_dgbr    !int
+1100.0001.dddd.dddd  movw_w_r0_dgbr    !int
+1100.0010.dddd.dddd  movl_w_r0_dgbr    !int
+1100.0100.dddd.dddd  movb_r_dgbr_r0    !int
+1100.0101.dddd.dddd  movw_r_dgbr_r0    !int
+1100.0110.dddd.dddd  movl_r_dgbr_r0    !int
 
-1100.1101.iiii.iiii  andb_imm_r0gbr
-1100.1111.iiii.iiii  orb_imm_r0gbr
-1100.1100.iiii.iiii  tstb_imm_r0gbr
-1100.1110.iiii.iiii  xorb_imm_r0gbr
+1100.1101.iiii.iiii  andb_imm_r0gbr    !int
+1100.1111.iiii.iiii  orb_imm_r0gbr     !int
+1100.1100.iiii.iiii  tstb_imm_r0gbr    !int
+1100.1110.iiii.iiii  xorb_imm_r0gbr    !int
 
 1100.0111.dddd.dddd  mova              !illslot
 
@@ -294,7 +298,7 @@ switch($[12:4]) {
 
 #---
 
-1101.nnnn.dddd.dddd  movl_r_dpc_rn     !illslot
+1101.nnnn.dddd.dddd  movl_r_dpc_rn     !delayslot
 
 #---
 
@@ -302,4 +306,4 @@ switch($[12:4]) {
 
 #---
 
-1111.iiii.iiii.iiii dsp_entry
+1111.iiii.iiii.iiii dsp_entry          !int

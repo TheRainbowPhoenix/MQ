@@ -74,6 +74,7 @@ static void copyData(mqMachine *mach, u32 SAR, u32 DAR, int size)
     // Note: We need to support writing to MMIO here so it can't be too easy,
     // but usually one side will be a buffer and the other won't change so we
     // can at least try to resolve the memory layers first.
+    // TODO[dma]: Raise address errors
 
     u32 x;
     if(size == 1) {

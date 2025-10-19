@@ -193,7 +193,12 @@ def parseSpec(spec, filename):
         else:
             pattern = m[1].replace(".", "")
             tags = [t.removeprefix("!") for t in m[3].split()]
-            instructions.append(Instruction(pattern, len(pattern), m[2], tags))
+            if "delayslot" in tags:
+                tags.append("illslot")
+            i = Instruction(pattern, len(pattern), m[2], tags)
+            if "int" in tags and "delayslot" in tags:
+                raise Exception(f"{i} is a delay slot and generates interrupts")
+            instructions.append(i)
 
     try:
         l = SwitchTreeLexer(tree, filename)
@@ -303,9 +308,13 @@ static void invalid_wrapper(mqMachine *mach, mqCpu *cpu, u16 inst) {
 }
 """
 
-ILLSLOT_TEMPLATE = """
+ILLSLOT_TEMPLATE = """\
     if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
-        return mq_cpu_raiseException(cpu, SH_EXC_ILLEGAL_SLOT, 0);
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_ILLEGAL_SLOT, 0);
+"""
+INT_TEMPLATE = """\
+    if(MQ_UNLIKELY(cpu->excMask & (1 << SH_EXC_INTERRUPT)))
+        mq_cpu_handleException(mach, cpu);
 """
 
 TABLE_TEMPLATE = """
@@ -334,6 +343,8 @@ def generateDecoderTableWrapperFunc(ins: list[Instruction]) -> str:
         if len(arg_list) == 2:
             c_content += '    (void)inst;\n'
         c_content += f"    {i.name}({', '.join(arg_list)});\n"
+        if "int" in i.tags:
+            c_content += INT_TEMPLATE
         c_content += '}\n\n'
     return c_content
 
