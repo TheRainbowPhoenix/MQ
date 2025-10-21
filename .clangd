@@ -1,0 +1,7 @@
+CompileFlags:
+  Add:
+    - '-I../include'
+    - '-I../3rdparty/stb'
+    - '-I../3rdparty/tracy/public'
+    - '-xc++'
+  Compiler: clang++

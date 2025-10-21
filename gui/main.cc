@@ -118,6 +118,10 @@ static void render(void)
             gui.actions.display.height = mach->display->height;
             if(mach->display->dirty) {
                 mqDisplay *d = mach->display;
+                gui.actions.display.data = memdup(
+                    mach->display->data,
+                    mq_display_framebufferSize(mach->display)
+                );
                 gui.displayTexture->bind();
                 if(d->format == MQ_DISPLAY_FORMAT_L8) {
                     gui.displayTexture->setFormat(GL_R8, d->width, d->height);

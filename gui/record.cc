@@ -118,7 +118,7 @@ static int _ffmpeg_init(
     //      warning will be displayer saying "Neither bitrate nor constrained
     //      quality specified, using default CRF of 32". So, use the default
     //      value
-    const AVCodec *codec = avcodec_find_encoder_by_name("libvpx-vp9");
+    const AVCodec *codec = avcodec_find_encoder_by_name("libx264");
     if (codec == NULL) {
         return record_set_error(
             record, -4,
@@ -126,7 +126,7 @@ static int _ffmpeg_init(
         );
     }
     AVDictionary* codec_opt = NULL;
-    if (av_dict_set(&codec_opt, "crf", "32", 0) < 0) {
+    if (av_dict_set(&codec_opt, "crf", "18", 0) < 0) {
         return record_set_error(
             record, -5,
             "ffmpeg_init: could not generate codec options"
