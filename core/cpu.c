@@ -288,12 +288,13 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
         // RC should be decremented *after* the repeat end instruction. (To fix
         // this, generate the correct value of RC dynamically when reading SR.)
-        int RC = cpu->RC;
-        if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 1)) {
-            cpu->RC = RC - 1;
+        if(MQ_UNLIKELY(cpu->pc == cpu->dspLoopPC)) {
+            cpu->RC--;
             /* Setup the next loop iteration */
-            if(RC > 1)
+            if(cpu->RC)
                 cpu->nextPC = cpu->spRegs[SH_RS];
+            else
+                cpu->dspLoopPC = -1;
         }
 
         /* Decode and execute the instruction. */
@@ -323,12 +324,13 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
     if(MQ_LIKELY(ins2 != 0)) {
         /* Check if this is the last instruction in a repeat control loop. */
         // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
-        int RC = cpu->RC;
-        if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 3)) {
-            cpu->RC = RC - 1;
+        if(MQ_UNLIKELY(cpu->pc == cpu->dspLoopPC)) {
+            cpu->RC--;
             /* Setup the next loop iteration */
-            if(RC > 1)
+            if(cpu->RC)
                 cpu->nextPC = cpu->spRegs[SH_RS];
+            else
+                cpu->dspLoopPC = -1;
         }
 
         TracyCZoneN(_ctx, "delay_slot", true);

@@ -904,6 +904,7 @@ MQ_INLINE void ldrc(mqMachine *mach, mqCpu *cpu, int m) {
     /* ldrc rm */
     // TODO: ldrc: Doesn't set SR.RF to disable setrc-style emulation
     cpu->RC = cpu->r[m] & 0xfff;
+    cpu->dspLoopPC = cpu->spRegs[SH_RE] & -2;
     cpu->spRegs[SH_RE] |= 1;
     cpu->pc = cpu->nextPC;
 }
@@ -911,6 +912,7 @@ MQ_INLINE void ldrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     /* ldrc #imm */
     // TODO: ldrc_imm: Doesn't set SR.RF to disable setrc-style emulation
     cpu->RC = imm & 0xfff;
+    cpu->dspLoopPC = cpu->spRegs[SH_RE] & -2;
     cpu->spRegs[SH_RE] |= 1;
     cpu->pc = cpu->nextPC;
 }

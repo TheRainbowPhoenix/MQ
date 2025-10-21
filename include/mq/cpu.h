@@ -105,6 +105,8 @@ struct mqCpu
     u32 pc;
     u32 nextPC;
     bool inDelaySlot;
+    /* Address of the DSP loop instruction when there's one, -1 if none. */
+    u32 dspLoopPC;
 
     /* Mask of pending exceptions */
     u32 excMask;
