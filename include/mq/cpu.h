@@ -92,8 +92,16 @@ struct mqCpu
     u32 r[16];  // r0..r15
     u32 spRegs[SH_NUM_SPECIAL_REGS];
 
+    /* SR is split in two parts:
+       * The "system" fields, in spRegs[SH_SR]: MD, RB, BL, IMASK
+       * The "split" fields below: RC, DSP, DMY, DMX, M, Q, RF, S, T
+       All of the split fields can be modified without any direct effect,
+       except RC which is managed by ldrc and the DSP loop logic. */
+    i16 RC;
+    i8 T, S, Q, M, DSP, DMX, DMY, RF;
+
     /* Control flow: PC, whether the next instruction should be executed as a
-       delay slot, and the target to jump to after said delay slot. */
+       delay slot, and the address of the next instruction. */
     u32 pc;
     u32 nextPC;
     bool inDelaySlot;
@@ -186,58 +194,13 @@ void _mq_cpu_execute(struct mqMachine *mach, mqCpu *cpu, u16 opcode);
 /* Set the CPU to sleep. It will wake up at the next interrupt. */
 void mq_cpu_sleep(mqCpu *cpu);
 
-/* Set/get the value of the T bit; the value provided must be 0 or 1. */
-MQ_INLINE void mq_cpu_setT(mqCpu *cpu, int T)
-{
-    cpu->spRegs[SH_SR] = (cpu->spRegs[SH_SR] & -2) + T;
-}
-MQ_INLINE int mq_cpu_getT(mqCpu *cpu)
-{
-    return cpu->spRegs[SH_SR] & 1;
-}
-/* Set/get the value of the S bit; the value provided must be 0 or 1. */
-MQ_INLINE void mq_cpu_setS(mqCpu *cpu, int S)
-{
-    cpu->spRegs[SH_SR] &= ~(1 << 1);
-    cpu->spRegs[SH_SR] |= (S != 0) << 1;
-}
-MQ_INLINE int mq_cpu_getS(mqCpu *cpu)
-{
-    return (cpu->spRegs[SH_SR] >> 1) & 1;
-}
-/* Set/get the value of the Q bit; the value provided must be 0 or 1. */
-MQ_INLINE void mq_cpu_setQ(mqCpu *cpu, int Q)
-{
-    cpu->spRegs[SH_SR] &= ~(1 << 8);
-    cpu->spRegs[SH_SR] |= (Q != 0) << 8;
-}
-MQ_INLINE int mq_cpu_getQ(mqCpu *cpu)
-{
-    return (cpu->spRegs[SH_SR] >> 8) & 1;
-}
-/* Set/get the value of the M bit; the value provided must be 0 or 1. */
-MQ_INLINE void mq_cpu_setM(mqCpu *cpu, int M)
-{
-    cpu->spRegs[SH_SR] &= ~(1 << 9);
-    cpu->spRegs[SH_SR] |= (M != 0) << 9;
-}
-MQ_INLINE int mq_cpu_getM(mqCpu *cpu)
-{
-    return (cpu->spRegs[SH_SR] >> 9) & 1;
-}
-/* Set/get the value of the RC field; the value provide must be 0...4095. */
-MQ_INLINE void mq_cpu_setRC(mqCpu *cpu, int RC)
-{
-    cpu->spRegs[SH_SR] &= ~(0xfff << 16);
-    cpu->spRegs[SH_SR] |= (RC & 0xfff) << 16;
-}
-MQ_INLINE int mq_cpu_getRC(mqCpu *cpu)
-{
-    return (cpu->spRegs[SH_SR] >> 16) & 0xfff;
-}
-
+/* Get the current value of SR. */
+u32 mq_cpu_getSR(mqCpu *cpu);
 /* Set the entire SR register. This swaps the register banks if RB changes. */
 void mq_cpu_setSR(mqCpu *cpu, u32 SR);
+/* Modify the SR register in a way that only affects system fields. The
+   systemSR value can be computed based off spRegs[SH_SR]. */
+void mq_cpu_setSystemSR(mqCpu *cpu, u32 SystemSR);
 
 /* Set a delay slot with the given target destination. */
 MQ_INLINE void mq_cpu_setDelaySlot(mqCpu *cpu, u32 targetAddress)

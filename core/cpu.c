@@ -186,18 +186,19 @@ void mq_cpu_handleException(mqMachine *mach, mqCpu *cpu)
 
     cpu->spRegs[SH_SPC] =
         exc_isReexecutionType(exc) ? cpu->excPC : cpu->nextPC;
-    cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
+    cpu->spRegs[SH_SSR] = mq_cpu_getSR(cpu);
     cpu->spRegs[SH_SGR] = cpu->r[15];
 
     /* Set BL=1, RB=1, MD=1 */
-    mq_cpu_setSR(cpu, cpu->spRegs[SH_SR] | 0x70000000);
+    mq_cpu_setSystemSR(cpu, cpu->spRegs[SH_SR] | 0x70000000);
 
     if(exc_isInterrupt(exc)) {
         /* INTEVT and INTPRIO have been set before raising the interrupt. */
         if(cpu->CPUOPM & 0x00000008) {
             /* Set IMASK to the interrupt's priority level */
-            u32 SR = cpu->spRegs[SH_SR];
-            mq_cpu_setSR(cpu, (SR & 0xffffff0f) + (cpu->INTPRIO << 4));
+            u32 SystemSR = cpu->spRegs[SH_SR];
+            SystemSR = (SystemSR & 0xffffff0f) + (cpu->INTPRIO << 4);
+            mq_cpu_setSystemSR(cpu, SystemSR);
         }
     }
     else {
@@ -256,9 +257,9 @@ void mq_cpu_raiseException2(mqMachine *mach, mqCpu *cpu, int exc, u32 value)
 
 static void updateIncomingInterrupt(mqCpu *cpu)
 {
-    u32 SR = cpu->spRegs[SH_SR];
-    u32 BL = (SR >> 28) & 1;
-    int IMASK = (SR >> 4) & 0xf;
+    u32 SystemSR = cpu->spRegs[SH_SR];
+    u32 BL = (SystemSR >> 28) & 1;
+    int IMASK = (SystemSR >> 4) & 0xf;
 
     if(BL || !cpu->nextInterruptINTEVT || cpu->nextInterruptPriority <= IMASK) {
         cpu->excMask &= ~(1 << SH_EXC_INTERRUPT);
@@ -287,9 +288,9 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
         // RC should be decremented *after* the repeat end instruction. (To fix
         // this, generate the correct value of RC dynamically when reading SR.)
-        int RC = mq_cpu_getRC(cpu);
+        int RC = cpu->RC;
         if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 1)) {
-            mq_cpu_setRC(cpu, RC - 1);
+            cpu->RC = RC - 1;
             /* Setup the next loop iteration */
             if(RC > 1)
                 cpu->nextPC = cpu->spRegs[SH_RS];
@@ -322,9 +323,9 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
     if(MQ_LIKELY(ins2 != 0)) {
         /* Check if this is the last instruction in a repeat control loop. */
         // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
-        int RC = mq_cpu_getRC(cpu);
+        int RC = cpu->RC;
         if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 3)) {
-            mq_cpu_setRC(cpu, RC - 1);
+            cpu->RC = RC - 1;
             /* Setup the next loop iteration */
             if(RC > 1)
                 cpu->nextPC = cpu->spRegs[SH_RS];
@@ -357,13 +358,37 @@ void mq_cpu_sleep(mqCpu *cpu)
     cpu->sleeping = true;
 }
 
+u32 mq_cpu_getSR(mqCpu *cpu)
+{
+    return cpu->spRegs[SH_SR]
+           | (cpu->T << 0) | (cpu->S << 1) | (cpu->RF << 2) | (cpu->Q << 8)
+           | (cpu->M << 9) | (cpu->DMX << 10) | (cpu->DMY << 11)
+           | (cpu->DSP << 12) | (cpu->RC << 16);
+}
+
 void mq_cpu_setSR(mqCpu *cpu, u32 SR)
 {
+    cpu->T = SR & 1;
+    cpu->S = (SR >> 1) & 1;
+    cpu->RF = (SR >> 2) & 3;
+    cpu->Q = (SR >> 8) & 1;
+    cpu->M = (SR >> 9) & 1;
+    cpu->DMX = (SR >> 10) & 1;
+    cpu->DMY = (SR >> 11) & 1;
+    cpu->DSP = (SR >> 12) & 1;
+    cpu->RC = (SR >> 16) & 0xfff;
+
+    // TODO: mq_cpu_setSR: Block the DSP loop?
+    mq_cpu_setSystemSR(cpu, SR & 0xf00000f0);
+}
+
+void mq_cpu_setSystemSR(mqCpu *cpu, u32 SystemSR)
+{
     // TODO[cpu]: SR mask depends on processor type (SH3 vs. SH4AL-DSP)
-    SR &= 0x7fff1fff;
+    SystemSR &= 0x700000f0;
 
     /* Swap register banks if we change the value of RB */
-    if((SR ^ cpu->spRegs[SH_SR]) & 0x20000000) {
+    if((SystemSR ^ cpu->spRegs[SH_SR]) & 0x20000000) {
         for(int i = 0; i < 8; i++) {
             u32 tmp = cpu->r[i];
             cpu->r[i] = cpu->spRegs[SH_RnBANK + i];
@@ -372,9 +397,9 @@ void mq_cpu_setSR(mqCpu *cpu, u32 SR)
     }
 
     /* Update the incoming interrupt logic if we change BL or IMASK */
-    bool updateInterrupt = ((SR ^ cpu->spRegs[SH_SR]) & 0x100000f0);
+    bool updateInterrupt = ((SystemSR ^ cpu->spRegs[SH_SR]) & 0x100000f0);
 
-    cpu->spRegs[SH_SR] = SR;
+    cpu->spRegs[SH_SR] = SystemSR;
 
     if(updateInterrupt)
         updateIncomingInterrupt(cpu);

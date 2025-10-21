@@ -277,8 +277,8 @@ void CPUWindow::renderContents(mqMachine *omach)
     ImGui::Text("macl:  %08x", omach->cpu.spRegs[SH_MACL]);
     ImGui::Text("pr:    %08x", omach->cpu.spRegs[SH_PR]);
 
-    u32 SR = omach->cpu.spRegs[SH_SR];
-    ImGui::Text("sr:    %08x", omach->cpu.spRegs[SH_SR]);
+    u32 SR = mq_cpu_getSR(&omach->cpu);
+    ImGui::Text("sr:    %08x", SR);
     ImGui::Text(" MD=%d RB=%d BL=%d",
         (SR >> 30) & 1, (SR >> 29 & 1), (SR >> 28) & 1);
     ImGui::Text(" IMASK=%d",
@@ -769,7 +769,7 @@ void MMUWindow::renderContents(mqMachine *omach)
 void InterruptsWindow::renderContents(mqMachine *omach)
 {
     mqCpu *cpu = &omach->cpu;
-    int IMASK = (cpu->spRegs[SH_SR] >> 4) & 0xf;
+    int IMASK = (mq_cpu_getSR(cpu) >> 4) & 0xf;
     int INTMU = (cpu->CPUOPM >> 3) & 1;
 
     mqINTC *INTC = mq_intc_get(omach);
