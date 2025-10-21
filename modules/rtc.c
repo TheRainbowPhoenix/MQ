@@ -361,7 +361,7 @@ static void write_RCR3(mqMachine *mach, u32 value)
 
 //=== Module =================================================================//
 
-bool mq_rtc_setup(mqMachine *mach, int initializeKind)
+bool mq_rtc_setup(mqMachine *mach)
 {
     mqMemory *mem = mach->memory;
     mqPage *pg413 = mq_memory_getPagePrealloc(mem, 0xa413fec0, 0x28, 18);
@@ -372,17 +372,8 @@ bool mq_rtc_setup(mqMachine *mach, int initializeKind)
     if(!RTC)
         return false;
 
-    // initialize with default value found when reseting the device on fx
-    // device which sets the date to Sunday, November 01 2010 at 00:00:00.
-    // Note that the cg device does not reset the peripheral. So, stick
-    // with the mono config for now
-    (void)initializeKind;
-    RTC->RCR2    = 0x09;
-    RTC->RWKCNT  = mq_rtc_bcd8(0);
-    RTC->RDAYCNT = mq_rtc_bcd8(1);
-    RTC->RMONCNT = mq_rtc_bcd8(11);
-    RTC->RYRCNT  = mq_rtc_bcd16(2010);
-    /* Keep PES_period initialized to a non-zero value */
+    /* Keep internal PES period info to 0xffff to indicate that we don't
+     * have periodic interrupt yet */
     RTC->PES_period = 0xffff;
 
     mq_timer_reset(&RTC->internalTimer_256HZ, RESOLUTION_NS_256HZ);

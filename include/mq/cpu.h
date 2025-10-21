@@ -95,13 +95,16 @@ struct mqCpu
     /* Control flow: PC, whether the next instruction should be executed as a
        delay slot, and the target to jump to after said delay slot. */
     u32 pc;
+    u32 nextPC;
     bool inDelaySlot;
-    u32 delaySlotTarget;
 
     /* Mask of pending exceptions */
     u32 excMask;
     /* Exception handling registers */
     u32 TRA, EXPEVT, INTEVT;
+    /* Address of the instruction that last raised an exception (or, if it was
+       in a delay slot, its preceding delayed branch) */
+    u32 excPC;
     /* Extra register storing the priority of the interrupt set in INTEVT */
     u32 INTPRIO;
     /* CPU Operation Mode register */
@@ -136,8 +139,6 @@ enum {
 
 void mq_cpu_reset(mqCpu *cpu);
 
-/* Initialize the CPU state for the given emulation scenario. */
-void mq_cpu_initialize(mqCpu *cpu, int initializeKind);
 /* Setup module IO for the CPU's internal mechanisms. */
 bool mq_cpu_setup(mqCpu *cpu, struct mqMemory *mem);
 
@@ -160,10 +161,23 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value);
    making exception paths terminal calls, notably in memory access code. */
 bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value);
 
-/* Set the next interrput to be accepted. This function is normally called only
+/* Set the next interrupt to be accepted. This function is normally called only
    by the INTC; for sending out interrupts, use the INTC module. */
 void mq_cpu_setIncomingInterrupt(
     mqCpu *cpu, int interrupt, u32 INTEVT, int priority);
+
+/* Handle an exception or interrupt. This function used to be called every
+   cycle but is now called only in instructions that raise exceptions, or after
+   instructions (and background processes) that can cause interrupts. This
+   should be called only if an exception is actually available. */
+void mq_cpu_handleException(struct mqMachine *mach, mqCpu *cpu);
+
+/* Raise an exception and handle it immediately. This is a combination of
+   raiseException and handleException which further checks that only one
+   exception is raised at any time. */
+// TODO: In the long run this may become raiseException.
+void mq_cpu_raiseException2(
+    struct mqMachine *mach, mqCpu *cpu, int exc, u32 value);
 
 void mq_cpu_cycle(struct mqMachine *mach, mqCpu *cpu);
 
@@ -180,6 +194,16 @@ MQ_INLINE void mq_cpu_setT(mqCpu *cpu, int T)
 MQ_INLINE int mq_cpu_getT(mqCpu *cpu)
 {
     return cpu->spRegs[SH_SR] & 1;
+}
+/* Set/get the value of the S bit; the value provided must be 0 or 1. */
+MQ_INLINE void mq_cpu_setS(mqCpu *cpu, int S)
+{
+    cpu->spRegs[SH_SR] &= ~(1 << 1);
+    cpu->spRegs[SH_SR] |= (S != 0) << 1;
+}
+MQ_INLINE int mq_cpu_getS(mqCpu *cpu)
+{
+    return (cpu->spRegs[SH_SR] >> 1) & 1;
 }
 /* Set/get the value of the Q bit; the value provided must be 0 or 1. */
 MQ_INLINE void mq_cpu_setQ(mqCpu *cpu, int Q)
@@ -219,8 +243,7 @@ void mq_cpu_setSR(mqCpu *cpu, u32 SR);
 MQ_INLINE void mq_cpu_setDelaySlot(mqCpu *cpu, u32 targetAddress)
 {
     cpu->inDelaySlot = true;
-    cpu->delaySlotTarget = targetAddress;
-    cpu->pc += 2;
+    cpu->nextPC = targetAddress;
 }
 /* Check if the current instructions is running in a delay slot. This is only
    for instruction emulation functions. */

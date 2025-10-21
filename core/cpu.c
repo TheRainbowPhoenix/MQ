@@ -20,35 +20,6 @@ void mq_cpu_reset(mqCpu *cpu)
     memset(cpu, 0x00, sizeof *cpu);
 }
 
-void mq_cpu_initialize(mqCpu *cpu, int initializeKind)
-{
-    mq_cpu_reset(cpu);
-    cpu->CPUOPM = 0x00000320;
-
-    // TODO: mq_cpu_initialize: Move out of this into CASIOWIN module
-    // (since this describes how CASIOWIN loads programs)
-    if(initializeKind == MQ_CPU_INITIALIZE_POWERON) {
-        cpu->spRegs[SH_SR] = 0x700000f0; // MD=1 RB=1 BL=1 IMASK=15
-        cpu->spRegs[SH_VBR] = 0x00000000;
-        cpu->spRegs[SH_DSR] = 0x0000;
-        cpu->pc = 0xa0000000;
-    }
-    else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_FX) {
-        cpu->spRegs[SH_SR] = 0x40000000; // MD=1
-        cpu->r[4] = 0; // isAppli
-        cpu->r[5] = 0; // optNum
-        cpu->pc = 0x00300200;
-    }
-    else if(initializeKind == MQ_CPU_INITIALIZE_ADDIN_CG) {
-        cpu->spRegs[SH_SR] = 0x40000000; // MD=1
-        cpu->r[4] = 0; // isAppli
-        cpu->r[5] = 0; // optNum
-        cpu->pc = 0x00300000;
-    }
-
-    /* CPU registers are initialized here (most to 0). */
-}
-
 void mq_cpu_makeObserver(mqCpu *ocpu, mqCpu const *cpu)
 {
     memcpy(ocpu, cpu, sizeof *cpu);
@@ -172,9 +143,19 @@ static int highestPriorityException(u32 excMask)
     return -1;
 }
 
-static bool handleException(
-    mqMachine *mach, mqCpu *cpu, int exc, u32 previousPC)
+void mq_cpu_handleException(mqMachine *mach, mqCpu *cpu)
 {
+    if(!cpu->excMask) {
+        mq_log(MQ_LOG_ERROR, "handleException but there's no exception?!");
+        return;
+    }
+    /* There shouldn't be a situation where we raise two exceptions before we
+       handle the first one. */
+    if(cpu->excMask & (cpu->excMask - 1)) {
+        mq_log(MQ_LOG_WARNING, "simultaneous exceptions! %08x", cpu->excMask);
+    }
+    int exc = highestPriorityException(cpu->excMask);
+
     /* SR.BL double-faults if an exception occurs, but simply waits in the case
        of interrupts. However interrupts are already masked by the logic in
        updateIncomingInterrupt() if SR.BL=1, so we don't worry about it.
@@ -184,7 +165,8 @@ static bool handleException(
         if(exc_isInterrupt(exc))
             mq_log(MQ_LOG_ERROR, "Handling interrupt while SR.BL=1?!");
         mq_log(MQ_LOG_ERROR, "Double fault!");
-        return false;
+        mach->stuck = true;
+        return;
     }
 
     /* Break from sleep */
@@ -202,7 +184,8 @@ static bool handleException(
             mq_cpu_exceptionName(exc));
     }
 
-    cpu->spRegs[SH_SPC] = exc_isReexecutionType(exc) ? previousPC : cpu->pc;
+    cpu->spRegs[SH_SPC] =
+        exc_isReexecutionType(exc) ? cpu->excPC : cpu->nextPC;
     cpu->spRegs[SH_SSR] = cpu->spRegs[SH_SR];
     cpu->spRegs[SH_SGR] = cpu->r[15];
 
@@ -230,7 +213,6 @@ static bool handleException(
         cpu->pc = 0xa0000000;
 
     cpu->excMask &= ~(1 << exc);
-    return true;
 }
 
 void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
@@ -238,6 +220,7 @@ void mq_cpu_raiseException(mqCpu *cpu, int exc, u32 value)
     mq_log(MQ_LOG_DEBUG, "[PC=%08x] Exception raised! %s (%08x)", cpu->pc,
         mq_cpu_exceptionName(exc), value);
 
+    cpu->excPC = cpu->pc - 2 * cpu->inDelaySlot;
     cpu->excMask |= (1 << exc);
     if(exc == SH_EXC_INS_ADDR
        || exc == SH_EXC_INS_TLBMISS
@@ -259,6 +242,18 @@ bool mq_cpu_raiseException_false(mqCpu *cpu, int exc, u32 value)
     return false;
 }
 
+void mq_cpu_raiseException2(mqMachine *mach, mqCpu *cpu, int exc, u32 value)
+{
+    if(cpu->excMask) {
+        mq_log(MQ_LOG_ERROR, "raiseAndHandleException: already an exception: "
+            "%08x", cpu->excMask);
+        mach->stuck = true;
+        return;
+    }
+    mq_cpu_raiseException(cpu, exc, value);
+    mq_cpu_handleException(mach, cpu);
+}
+
 static void updateIncomingInterrupt(mqCpu *cpu)
 {
     u32 SR = cpu->spRegs[SH_SR];
@@ -271,33 +266,35 @@ static void updateIncomingInterrupt(mqCpu *cpu)
     else {
         // mq_log(MQ_LOG_DEBUG, "Interrupt raised! 0x%03x (prio=%d)",
         //     cpu->nextInterruptINTEVT, cpu->nextInterruptPriority);
+        cpu->excPC = cpu->pc;
         cpu->excMask |= (1 << SH_EXC_INTERRUPT);
         cpu->INTEVT = cpu->nextInterruptINTEVT;
         cpu->INTPRIO = cpu->nextInterruptPriority;
     }
 }
 
-void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
+MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 {
-    TracyCZoneN(_ctx, "cpu", true);
-
-    u32 previousPC = cpu->pc;
-
     if(MQ_UNLIKELY(cpu->sleeping))
-        goto endCycle;
-
-    // printf("Cycle: pc=%08x\n", cpu->pc);
-
-    /* Check if this is the last instruction in a repeat control loop. */
-    bool end_dsp_loop = false;
-    if(MQ_UNLIKELY(mq_cpu_getRC(cpu)))
-        end_dsp_loop = (cpu->spRegs[SH_RE] == cpu->pc + 1);
+        return;
 
     /* Fetch the next instruction. */
-    // TODO: Same-basic-block prefetching optimization.
-    u32 ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
+    u32 ins = mq_memory_read_opcode(mach->memory, cpu->pc);
     if(MQ_LIKELY(ins != 0)) {
-        // printf("  -> ins=%04x\n", ins);
+        cpu->nextPC = cpu->pc + 2;
+
+        /* Check if this is the last instruction in a repeat control loop. */
+        // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
+        // RC should be decremented *after* the repeat end instruction. (To fix
+        // this, generate the correct value of RC dynamically when reading SR.)
+        int RC = mq_cpu_getRC(cpu);
+        if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 1)) {
+            mq_cpu_setRC(cpu, RC - 1);
+            /* Setup the next loop iteration */
+            if(RC > 1)
+                cpu->nextPC = cpu->spRegs[SH_RS];
+        }
+
         /* Decode and execute the instruction. */
         TracyCZoneN(_ctx, "exec", true);
         _mq_cpu_execute(mach, cpu, ins);
@@ -309,48 +306,49 @@ void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
        handler to that address. */
     else if(cpu->pc == cpu->syscallHandler && cpu->pc) {
         mq_casiowin_syscall(mach);
-        goto endCycle;
+        return;
     }
     else {
-        mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc);
     }
 
-    /* In case of a delay slot, continue. */
-    if(MQ_UNLIKELY(cpu->inDelaySlot)) {
-        ins = mq_memory_read_opcode(cpu, mach->memory, cpu->pc);
-        if(MQ_LIKELY(ins != 0)) {
-            // printf("  -> delay ins=%04x\n", ins);
-            TracyCZoneN(_ctx, "delay_slot", true);
-            _mq_cpu_execute(mach, cpu, ins);
-            TracyCZoneEnd(_ctx);
-            cpu->pc = cpu->delaySlotTarget;
-            cpu->inDelaySlot = false;
-        }
-        else {
-            // TODO: Should that be illegal slot?
-            mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, cpu->pc);
-        }
-    }
+    /* Group the execution of delayed branches and their delay slots. */
+    if(MQ_LIKELY(!cpu->inDelaySlot))
+        return;
 
-    /* If we reach the end of a DSP loop, loop back. */
-    if(end_dsp_loop) {
+    /* Delayed branch instruction don't increment PC, which is not needed: all
+       PC-dependent instructions are forbidden as delay slots. */
+    u32 ins2 = mq_memory_read_opcode(mach->memory, cpu->pc + 2);
+    if(MQ_LIKELY(ins2 != 0)) {
+        /* Check if this is the last instruction in a repeat control loop. */
+        // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
         int RC = mq_cpu_getRC(cpu);
-        RC -= (RC > 0);
-        mq_cpu_setRC(cpu, RC);
+        if(MQ_UNLIKELY(RC) && MQ_UNLIKELY(cpu->spRegs[SH_RE] == cpu->pc + 3)) {
+            mq_cpu_setRC(cpu, RC - 1);
+            /* Setup the next loop iteration */
+            if(RC > 1)
+                cpu->nextPC = cpu->spRegs[SH_RS];
+        }
 
-        if(RC > 0)
-            cpu->pc = cpu->spRegs[SH_RS];
+        TracyCZoneN(_ctx, "delay_slot", true);
+        _mq_cpu_execute(mach, cpu, ins2);
+        TracyCZoneEnd(_ctx);
+        cpu->inDelaySlot = false;
+
+        /* Handle interrupts from rte which have to wait until after the delay
+           slot is executed. */
+        if(MQ_UNLIKELY(ins == 0x002b /* rte */) && cpu->excMask)
+            mq_cpu_handleException(mach, cpu);
     }
-
-endCycle:
-    /* Check for exceptions or interrupts. This is done *after* running the
-       instruction because some exceptions are re-execution type. */
-    if(MQ_UNLIKELY(cpu->excMask)) {
-        int exc = highestPriorityException(cpu->excMask);
-        if(!handleException(mach, cpu, exc, previousPC))
-            mach->stuck = true;
+    else {
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc + 2);
     }
+}
 
+void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
+{
+    TracyCZoneN(_ctx, "cpu", true);
+    mq_cpu_cycle_aux(mach, cpu);
     TracyCZoneEnd(_ctx);
 }
 

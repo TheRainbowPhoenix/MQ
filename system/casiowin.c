@@ -6,6 +6,11 @@
 
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
+#include <mq/modules/mmu.h>
+#include <mq/modules/rtc.h>
+#include <mq/modules/intc.h>
+#include <mq/modules/cpg.h>
+#include <mq/cpu.h>
 #include <mq/memory.h>
 #include <mq/hooks.h>
 #include <mq/mq.h>
@@ -44,6 +49,7 @@ static int keymap_fx[7 * 12] = {
 };
 
 static struct mqCasiowin_OSInfo OSInfo_FX205 = {
+    .OSSeries               = MQ_CASIOWIN_SERIES_FX,
     .OSBaseAddress          = 0x80010000,
     .OSFooterAddress        = 0x8024ff18,
     .versionString          = "02.05.0000",
@@ -51,6 +57,12 @@ static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .syscallStubAddress     = 0x80010070,
     .heapAddress            = 0x88030000, /* @ 192 kB */
     .heapSize               = 48 << 10,
+
+    .addinAddress           = 0x80300000, /* @ 3 MB (in fs for OS 2.xx) */
+    .addinSize              = 512 << 10,
+
+    .uramAddress            = 0x88020000, /* @ 128ko */
+    .uramSize               = 32 << 10,
 
     .rodataAreaAddress      = 0x80240000, /* @ -64 kB, approximately */
     .rodataAreaSize         = 4 << 10,
@@ -63,6 +75,7 @@ static struct mqCasiowin_OSInfo OSInfo_FX205 = {
     .dataVramCount          = 4,
 };
 static struct mqCasiowin_OSInfo OSInfo_CG380 = {
+    .OSSeries               = MQ_CASIOWIN_SERIES_CG,
     .OSBaseAddress          = 0x80020000,
     .OSFooterAddress        = 0x80b5ffe0,
     .versionString          = "03.80.0000",
@@ -70,6 +83,18 @@ static struct mqCasiowin_OSInfo OSInfo_CG380 = {
     .syscallStubAddress     = 0x80020070,
     .heapAddress            = 0x8c0b0000, /* @ 704 kB */
     .heapSize               = 128 << 10,
+
+    .systemStackAddress     = 0x8c0e0000,
+    .systemStackSize        = 512 << 10,
+
+    .addinAddress           = 0x81800000, /* @ 24 MB, somewhere in fs */
+    .addinSize              = 2 << 20,
+
+    .uramAddress            = 0x8c170000, /* @1.5 MB - 64 kB (contiguity) */
+    .uramSize               = 512 << 10,
+
+    .eramAddress            = 0x8c200000,
+    .eramSize               = 2 << 20,
 
     .rodataAreaAddress      = 0x80b40000, /* @ -128 kB, approximately */
     .rodataAreaSize         = 4 << 10,
@@ -163,7 +188,7 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     if(!Casiowin->bgs)
         return false;
 
-    Casiowin->info = mq_casiowin_getOSInfo(version);
+    Casiowin->info = info;
     Casiowin->version = version;
 
     bool ok = true;
@@ -199,14 +224,163 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
     }
     else ok = false;
 
-    /* Export some of the data to other components for optimization purposes */
-    mach->cpu.syscallHandler = info->syscallStubAddress;
+    /* addin area */
+    u32 addinSize = info->addinSize;
+    u32 addinAddr = info->addinAddress;
+    void *addin = mq_memory_allocBuffer(mach->memory, "ADDIN", addinSize);
+    ok &= mq_memory_createBlock(mach->memory, addinAddr, addinSize, addin);
+
+    /* User RAM area */
+    u32 uramSize = info->uramSize;
+    u32 uramP1 = info->uramAddress;
+    u32 uramP2 = (uramP1 & 0x1fffffff) | 0xa0000000;
+    void *uram = mq_memory_allocBuffer(mach->memory, "URAM", uramSize);
+    ok &= mq_memory_createBlock(mach->memory, uramP1, uramSize, uram);
+    ok &= mq_memory_createBlock(mach->memory, uramP2, uramSize, uram);
+
+    /* system Stack, used only for other device than fx */
+    if(info->systemStackAddress != 0x00000000) {
+        u32 ostkSize = info->systemStackSize;
+        u32 ostkP1 = info->systemStackAddress;
+        u32 ostkP2 = (ostkP1 & 0x1fffffff) | 0xa0000000;
+        void *ostk = mq_memory_allocBuffer(mach->memory, "OSTK", ostkSize);
+        ok &= mq_memory_createBlock(mach->memory, ostkP1, ostkSize, ostk);
+        ok &= mq_memory_createBlock(mach->memory, ostkP2, ostkSize, ostk);
+    }
 
     if(ok)
         mach->modules[moduleID] = Casiowin;
     else
         free(Casiowin);
+
     return ok;
+}
+
+void mq_casiowin_initialize(mqMachine *mach)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    mqCasiowin_OSInfo const *info = Casiowin->info;
+
+    mach->cpu.CPUOPM = 0x00000320;
+
+    /* Export some of the data to other components for optimization purposes */
+    mach->cpu.syscallHandler = info->syscallStubAddress;
+
+    /* Set the stack pointer to be P1 instead of MMU, as the OS does */
+    mach->cpu.r[15] = info->uramAddress + info->uramSize;
+
+    // TODO[casiowin]: Handle the NULL page with MMU so it shows up in TLB
+
+    if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_FX) {
+        mach->cpu.spRegs[SH_SR] = 0x40000000; // MD=1
+        mach->cpu.r[4] = 0; // isAppli
+        mach->cpu.r[5] = 0; // optNum
+        mach->cpu.pc = 0x00300200;
+
+        mq_mmu_map(mach, 0x00300000, info->addinAddress, 0, 0x10000, 8);
+        mq_mmu_map(mach, 0x08100000, info->uramAddress, 55,  0x1000, 8);
+        mq_mmu_bind(mach);
+
+        /* CPG
+         * - fixed Graph35+E configuration (OS 02.05) */
+        mqCPG *CPG = mq_cpg_get(mach);
+        CPG->FRQCR      = 0x0f212213;
+        CPG->FSICLKCR   = 0x00000157;
+        CPG->DDCLKCR    = 0x00000198;
+        CPG->USBCLKCR   = 0x00000100;
+        CPG->PLLCR      = 0x00005000;
+        CPG->PLL2CR     = 0x00000000;
+        CPG->SPUCLKCR   = 0x00000103;
+        CPG->SSCGCR     = 0x00000000;
+        CPG->FLLFRQ     = 0x00004384;
+        CPG->LSTATUS    = 0x00000000;
+        /* INTC
+         * - load initial OS state */
+        mqINTC *INTC = mq_intc_get(mach);
+        INTC->IPR[0]    = 0x0800;
+        INTC->IPR[1]    = 0xc000;
+        INTC->IPR[5]    = 0xd000;
+        INTC->IPR[10]   = 0x8d00;
+        INTC->IMR[0]    = 0x07;
+        INTC->IMR[1]    = 0x0f;
+        INTC->IMR[2]    = 0x07;
+        INTC->IMR[3]    = 0xfc;
+        INTC->IMR[4]    = 0x70;
+        INTC->IMR[5]    = 0x77;
+        INTC->IMR[6]    = 0x1b;
+        INTC->IMR[7]    = 0xff;
+        INTC->IMR[8]    = 0x07;
+        INTC->IMR[9]    = 0x12;
+        INTC->IMR[10]   = 0x14;
+        INTC->IMR[11]   = 0x01;
+        INTC->IMR[12]   = 0x38;
+        //todo: dump KEYSC config?
+        //todo: dump DMA config?
+        //todo: dump Cmod config?
+        //todo: dump TMU config?
+        /* RTC
+         * - Keep PES_period initialized to a non-zero value
+         * - copy default date information (exact same info than %11e1) */
+        mqRTC *RTC = mq_rtc_get(mach);
+        RTC->RCR2       = 0x09;
+        RTC->RWKCNT     = 0x00;
+        RTC->RDAYCNT    = 0x01;
+        RTC->RMONCNT    = 0x11;
+        RTC->RYRCNT     = 0x2010;
+    }
+    else if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_CG) {
+        mach->cpu.spRegs[SH_SR] = 0x40000000; // MD=1
+        mach->cpu.r[4] = 0; // isAppli
+        mach->cpu.r[5] = 0; // optNum
+        mach->cpu.pc = 0x00300000;
+
+        mq_mmu_map(mach, 0x00300000, info->addinAddress, 0, 0x100000, 2);
+        mq_mmu_map(mach, 0x08100000, info->uramAddress, 55,  0x10000, 8);
+        mq_mmu_bind(mach);
+
+        /* CPG
+         * - fixed fx-CG 50 configuration (from OS 3.80) */
+        mqCPG *CPG = mq_cpg_get(mach);
+        CPG->FRQCR      = 0x0f011112;
+        CPG->FSICLKCR   = 0x00000057;
+        CPG->DDCLKCR    = 0x00000198;
+        CPG->USBCLKCR   = 0x00000100;
+        CPG->PLLCR      = 0x00005000;
+        CPG->PLL2CR     = 0x00000000;
+        CPG->SPUCLKCR   = 0x00000003;
+        CPG->SSCGCR     = 0x10000000;
+        CPG->FLLFRQ     = 0x00004384;
+        CPG->LSTATUS    = 0x00000000;
+        /* INTC
+         * - load initial OS state */
+        mqINTC *INTC = mq_intc_get(mach);
+        INTC->IPR[0]    = 0x0800;
+        INTC->IPR[1]    = 0xc000;
+        INTC->IPR[5]    = 0xd000;
+        INTC->IPR[10]   = 0x8000;
+        INTC->IMR[0]    = 0x07;
+        INTC->IMR[1]    = 0x0f;
+        INTC->IMR[2]    = 0x07;
+        INTC->IMR[3]    = 0xfc;
+        INTC->IMR[4]    = 0x00;
+        INTC->IMR[5]    = 0x77;
+        INTC->IMR[6]    = 0x1b;
+        INTC->IMR[7]    = 0xff;
+        INTC->IMR[8]    = 0x07;
+        INTC->IMR[9]    = 0x12;
+        INTC->IMR[10]   = 0x34;
+        INTC->IMR[11]   = 0x01;
+        INTC->IMR[12]   = 0x38;
+        /* RTC
+         * - keep PES_period initialized to a non-zero value
+         * - use syscall %11e1 `RTC_GetDateDefault()` */
+        mqRTC *RTC = mq_rtc_get(mach);
+        RTC->RCR2       = 0x09;
+        RTC->RWKCNT     = 0x00;
+        RTC->RDAYCNT    = 0x01;
+        RTC->RMONCNT    = 0x11;
+        RTC->RYRCNT     = 0x2010;
+    }
 }
 
 static void mq_casiowin_cleanup(mqMachine *mach)

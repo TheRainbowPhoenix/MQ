@@ -29,7 +29,7 @@ struct mqCPG {
 typedef struct mqCPG mqCPG;
 
 /* Setup the CPG module for a given machine. */
-bool mq_cpg_setup(mqMachine *mach, int initializeKind);
+bool mq_cpg_setup(mqMachine *mach);
 
 /* Get the CPG module for a machine, NULL if there is none. */
 mqCPG *mq_cpg_get(mqMachine *mach);

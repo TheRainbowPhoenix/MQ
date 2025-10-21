@@ -22,6 +22,12 @@ typedef struct mqMachine mqMachine;
 /* Type of a background syscall progress function. */
 typedef bool mq_casiowin_bgsyscall_t(struct mqMachine *mach);
 
+/* Calculator series */
+enum mqCasiowin_Series {
+    MQ_CASIOWIN_SERIES_FX,
+    MQ_CASIOWIN_SERIES_CG,
+};
+
 /* Supported OS versions. */
 enum mqCasiowin_Version {
     // MQ_CASIOWIN_FX100,  // Super old FX... (SH3)
@@ -36,6 +42,8 @@ enum mqCasiowin_Version {
 /* Detailed information about each OS version. Unless otherwise specified, all
    addresses are set in P1. */
 struct mqCasiowin_OSInfo {
+    /* OS series */
+    int OSSeries;
     /* OS base and footer addresses */
     u32 OSBaseAddress;
     u32 OSFooterAddress;
@@ -48,9 +56,21 @@ struct mqCasiowin_OSInfo {
     u32 syscallStubAddress;
     // TODO[casiowin]: Syscall API version
 
+    /* Addin loading address and size */
+    u32 addinAddress;
+    u32 addinSize;
     /* Heap address and size */
     u32 heapAddress;
     u32 heapSize;
+    /* System Stack address and size */
+    u32 systemStackAddress;
+    u32 systemStackSize;
+    /* User RAM address and size */
+    u32 uramAddress;
+    u32 uramSize;
+    /* additional RAM address and size */
+    u32 eramAddress;
+    u32 eramSize;
 
     /* Address of the read-only "data area" which is where the emulator puts
        all the read-only OS data that needs to be accessed by address. */
@@ -107,6 +127,9 @@ typedef struct mqCasiowin mqCasiowin;
 
 /* Setup the CASIOWIN interface for the given OS version. */
 bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version);
+
+/* initialize CASIOWIN interface (e.g set registers' default value) */
+void mq_casiowin_initialize(mqMachine *mach);
 
 /* Get the CASIOWIN module for a machine, NULL if there's none. */
 mqCasiowin *mq_casiowin_get(mqMachine *mach);

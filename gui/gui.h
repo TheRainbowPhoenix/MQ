@@ -4,13 +4,12 @@
 #define MQ_UI_GUI_H
 
 #include "windows.h"
-#include "texture.h"
 #include "util.h"
 #include "watch.h"
 #include "record.h"
+#include <mq/controller.h>
+#include <azur/opengl.h>
 #include <filesystem>
-#include <vector>
-#include <string>
 #include <optional>
 
 /* The GUI state and actions can be accessed globally. */
@@ -119,7 +118,7 @@ struct GUI
     /* OpenGL logic for the display window */
     DisplayGlWindow DGW;
     /* OpenGL texture for the mono or RGB display */
-    Texture displayTexture;
+    azur::gl::Texture2D *displayTexture;
 
     /* Hexadecimal viewer widget */
     ImGui::HexViewer HV;

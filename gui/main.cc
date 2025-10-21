@@ -117,11 +117,23 @@ static void render(void)
             gui.actions.display.width  = mach->display->width;
             gui.actions.display.height = mach->display->height;
             if(mach->display->dirty) {
-                gui.actions.display.data = memdup(
-                    mach->display->data,
-                    mq_display_framebufferSize(mach->display)
-                );
-                mq_display_setDirty(mach->display, false);
+                mqDisplay *d = mach->display;
+                gui.displayTexture->bind();
+                if(d->format == MQ_DISPLAY_FORMAT_L8) {
+                    gui.displayTexture->setFormat(GL_R8, d->width, d->height);
+                    gui.displayTexture->loadData(
+                        d->data, GL_RED, GL_UNSIGNED_BYTE, d->width, 0);
+                }
+                else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
+                    gui.displayTexture->setFormat(GL_RGB565, d->width, d->height);
+                    gui.displayTexture->loadData(
+                        d->data, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, d->width, 0);
+                }
+                else
+                    printf("warning: display not updated, unknown format!\n");
+
+                gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
+                mq_display_setDirty(d, false);
                 render_needed = std::max(render_needed, 1);
             }
         }
@@ -135,43 +147,6 @@ static void render(void)
     if(!render_needed)
         return;
     render_needed--;
-
-    // printf("[Main] Generate display texture\n");
-    if(gui.actions.display.dirty) {
-        gui.displayTexture.bind();
-            if(gui.actions.display.format == MQ_DISPLAY_FORMAT_L8) {
-#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
-                gui.displayTexture.setFormat(
-                    GL_LUMINANCE,
-                    GL_UNSIGNED_BYTE,
-                    gui.actions.display.width,
-                    gui.actions.display.height
-                );
-#elif AZUR_GRAPHICS_OPENGL_3_3
-                gui.displayTexture.setFormat(
-                    GL_RED,
-                    GL_UNSIGNED_BYTE,
-                    gui.actions.display.width,
-                    gui.actions.display.height
-                );
-#endif
-            gui.displayTexture.setData(gui.actions.display.data);
-        }
-        else if(gui.actions.display.format == MQ_DISPLAY_FORMAT_RGB565) {
-            gui.displayTexture.setFormat(
-                    GL_RGB,
-                    GL_UNSIGNED_SHORT_5_6_5,
-                    gui.actions.display.width,
-                    gui.actions.display.height
-            );
-            gui.displayTexture.setData(gui.actions.display.data);
-        }
-        else {
-            printf("warning: display not updated, unknown format!\n");
-        }
-        gui.DGW.setInherentScale(
-            (gui.actions.display.width <= 128) ? 3 : 1);
-    }
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
@@ -199,13 +174,15 @@ static void open_addin(std::string const &path, void *data, long size)
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN_FX);
+        mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         resetWindowStates();
         watch_quit(&gui.watch_info);
-        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN_CG);
+        mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(emu0->mach, data, size);
     }
     else {
@@ -243,7 +220,6 @@ static int update(void)
     }
 
     fs::path loadPath = "";
-
     if(gui.watch_enabled) {
         enum WatchEvent event;
         while((event = watch_poll(&gui.watch_info)) != MQ_WATCH_EVT_NONE) {
@@ -524,8 +500,8 @@ int main(int argc, char **argv)
 
     srand(clock());
 
-    gui.displayTexture.init(GL_TEXTURE_2D);
-    gui.DGW.init(gui.displayTexture);
+    gui.DGW.init();
+    gui.displayTexture = &gui.DGW.texture();
 
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;

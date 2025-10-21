@@ -3,15 +3,15 @@
 
 //=== Display window =========================================================//
 
-void DisplayGlWindow::init(Texture const &texture)
+void DisplayGlWindow::init()
 {
     shader_texture.init();
     shader_background.init();
-    m_texture = &texture;
     setPadding({0, 0, 0, 25});
 
     /* Set texture parameters */
-    m_texture->bind();
+    m_texture.generateName();
+    m_texture.bind();
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -26,7 +26,7 @@ void DisplayGlWindow::cleanup(void)
 {
     shader_texture.cleanup();
     shader_background.cleanup();
-    m_texture = nullptr;
+    m_texture.reset();
 }
 
 ImVec2 DisplayGlWindow::viewLocation(int gx, int gy) const
@@ -54,13 +54,13 @@ void DisplayGlWindow::setInherentScale(float scale)
 void DisplayGlWindow::updateShaderUniforms()
 {
     float esc = viewEffectiveScale();
-    mat3 tr_world2pixel(
+    glm::mat3 tr_world2pixel(
          esc,                       0.0f,                       0.0f,
          0.0f,                      esc,                        0.0f,
          width() / 2 - m_vx * esc,  height() / 2 - m_vy * esc,  1.0f);
 
-    mat3 tr_pixel2gl = windowToOpenGLMatrix();
-    mat3 tr_world2gl = tr_pixel2gl * tr_world2pixel;
+    glm::mat3 tr_pixel2gl = windowToOpenGLMatrix();
+    glm::mat3 tr_world2gl = tr_pixel2gl * tr_world2pixel;
 
     glUseProgram(shader_texture.prog);
     shader_texture.set_uniform("u_transform", tr_world2gl);
@@ -84,11 +84,11 @@ void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
     shader_background.add_background(0, 0, width(), height());
     shader_background.draw();
 
-    if(m_texture && m_texture->isValid()) {
-        float sw = m_texture->storageWidth();
-        float sh = m_texture->storageHeight();
-        float w = m_texture->width();
-        float h = m_texture->height();
+    if(m_texture.isValid()) {
+        float sw = m_texture.storageSize().x;
+        float sh = m_texture.storageSize().y;
+        float w = m_texture.width();
+        float h = m_texture.height();
 
         /* Go to the negatives to benefit from clamping (on bottom right side
            the texture continues till next power of 2) */
@@ -101,14 +101,9 @@ void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
         shader_texture.add_subtexture(
             -w/2, -h/2, w, h,
             u0, v0, tw, th,
-#if AZUR_GRAPHICS_OPENGL_ES_2_0 || AZUR_GRAPHICS_OPENGL_ES_3_0
-            m_texture->format() == GL_LUMINANCE
-#elif AZUR_GRAPHICS_OPENGL_3_3
-            m_texture->format() == GL_RED
-#endif
-        );
+            m_texture.format() == GL_R8);
 
-        m_texture->bind();
+        m_texture.bind();
         shader_texture.draw();
     }
 }
@@ -206,10 +201,10 @@ void ProgramTexture::add_subtexture(int x, int y, int width, int height,
     float u, float v, float tw, float th, bool grayscale)
 {
     ProgramTexture_Attributes attr[4] = {
-        { glm::vec2(x,       y),        glm::vec2(u, v),       (float)(int)grayscale },
-        { glm::vec2(x+width, y),        glm::vec2(u+tw, v),    (float)(int)grayscale },
-        { glm::vec2(x,       y+height), glm::vec2(u, v+th),    (float)(int)grayscale },
-        { glm::vec2(x+width, y+height), glm::vec2(u+tw, v+th), (float)(int)grayscale },
+        { {x,       y},        {u, v},       (float)(int)grayscale },
+        { {x+width, y},        {u+tw, v},    (float)(int)grayscale },
+        { {x,       y+height}, {u, v+th},    (float)(int)grayscale },
+        { {x+width, y+height}, {u+tw, v+th}, (float)(int)grayscale },
     };
 
     this->vertices.push_back(attr[0]);
@@ -246,10 +241,10 @@ void ProgramBackground::set_vertex_attributes() const
 void ProgramBackground::add_background(int x, int y, int w, int h)
 {
     ProgramBackground_Attributes attr[4] = {
-        { glm::vec2(x,   y)   },
-        { glm::vec2(x+w, y)   },
-        { glm::vec2(x,   y+h) },
-        { glm::vec2(x+w, y+h) },
+        { {x,   y}   },
+        { {x+w, y}   },
+        { {x,   y+h} },
+        { {x+w, y+h} },
     };
 
     this->vertices.push_back(attr[0]);

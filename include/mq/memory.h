@@ -376,9 +376,9 @@ bool _mq_chunk_read_pure(
     mqChunk const *chunk, u32 addr, int size, u32 *out, mqPage **page);
 
 /* Read 32 bits from memory at the given address. On success, returns true and
-   sets *out. On error, raises an exception with the machine, leaves *out
-   unchanged, and returns false. The fast path is inlined while the slow paths
-   are handled in the internal `_mq_chunk_read()` function. The output pointer
+   sets *out. On error, leaves *out unchanged, and returns false. The caller
+   should raise an exception. The fast path is inlined while the slow paths are
+   handled in the internal `_mq_chunk_read()` function. The output pointer
    should disappear with inlining and the alignment check can be contextually
    optimized out. */
 MQ_INLINE bool mq_memory_read32(
@@ -386,7 +386,7 @@ MQ_INLINE bool mq_memory_read32(
 {
     // TODO: Memory access exception type: instruction read vs. data read.
     if(MQ_UNLIKELY(addr & 3))
-        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
+        return false;
 
     mqChunkPointer ptr = mem->chunks[addr >> 20];
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
@@ -403,7 +403,7 @@ MQ_INLINE bool mq_memory_read16(
 {
     // TODO: Memory access exception type: instruction read vs. data read.
     if(MQ_UNLIKELY(addr & 1))
-        return mq_cpu_raiseException_false(&mach->cpu, SH_EXC_READ_ADDR, addr);
+        return false;
 
     mqChunkPointer ptr = mem->chunks[addr >> 20];
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr))) {
@@ -429,12 +429,10 @@ MQ_INLINE bool mq_memory_read8(
 
 /* Read an opcode from the given address. The is a pure read. Returns 0 in case
    of error, which is an invalid opcode anyway. */
-MQ_INLINE u32 mq_memory_read_opcode(mqCpu *cpu, mqMemory *mem, u32 addr)
+MQ_INLINE u32 mq_memory_read_opcode(mqMemory *mem, u32 addr)
 {
-    if(MQ_UNLIKELY(addr & 1)) {
-        mq_cpu_raiseException_false(cpu, SH_EXC_INS_ADDR, addr);
+    if(MQ_UNLIKELY(addr & 1))
         return 0;
-    }
 
     mqChunkPointer ptr = mem->chunks[addr >> 20];
     if(MQ_LIKELY(MQ_CHUNKPTR_ISBUFFER(ptr)))
@@ -445,7 +443,8 @@ MQ_INLINE u32 mq_memory_read_opcode(mqCpu *cpu, mqMemory *mem, u32 addr)
     return b ? out : 0;
 }
 
-/* Write to memory. Returns true on success, false if an exception occurs. */
+/* Write to memory. Returns true on success, false on error, in which case the
+   caller should raise an exception. */
 bool mq_memory_write(
     mqMachine *mach, mqMemory *mem, u32 addr, int size, u32 value);
 

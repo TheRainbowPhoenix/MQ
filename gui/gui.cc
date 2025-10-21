@@ -35,9 +35,9 @@ void GUI::Render(mqMachine *omach)
         ImGui::EndCustomMenu();
         if(ImGui::BeginCustomMenu("Machine")) {
             if(ImGui::MenuItem("Reset to blank FX add-in"))
-                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_FX;
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
             if(ImGui::MenuItem("Reset to blank CG add-in"))
-                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN_CG;
+                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
             actions.machineGenerateMonoFrame |=
                 ImGui::MenuItem("Generate B&W frame");
             actions.machineGenerateRGBFrame |=
@@ -803,6 +803,8 @@ void InterruptsWindow::renderContents(mqMachine *omach)
         ImGui::SameLine();
         ImGui::TextMono("TEA: %08x", MMU->TEA);
     }
+    ImGui::SameLine();
+    ImGui::TextMono("excPC: %08x", cpu->excPC);
     ImGui::TextMono("INTEVT: 0x%03x", cpu->INTEVT);
     ImGui::SameLine(0, 0);
     ImGui::Text(" %s (%d)", INTEVT_name, cpu->INTPRIO);

@@ -2,7 +2,7 @@
 
 import dataclasses
 from typing import Dict
-from collections.abc import Sequence
+from collections.abc import Sequence, Generator
 import copy
 import sys
 import re
@@ -157,6 +157,21 @@ class Instruction:
             str += before + c + after
         return str + " ({})".format(self.name)
 
+    def allOpcodes(self, _i=0, _base=0) -> Generator[int]:
+        if _i >= len(self.encoding):
+            yield _base
+            return
+        if self.encoding[_i] != "1":
+            yield from self.allOpcodes(_i+1, _base)
+        if self.encoding[_i] != "0":
+            bitPosition = len(self.encoding) - _i - 1
+            yield from self.allOpcodes(_i+1, _base + (1 << bitPosition))
+
+    def allFieldSlices(self) -> Generator[tuple[Slice, str, int]]:
+        for m in re.finditer("n+|m+|d+|i+|c+|s+", self.encoding):
+            s = Slice(16 - m.end(), m.end() - m.start())
+            yield s, m[0][0], self.mask(s)
+
 def parseSpec(spec, filename):
     RE_INS = re.compile(
         r"([0-1a-z.]+)\s+"                    # Encoding with field letters
@@ -178,7 +193,12 @@ def parseSpec(spec, filename):
         else:
             pattern = m[1].replace(".", "")
             tags = [t.removeprefix("!") for t in m[3].split()]
-            instructions.append(Instruction(pattern, len(pattern), m[2], tags))
+            if "delayslot" in tags:
+                tags.append("illslot")
+            i = Instruction(pattern, len(pattern), m[2], tags)
+            if "int" in tags and "delayslot" in tags:
+                raise Exception(f"{i} is a delay slot and generates interrupts")
+            instructions.append(i)
 
     try:
         l = SwitchTreeLexer(tree, filename)
@@ -226,7 +246,7 @@ def resolveDecisions(tree, instructions):
         if dc is None or args is None:
             error(f"switch tree does not cover {ins.encoding} ({ins.name})")
             continue
-        if dc.name is not None:
+        if dc.name is not None and "overload" not in ins.tags:
             error(f"decision conflict between {dc.name} and {ins.name}")
             continue
         dc.name = ins.name
@@ -276,104 +296,81 @@ def generateDecoder(spec, filename="<inline>"):
 
 #=== Decoder (table version) generation =======================================#
 
-def generateDecoderTableWrapperFunc(inst_table: Sequence[str]) -> str:
-    c_content  = (
-        '//---\n'
-        '// Generated instruction wrapper function\n'
-        '//----\n'
-        '\n'
-        'static void invalid_wrapper(mqMachine *mach, mqCpu *cpu, u16 inst) {\n'
-        '   mq_log(MQ_LOG_ERROR, "unable to decode instruction %08x", inst);\n'
-        '   mach->stuck = true;\n'
-        '   (void)cpu;\n'
-        '}\n'
-        '\n'
-    )
-    for name, encoding in inst_table[1:]:
+WRAPPERS_TEMPLATE = """
+//---
+// Generated instruction wrapper functions
+//----
+
+static void invalid_wrapper(mqMachine *mach, mqCpu *cpu, u16 inst) {
+   mq_log(MQ_LOG_ERROR, "unable to decode instruction %08x", inst);
+   mach->stuck = true;
+   (void)cpu;
+}
+"""
+
+ILLSLOT_TEMPLATE = """\
+    if(MQ_UNLIKELY(mq_cpu_inDelaySlot(cpu)))
+        return mq_cpu_raiseException2(mach, cpu, SH_EXC_ILLEGAL_SLOT, 0);
+"""
+INT_TEMPLATE = """\
+    if(MQ_UNLIKELY(cpu->excMask & (1 << SH_EXC_INTERRUPT)))
+        mq_cpu_handleException(mach, cpu);
+"""
+
+TABLE_TEMPLATE = """
+//---
+// Generated translation and wrapper table
+//----
+
+static void (*mq_inst_wrapper_table[65536])(mqMachine*,mqCpu*,u16) = {{
+{}
+}};
+"""
+
+def generateDecoderTableWrapperFunc(ins: list[Instruction]) -> str:
+    c_content = WRAPPERS_TEMPLATE
+
+    for i in ins:
         arg_list = ['mach', 'cpu']
-        c_content += f"static void {name}_wrapper("
+        c_content += f"static void {i.name}_wrapper("
         c_content += 'mqMachine *mach, mqCpu *cpu, u16 inst) {\n'
-        for x in re.finditer('n+|m+|d+|i+|c+|s+', encoding):
-            mask = (0x1 << (x.end() - x.start())) - 1
-            shift = 16 - x.end()
-            arg = x[0][0]
-            c_content += f"    int {arg} = "
-            c_content += f"(inst & {(mask << shift):#06x}) >> {shift};\n"
-            arg_list.append(arg)
+        if "illslot" in i.tags:
+            c_content += ILLSLOT_TEMPLATE
+        for slice, name, mask in i.allFieldSlices():
+            arg_list.append(name)
+            shift = slice.start
+            c_content += f"    int {name} = (inst & {mask:#06x}) >> {shift};\n"
         if len(arg_list) == 2:
             c_content += '    (void)inst;\n'
-        c_content += f"    {name}({', '.join(arg_list)});\n"
+        c_content += f"    {i.name}({', '.join(arg_list)});\n"
+        if "int" in i.tags:
+            c_content += INT_TEMPLATE
         c_content += '}\n\n'
     return c_content
 
 
 def generateDecoderTableInfo(
-    inst_table: Sequence[str],
-    inst_translate: Sequence[int],
-) -> str:
-    c_content  = (
-        '//---\n'
-        '// Generated translation and wrapper table\n'
-        '//----\n'
-        '\n'
-    )
-
-    # 2direct
-    #c_content += 'static const u8 mq_inst_translation_table[65536] = {\n'
-    #for x in inst_translate:
-    #    c_content += f"    {x},\n"
-    #c_content += '};\n\n'
-    #c_content += 'static void (*mq_inst_wrapper_table[])'
-    #c_content += '(mqMachine*,mqCpu*,u16) = {\n'
-    #for inst in inst_table:
-    #    c_content += f"    &{inst[0]}_wrapper,\n"
-    #c_content += '};\n\n'
-
-    # direct
-    c_content += 'static void (*mq_inst_wrapper_table[65536])'
-    c_content += '(mqMachine*,mqCpu*,u16) = {\n'
-    for inst in inst_translate:
-        c_content += f"    &{inst_table[inst][0]}_wrapper,\n"
-    c_content += '};\n\n'
-    return c_content
+        ins: list[Instruction], opcodeMap: Sequence[int]) -> str:
+    entries = ""
+    for instId in opcodeMap:
+        name = ins[instId].name if instId >= 0 else "invalid"
+        entries += f"    &{name}_wrapper,\n"
+    return TABLE_TEMPLATE.format(entries)
 
 
 def generateDecoderTable(spec, filename="<inline>"):
-    inst_idx = 1
-    inst_table = [('invalid', -1),]
-    inst_translate = [0] * 65536
-    for inst in parseSpec(spec, filename)[1]:
-        inst_shard = []
-        for shard in [inst.encoding[i:i+4] for i in range(0, 16, 4)]:
-            inst_shard.append(int(shard, 2) if shard[0] in '01' else -1)
-        assert inst_shard[0] >= 0, f"broken instruction -> {inst}"
-        idx = inst_shard[0] << 12
-        for x3 in range(0, 16):
-            x3 = inst_shard[1] if inst_shard[1] >= 0 else x3
-            idx = (idx & 0xf000) | (x3 << 8)
-            for x2 in range(0, 16):
-                x2 = inst_shard[2] if inst_shard[2] >= 0 else x2
-                idx = (idx & 0xff00) | (x2 << 4)
-                for x1 in range(0, 16):
-                    x1 = inst_shard[3] if inst_shard[3] >= 0 else x1
-                    idx = (idx & 0xfff0) | (x1 << 0)
-                    if inst_translate[idx] != 0:
-                        raise Exception(
-                            f"instruction collision {inst_translate[idx]} - "
-                            f"{inst_table[inst_translate[idx]]} - "
-                            f"{inst}"
-                        )
-                    inst_translate[idx] = inst_idx
-                    if inst_shard[3] >= 0:
-                        break
-                if inst_shard[2] >= 0:
-                    break
-            if inst_shard[1] >= 0:
-                break
-        inst_table.append((inst.name, inst.encoding))
-        inst_idx = inst_idx + 1
-    c_content = generateDecoderTableWrapperFunc(inst_table)
-    c_content += generateDecoderTableInfo(inst_table, inst_translate)
+    tree, ins = parseSpec(spec, filename)
+    opcodeMap = [-1] * 65536
+
+    for instId, inst in enumerate(ins):
+        for opcode in inst.allOpcodes():
+            if opcodeMap[opcode] >= 0 and "overload" not in inst.tags:
+                raise Exception("instruction collision @ {:04x}: {} vs. {}" \
+                    .format(opcode, ins[opcodeMap[opcode]], inst))
+            opcodeMap[opcode] = instId
+
+    c_content = generateDecoderTableWrapperFunc(ins)
+    c_content += generateDecoderTableInfo(ins, opcodeMap)
     return c_content
 
 #=== Main function ============================================================#

@@ -5,7 +5,7 @@
 
 #include "imgui-util.h"
 #include "shader.h"
-#include "texture.h"
+#include <azur/opengl.h>
 #include <mq/machine.h>
 #include <mq/memory.h>
 #include <optional>
@@ -15,8 +15,8 @@
 /* 2D texture shader rendering subrectangles in quads. */
 
 struct ProgramTexture_Attributes {
-    glm::vec2 vertex;      // Vertex location in OpenGL coordinate space
-    glm::vec2 uv;          // Location within texture
+    glm::vec2 vertex; // Vertex location in OpenGL coordinate space
+    glm::vec2 uv;     // Location within texture
     float grayscale;  // 1.0 for grayscale mode (red is all channels)
 };
 
@@ -37,7 +37,7 @@ struct ProgramTexture: public Shader<ProgramTexture_Attributes>
 /* Checkered background shader, rendering on full rectangles. */
 
 struct ProgramBackground_Attributes {
-    glm::vec2 vertex;    // Vertex location
+    glm::vec2 vertex; // Vertex location
 };
 
 struct ProgramBackground: public Shader<ProgramBackground_Attributes>
@@ -52,7 +52,7 @@ struct ProgramBackground: public Shader<ProgramBackground_Attributes>
 class DisplayGlWindow: public ImGuiGlWindow
 {
 public:
-    void init(Texture const &texture);
+    void init();
     void cleanup();
 
     void render(ImDrawList const *, ImDrawCmd const *) override;
@@ -79,6 +79,8 @@ public:
     void setInherentScale(float scale);
     float inherentScale() const { return m_inherentScale; }
 
+    azur::gl::Texture2D &texture() { return m_texture; }
+
 private:
     void updateShaderUniforms();
 
@@ -96,7 +98,7 @@ private:
     ProgramBackground shader_background;
 
     /* Display texture */
-    Texture const *m_texture = nullptr;
+    azur::gl::Texture2D m_texture;
 };
 
 /* Class of an instanced window along with some automation. */
