@@ -14,6 +14,7 @@
 #include <mq/interfaces/keyboard.h>
 #include <mq/interfaces/timer.h>
 #include <pthread.h>
+#include <setjmp.h>
 MQ_START_DEFS
 
 struct mqMemory;
@@ -45,6 +46,12 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
+    /* Jump buffer to jump to when the machine gets stuck. This is used to
+       unwind in case of unrecoverable failure. The jump buffer may or may not
+       be present. */
+   bool hasStuckJumpBuffer;
+   jmp_buf stuckJumpBuffer;
+
     /* Machine is internally paused for a limited time. This is a high-level
        emulation of sleep functions. While internally paused, the machine still
        runs background processes but no CPU instructions, and counts ticks from
@@ -102,8 +109,19 @@ void mq_machine_unlock(mqMachine *mach);
    machine and wait on the condition variable (atomically). */
 void mq_machine_unlockAndWaitForWork(mqMachine *mach);
 
-/* Mark the machine as stuck. This stops all execution. */
+/* Mark the machine as stuck. This stops all execution. If a stuck jump buffer
+   was setup, long jumps back to it; otherwise, returns normally. */
 void mq_machine_setStuck(mqMachine *mach);
+/* Set a jump buffer target that the machine unwinds to if stuck. The current
+   context is saved in an internal jmp_buf in the machine. This macro contains
+   a setjmp() and returns twice. setStuck() does the longjmp() back. */
+#define mq_machine_setStuckJumpBuffer(mach) ({ \
+   extern void mq_machine_setStuckJumpBufferAux(mqMachine *mach); \
+   mq_machine_setStuckJumpBufferAux(mach); \
+   setjmp(mach->stuckJumpBuffer); \
+})
+/* Clear the jump buffer target that the machine unwinds to if stuck. */
+void mq_machine_clearStuckJumpBuffer(mqMachine *mach);
 
 /* Set the number of pending cycles. This controls the execution of the
    machine. Setting 0 pauses it. Setting a negative number makes it run with no

@@ -122,6 +122,26 @@ void mq_machine_unlockAndWaitForWork(mqMachine *mach)
 void mq_machine_setStuck(mqMachine *mach)
 {
     mach->stuck = true;
+    if(mach->hasStuckJumpBuffer)
+        longjmp(mach->stuckJumpBuffer, 1);
+}
+
+void mq_machine_setStuckJumpBufferAux(mqMachine *mach)
+{
+    if(mach->hasStuckJumpBuffer) {
+        mq_log(MQ_LOG_ERROR, "double stuck jump buffer on a machine!");
+        /* Try to stop execution before we unwind incorrectly and crash... */
+        mach->stuck = true;
+    }
+
+    mach->hasStuckJumpBuffer = true;
+}
+
+void mq_machine_clearStuckJumpBuffer(mqMachine *mach)
+{
+    mach->hasStuckJumpBuffer = false;
+    /* Purge the context copy to avoid accidental jumps back. */
+    memset(mach->stuckJumpBuffer, 0, sizeof mach->stuckJumpBuffer);
 }
 
 void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending)
@@ -338,17 +358,9 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
        be exactly the cycle we're checiking. */
     if(mach->processTimer % 4 == 0 && mach->processFrequency % 4 == 0) {
         while(cyclesRemaining > 4) {
-            if(MQ_UNLIKELY(mach->stuck))
-                break;
             mq_cpu_cycle(mach, &mach->cpu);
-            if(MQ_UNLIKELY(mach->stuck))
-                break;
             mq_cpu_cycle(mach, &mach->cpu);
-            if(MQ_UNLIKELY(mach->stuck))
-                break;
             mq_cpu_cycle(mach, &mach->cpu);
-            if(MQ_UNLIKELY(mach->stuck))
-                break;
             mq_cpu_cycle(mach, &mach->cpu);
 
             if((mach->processTimer -= 4) <= 0)
@@ -363,8 +375,6 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     }
 
     while(cyclesRemaining > 0) {
-        if(MQ_UNLIKELY(mach->stuck))
-            break;
         mq_cpu_cycle(mach, &mach->cpu);
 
         if(--mach->processTimer == 0)
