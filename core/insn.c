@@ -1009,39 +1009,39 @@ MQ_INLINE void dsp_entry(mqMachine *mach, mqCpu *cpu, int i) {
         return;
     }
     mq_log(MQ_LOG_DEBUG, "[%08x] try DSP decoding for %08x\n", cpu->pc, i);
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 
 //===//
 
 MQ_INLINE void movlil(mqMachine *mach, mqCpu *cpu, int m) {
     fprintf(stderr, "error: not implemented: movlil\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void movcol(mqMachine *mach, mqCpu *cpu, int n) {
     fprintf(stderr, "error: not implemented: movcol\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void movcal(mqMachine *mach, mqCpu *cpu, int n) {
     fprintf(stderr, "error: not implemented: movcal\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void ldtlb(mqMachine *mach, mqCpu *cpu) {
     fprintf(stderr, "error: not implemented: ldtlb\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void macl(mqMachine *mach, mqCpu *cpu, int n, int m) {
     // mac.l @r0+, @r0+ -> read r0, r0+=4, read r0, r0+=4
     fprintf(stderr, "error: not implemented: macl\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void setrc(mqMachine *mach, mqCpu *cpu, int m) {
     fprintf(stderr, "error: not implemented: setrc\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void tasb(mqMachine *mach, mqCpu *cpu, int n) {
     fprintf(stderr, "error: not implemented: tasb\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void macw(mqMachine *mach, mqCpu *cpu, int n, int m) {
     /* mac.w @rm+, @rn+ */
@@ -1073,11 +1073,11 @@ MQ_INLINE void macw(mqMachine *mach, mqCpu *cpu, int n, int m) {
 }
 MQ_INLINE void setrc_imm(mqMachine *mach, mqCpu *cpu, int imm) {
     fprintf(stderr, "error: not implemented: setrc_imm\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 MQ_INLINE void trapa(mqMachine *mach, mqCpu *cpu, int imm) {
     fprintf(stderr, "error: not implemented: trapa\n");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 
 #pragma GCC diagnostic pop

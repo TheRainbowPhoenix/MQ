@@ -135,7 +135,7 @@ static void setupRodataArea(mqMachine *mach, mqCasiowin *Casiowin)
 
     if(rodata - info->rodataAreaAddress > info->rodataAreaSize) {
         mq_log(MQ_LOG_ERROR, "OS rodata area overflow!");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
     }
 }
 
@@ -156,7 +156,7 @@ static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin, void *buffer)
 
     if(data - info->dataAreaAddress > info->dataAreaSize) {
         mq_log(MQ_LOG_ERROR, "OS data area overflow!");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
     }
 }
 
@@ -477,7 +477,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x0030: /* Bdisp_DrawLineVRAM() */
         mq_log(MQ_LOG_ERROR, "unsupported syscall %%030 Bdisp_DrawLineVRAM()");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
 
     case 0x0039: /* RTC_Reset() */
@@ -526,7 +526,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
            readStack32(mach, +4, &args.ptr_u16_key))
             mq_casiowin_GetKeyWait(mach, args);
         else
-            mach->stuck = true;
+            mq_machine_setStuck(mach);
         return;
     }
 
@@ -535,7 +535,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
             MQ_LOG_ERROR,
             "unsupported syscall %%24c Keyboard_IsSpecialKeyDown()"
         );
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
 
     case 0x03ed: /* Interrupt_SetOrClrStatusFlagsy() */
@@ -543,7 +543,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
             MQ_LOG_ERROR,
             "unsupported syscall %%3ed Interrupt_SetOrClrStatusFlags()"
         );
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
 
     case 0x03fa: /* Hmem_SetMMU() */
@@ -609,7 +609,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x090f: /* GetKey() */
         mq_log(MQ_LOG_ERROR, "Unsupported syscall %%90F GetKey()");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
 
     case 0x09ad: /* PrintXY() */
@@ -653,7 +653,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     mq_log(MQ_LOG_ERROR, "Unknown FX syscall %%%03x, getting stuck.",
         syscallID);
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 
 static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
@@ -676,7 +676,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x012b: /* FKey_Mapping1() */
         mq_log(MQ_LOG_ERROR, "syscall FKey_Mapping1() not supported");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
 
     case 0x01e6: /* GetVRAMAddress() */
@@ -710,7 +710,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
     case 0x02a8: /* DrawFrame() */
         mq_log(MQ_LOG_ERROR, "syscall %%2a8 DrawFrame() not supported");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
 
     case 0x02b7: /* EnableStatusArea() */
@@ -764,7 +764,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
            readStack32(mach, +4, &args.ptr_u16_key))
             mq_casiowin_GetKeyWait(mach, args);
         else
-            mach->stuck = true;
+            mq_machine_setStuck(mach);
         return;
     }
 
@@ -782,7 +782,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x18f9: /* PrintXY() */
         mq_log(MQ_LOG_ERROR, "syscall %%18f9 PrintXY() ignored");
-        cpu->r[0] = 0; //mach->stuck = true;
+        cpu->r[0] = 0;
         return;
 
     case 0x1d77: /* DefineStatusMessage() */
@@ -841,7 +841,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     mq_log(MQ_LOG_ERROR, "Unknown CG syscall %%%03x, getting stuck.",
         syscallID);
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
 }
 
 bool mq_casiowin_initHeap(mqMachine *mach)

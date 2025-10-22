@@ -119,6 +119,11 @@ void mq_machine_unlockAndWaitForWork(mqMachine *mach)
     }
 }
 
+void mq_machine_setStuck(mqMachine *mach)
+{
+    mach->stuck = true;
+}
+
 void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending)
 {
     /* Signal the condition variable for new work if we went from zero to a

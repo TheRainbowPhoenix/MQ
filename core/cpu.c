@@ -165,7 +165,7 @@ void mq_cpu_handleException(mqMachine *mach, mqCpu *cpu)
         if(exc_isInterrupt(exc))
             mq_log(MQ_LOG_ERROR, "Handling interrupt while SR.BL=1?!");
         mq_log(MQ_LOG_ERROR, "Double fault!");
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
     }
 
@@ -248,7 +248,7 @@ void mq_cpu_raiseException2(mqMachine *mach, mqCpu *cpu, int exc, u32 value)
     if(cpu->excMask) {
         mq_log(MQ_LOG_ERROR, "raiseAndHandleException: already an exception: "
             "%08x", cpu->excMask);
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
         return;
     }
     mq_cpu_raiseException(cpu, exc, value);
@@ -274,6 +274,22 @@ static void updateIncomingInterrupt(mqCpu *cpu)
     }
 }
 
+MQ_INLINE void mq_cpu_checkDSPLoop(mqCpu *cpu)
+{
+    /* Check if this is the last instruction in a repeat control loop. */
+    // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
+    // RC should be decremented *after* the repeat end instruction. (To fix
+    // this, generate the correct value of RC dynamically when reading SR.)
+    if(MQ_UNLIKELY(cpu->pc == cpu->dspLoopPC)) {
+        cpu->RC--;
+        /* Setup the next loop iteration */
+        if(cpu->RC)
+            cpu->nextPC = cpu->spRegs[SH_RS];
+        else
+            cpu->dspLoopPC = -1;
+    }
+}
+
 MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 {
     if(MQ_UNLIKELY(cpu->sleeping))
@@ -283,19 +299,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
     u32 ins = mq_memory_read_opcode(mach->memory, cpu->pc);
     if(MQ_LIKELY(ins != 0)) {
         cpu->nextPC = cpu->pc + 2;
-
-        /* Check if this is the last instruction in a repeat control loop. */
-        // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
-        // RC should be decremented *after* the repeat end instruction. (To fix
-        // this, generate the correct value of RC dynamically when reading SR.)
-        if(MQ_UNLIKELY(cpu->pc == cpu->dspLoopPC)) {
-            cpu->RC--;
-            /* Setup the next loop iteration */
-            if(cpu->RC)
-                cpu->nextPC = cpu->spRegs[SH_RS];
-            else
-                cpu->dspLoopPC = -1;
-        }
+        mq_cpu_checkDSPLoop(cpu);
 
         /* Decode and execute the instruction. */
         TracyCZoneN(_ctx, "exec", true);
@@ -322,16 +326,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
        PC-dependent instructions are forbidden as delay slots. */
     u32 ins2 = mq_memory_read_opcode(mach->memory, cpu->pc + 2);
     if(MQ_LIKELY(ins2 != 0)) {
-        /* Check if this is the last instruction in a repeat control loop. */
-        // TODO: DSP loop may expose wrong value of RC, RE & 1 during end inst.
-        if(MQ_UNLIKELY(cpu->pc == cpu->dspLoopPC)) {
-            cpu->RC--;
-            /* Setup the next loop iteration */
-            if(cpu->RC)
-                cpu->nextPC = cpu->spRegs[SH_RS];
-            else
-                cpu->dspLoopPC = -1;
-        }
+        mq_cpu_checkDSPLoop(cpu);
 
         TracyCZoneN(_ctx, "delay_slot", true);
         _mq_cpu_execute(mach, cpu, ins2);

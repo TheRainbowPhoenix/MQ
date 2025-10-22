@@ -102,6 +102,9 @@ void mq_machine_unlock(mqMachine *mach);
    machine and wait on the condition variable (atomically). */
 void mq_machine_unlockAndWaitForWork(mqMachine *mach);
 
+/* Mark the machine as stuck. This stops all execution. */
+void mq_machine_setStuck(mqMachine *mach);
+
 /* Set the number of pending cycles. This controls the execution of the
    machine. Setting 0 pauses it. Setting a negative number makes it run with no
    limit. Setting a positive integer makes it run for that number of cycles.

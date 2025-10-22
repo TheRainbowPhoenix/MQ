@@ -303,7 +303,7 @@ WRAPPERS_TEMPLATE = """
 
 static void invalid_wrapper(mqMachine *mach, mqCpu *cpu, u16 inst) {
    mq_log(MQ_LOG_ERROR, "unable to decode instruction %08x", inst);
-   mach->stuck = true;
+   mq_machine_setStuck(mach);
    (void)cpu;
 }
 """
