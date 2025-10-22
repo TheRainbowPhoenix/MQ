@@ -185,7 +185,7 @@ void mq_casiowin_mono_PrintXY(
 
     if(mode != TEXT_NORMAL && mode != TEXT_REVERSE) {
         mq_log(MQ_LOG_WARNING, "PrintXY mode not supported: %x", mode);
-        mach->stuck = true;
+        mq_machine_setStuck(mach);
     }
 
     while(x < SCREEN_WIDTH) {

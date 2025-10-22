@@ -48,7 +48,7 @@ static void write_t6k11_data(mqMachine *mach, u32 value)
             if(T6K11->col >= 16 || T6K11->row >= 64) {
                 mq_log(MQ_LOG_ERROR, "write_t6k11_data: out-of-bounds pixel "
                     "write at (col %d, row %d) ", T6K11->col, T6K11->row);
-                mach->stuck = true;
+                mq_machine_setStuck(mach);
                 return;
             }
             u8 *dst = mach->display->data + 128 * T6K11->row + 8 * T6K11->col;
