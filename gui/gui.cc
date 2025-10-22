@@ -50,9 +50,9 @@ void GUI::Render(mqMachine *omach)
             ImGui::CustomMenuSeparator();
             ImGui::SameLine(0, 6);
 
-            ImGui::BeginDisabled(!omach->initialized);
             bool paused = omach->cyclesPending == 0;
             bool stuck = omach->stuck;
+            ImGui::BeginDisabled(!omach->initialized || stuck);
 
             if(paused && ImGui::IconButton(0, "Run"))
                 actions.machineSetPendingCycles = -1;

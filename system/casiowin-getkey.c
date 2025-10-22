@@ -43,7 +43,7 @@ static bool GetKeyWait_bgsyscall(mqMachine *mach)
         }
 
     mq_log(MQ_LOG_ERROR, "long GetKeyWait isn't supported yet! o(x_x)o");
-    mach->stuck = true;
+    mq_machine_setStuck(mach);
     return false;
 }
 

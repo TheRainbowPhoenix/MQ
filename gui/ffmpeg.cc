@@ -151,7 +151,7 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     err = avcodec_open2(avcodec_ctx, avcodec, &avcodec_opt);
     if(err < 0) {
         ffmpeg_error(err, "unable to open the codec");
-        mq_log(MQ_LOG_DEBUG, "ffmpeg_codec_config() : error %d %s", err, av_err2str(err));
+        // mq_log(MQ_LOG_DEBUG, "ffmpeg_codec_config() : error %d %s", err, av_err2str(err));
         goto codec_config_error;
     }
 

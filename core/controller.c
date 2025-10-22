@@ -22,9 +22,19 @@ static void *thread_run(void *userdata)
         // printf("[Emu] Locked machine\n");
 
         int cycles = 20000;
-        TracyCZoneN(_ctxA, "cycles", true);
-        mq_machine_cycle(mach, cycles);
-        TracyCZoneEnd(_ctxA);
+        int rc = mq_machine_setStuckJumpBuffer(mach);
+
+        if(rc == 0) {
+            TracyCZoneN(_ctxA, "cycles", true);
+            mq_machine_cycle(mach, cycles);
+            TracyCZoneEnd(_ctxA);
+        }
+        else {
+            mq_log(MQ_LOG_WARNING, "machine is stuck!");
+            mach->cyclesPending = 0;
+        }
+
+        mq_machine_clearStuckJumpBuffer(mach);
 
         // printf("[Emu] Unlocking machine and waiting for work\n");
         TracyCZoneN(_ctxB, "wait", true);
