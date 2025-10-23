@@ -111,6 +111,8 @@ set(GUI_SOURCES
   gui/stb.cc
   gui/util.cc
   gui/record.cc
+  gui/ffmpeg.cc
+  gui/stb_image.cc
   gui/watch.cc)
 
 set(ASSETS

@@ -107,11 +107,7 @@ struct GUI
 
     //=== Recording ==========================================================//
 
-    mqRecord record_info = {
-        .status = MQ_RECORD_STATUS_UNINIT,
-        .error = nullptr,
-        .stats = {0, 0, 0, 0, 0, 0},
-    };
+    mqRecord record_info;
 
     //=== Widgets and co. ====================================================//
 

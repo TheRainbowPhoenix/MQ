@@ -4,82 +4,65 @@
 #define MQ_UI_RECORD_H
 
 #include <string>
+#include <vector>
 using namespace std;
 
-#include <mq/defs.h>
+#include "./ffmpeg.h"
 #include <mq/interfaces/display.h>
 
-/* record internal status */
-enum mqRecordStatus {
-    MQ_RECORD_STATUS_UNINIT     = 0,
-    MQ_RECORD_STATUS_INIT       = 1,
-    MQ_RECORD_STATUS_INIT_DELAY = 2,
-    MQ_RECORD_STATUS_START      = 3,
-    MQ_RECORD_STATUS_PAUSED     = 4,
-};
+//=== Record class ===========================================================//
 
-/* record information */
-struct mqRecord {
-    mqRecordStatus status = MQ_RECORD_STATUS_UNINIT;
-    char const *error = nullptr;
+typedef struct mqRecordStats
+{
+    int time_min;
+    int time_sec;
+    int time_ms;
+} mqRecordStats;
+
+class mqRecord
+{
+public:
+    std::vector<std::string> const &scaleTable(mqDisplay *display);
+    int scale(int scale_idx) const;
+    std::vector<std::string> const &encoderTable();
+    std::string encoder(unsigned int encoder_idx) const;
+
+    std::string filename(char const *ext);
+    void filenameUpdate(char const *format);
+    bool filenameExist(char const *ext);
+
+    /* take a screenshot of the */
+    bool screenshot(mqDisplay *display, int scale_idx);
+    std::string screenshot_lasterror();
+
+    /* video primitives */
+    bool start(mqDisplay *display, int encoder_idx, int scale_idx);
+    bool frame_add(mqDisplay *display);
+    bool unpause();
+    bool pause();
+    bool debug();
+    bool stop();
+    std::string lasterror();
+
+    /* misc */
+    mqRecordStats const *stats();
+
+private:
+    mqFFmpeg m_ffmpeg = mqFFmpeg();
+    std::vector<std::string> m_scale_info;
+
+    // hidden cache method
+    void filenameCacheRefresh();
+
+    // cache information
     struct {
-        uint iframe   = 0;
-        uint time_ms  = 0;
-        uint time_sec = 0;
-        uint time_min = 0;
-        uint total_ms = 0;
-        uint nb_error = 0;
-        char const *pathname_out = nullptr;
-        char const *status = nullptr;
-    } stats;
+        int scale_type;
+        std::string filename;
+        bool filename_dirty;
+        int screenshot_lasterror;
+        int record_lasterror;
+        mqRecordStats record_stats;
+    } m_cache;
 };
-typedef struct mqRecord mqRecord;
-
-/* record request */
-struct mqRecordRequest {
-    uint frameRate;
-    uint scale_factor;
-    char const *filename;
-};
-typedef struct mqRecordRequest mqRecordRequest;
-
-//=== Record API ============================================================//
-
-/* take a screenshot */
-int record_screenshot(
-    mqRecord *record,
-    mqRecordRequest *request,
-    mqDisplay *display
-);
-
-bool record_encoder_check(mqRecord *record, std::string const&encoder);
-
-/* initialize the record backend */
-int record_init(
-    mqRecord *record,
-    mqRecordRequest *request,
-    mqDisplay *display
-);
-
-/* add a frame to the current video */
-int record_add_frame(mqRecord *record, mqDisplay *display);
-
-/* debug record backend */
-void record_show(mqRecord *record);
-
-/* handle internal error (log, stats, return, ...) */
-int record_set_error(mqRecord *record, int ret, char const *error);
-
-/* update iframe information (stats, ...) */
-int record_set_iframe(mqRecord *record, uint iframe);
-
-/* update error information */
-int record_set_error(mqRecord *record, int ret, char const *error);
-
-/* update errro information */
-int record_set_status(mqRecord *record, mqRecordStatus status);
-
-/* quit record */
-int record_quit(mqRecord *record);
 
 #endif /* MQ_UI_RECORD_H */

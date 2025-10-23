@@ -5,6 +5,7 @@
 #include <mq/modules/intc.h>
 #include <mq/system/heap.h>
 #include <stdio.h>
+#include <format>
 
 void GUIWindow::render(mqMachine *omach)
 {
@@ -1143,96 +1144,21 @@ void KeyboardWindow::renderContents(mqMachine *omach)
 
 //=== Record =================================================================//
 
-
-//fixme: move me
-void RecordWindow::replace_all(
-    std::string &text,
-    std::string const &toReplace,
-    std::string const &replaceWith
-) const {
-    std::string buf;
-    std::size_t pos = 0;
-    std::size_t prevPos;
-
-    buf.reserve(text.size());
-
-    while (true) {
-        prevPos = pos;
-        pos = text.find(toReplace, pos);
-        if (pos == std::string::npos)
-            break;
-        buf.append(text, prevPos, pos - prevPos);
-        buf += replaceWith;
-        pos += toReplace.size();
-    }
-
-    buf.append(text, prevPos, text.size() - prevPos);
-    text.swap(buf);
-}
-
-std::string &RecordWindow::filename(std::string const &ext)
-{
-    m_record_filename = std::string(m_record_filename_format);
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "%Y%d%m%H%M%S");
-    replace_all(m_record_filename, "%ADDIN%", gui.current_program_path.stem());
-    replace_all(m_record_filename, "%TIME%", oss.str());
-    m_record_filename += ext;
-    return m_record_filename;
-}
-mqRecordRequest RecordWindow::request(std::string const &ext)
-{
-    mqRecordRequest request = {
-        .frameRate    = 60,
-        .scale_factor = scale(),
-        .filename     = filename(ext).c_str()
-    };
-    return request;
-}
-
 void RecordWindow::renderContents(mqMachine *omach)
 {
     const ImGuiStyle& style = ImGui::GetStyle();
     auto w_button = ImGui::GetContentRegionAvail().x;
     w_button = (w_button - (style.ItemInnerSpacing.x * 2)) / 3;
-    bool uninit = !omach->initialized;
-    bool record_started = gui.record_info.status != MQ_RECORD_STATUS_UNINIT;
-    bool disabled = uninit || record_started;
 
-    mqRecord *backend = &gui.record_info;
+    bool uninit = !omach->initialized;
+    // bool record_started = gui.record_info.status != MQ_RECORD_STATUS_UNINIT;
+    bool disabled = uninit;// || record_started;
+
+    mqRecord &backend = gui.record_info;
     mqDisplay *display = &gui.actions.display;
 
     /* common section */
     {
-        static char record_scale_combo_data[4][32];
-        if(m_dirty) {
-            for (int i = 0 ; i < 4; ++i) {
-                int scale = (i == 3) ? 8 : i + 2;
-                if(uninit) {
-                    snprintf(
-                        record_scale_combo_data[i], 32,
-                        "x%d (??x\?\?)", scale
-                    );
-                } else {
-                    snprintf(
-                        record_scale_combo_data[i], 32,
-                        "x%d (%dx%d)", scale,
-                        gui.actions.display.width * scale,
-                        gui.actions.display.height * scale
-                    );
-                }
-            }
-            m_dirty = false;
-        }
-        static const char *record_scale_combo[] = {
-            record_scale_combo_data[0],
-            record_scale_combo_data[1],
-            record_scale_combo_data[2],
-            record_scale_combo_data[3],
-            nullptr,
-        };
         ImGui::SeparatorTextD("Common");
         ImGui::TextWrapped(
             "You can change shared configuration for both screenshot and "
@@ -1244,7 +1170,11 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SetCursorPosX(29);
         ImGui::Text("Scale");
         ImGui::SameLine(64);
-        ImGui::ComboAnon(0, &m_record_scale, record_scale_combo, disabled);
+        ImGui::ComboAnon(0,
+            &m_scale,
+            backend.scaleTable(uninit ? NULL : display),
+            disabled
+        );
         ImGui::HelpMarker(
             "(?)",
             "The Scalling\n"
@@ -1253,10 +1183,11 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Filename");
         ImGui::SameLine(64);
-        if(record_started)
+        if(disabled)
             ImGui::BeginDisabled();
-        ImGui::InputText("##recordinput", m_record_filename_format, 128);
-        if(record_started)
+        if(ImGui::InputText("##recordinput", m_filename_format, 128))
+            backend.filenameUpdate(m_filename_format);
+        if(disabled)
             ImGui::EndDisabled();
         ImGui::HelpMarker(
             "(?)",
@@ -1269,14 +1200,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::Spacing();
         if(uninit) {
             ImGui::TextCenteredColor("No addin selected", 0xff0000);
-        }
-        // else if(filenameExists()) {
-        //     auto warning = (
-        //         "\"" + filename() + "\" already exists (will be overwritten)"
-        //     );
-        //     ImGui::TextCenteredColor(warning.c_str(), 0xffbf00);
-        // }
-        else {
+        } else {
             ImGui::Spacing();
         }
     }
@@ -1290,9 +1214,18 @@ void RecordWindow::renderContents(mqMachine *omach)
             "the generated image in the COMMON section above"
         );
         ImGui::Spacing();
-        if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
-            mqRecordRequest _request = request(".png");
-            record_screenshot(backend, &_request, display);
+        //fixme: if addin not started, disable screenshot
+        if(ImGui::ButtonWSized("Take Screenshot", -1, uninit))
+            backend.screenshot(display, m_scale);
+        std::string err = backend.screenshot_lasterror();
+        if(!err.empty())
+            ImGui::TextCenteredColor(err.c_str(), 0xff0000);
+        if(backend.filenameExist(".png")) {
+            ImGui::TextCenteredColor(
+                ("\"" + backend.filename(".png") + "\" already exists").c_str(),
+                0xffbf00
+            );
+            ImGui::TextCenteredColor("(will be overwritten)", 0xffbf00);
         }
     }
 
@@ -1301,46 +1234,19 @@ void RecordWindow::renderContents(mqMachine *omach)
 
     /* video section */
     {
-        static const char *record_start_selector[] = {
+        static const std::vector<std::string> record_start_selector = {
             "Automatically",
             "Manually",
-            nullptr,
         };
-        static const char *record_reset_selector[] = {
+        static const std::vector<std::string> record_reset_selector = {
             "Stop",
             "Restart",
-            nullptr,
-        };
-        static const char *record_encoder_selector[] = {
-            "No encoder",
-            "h264_mf",
-            "hevc_mf",
-            "h264_nvenc",
-            "hevc_nvenc",
-            "av1_nvenc",
-            "h264_amf",
-            "hevc_amf",
-            "av1_amf",
-            "h264_qsv",
-            "hevc_qsv",
-            "vp9_qsv",
-            "av1_qsv",
-            "h264_videotoolbox",
-            "hevc_videotoolbox",
-            "av1_nvenc",
-            "h264_nvenc",
-            "hevc_nvenc",
-            "h264_vaapi",
-            "hevc_vaapi",
-            "av1_vaapi",
-            "vp9",
-            nullptr,
         };
         ImGui::SeparatorTextD("Video recorder");
         ImGui::TextWrapped(
-            "The default create a YUV420V MP4 file, which is suitable "
-            "for most users and purposes. As for screenshot, you a tweak "
-            "the behaviour of the recording through scalling, start/stop "
+            "The default create a MP4 file, which is suitable for most "
+            "users and purposes. As for screenshot, you a tweak the "
+            "behaviour of the recording through scalling, start/stop "
             "options, file name, ...\n"
             // "Small note concerning hardware encoder. When you enable this "
             // "option for the first time, MQ will try to automatically find "
@@ -1353,7 +1259,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::Text("Start");
         ImGui::SameLine(64);
         ImGui::ComboAnon(
-            1, &m_record_start_opt, record_start_selector, disabled);
+            1, &m_start_opt, record_start_selector, disabled);
         ImGui::HelpMarker(
             "(?)",
             "The START option allow to control the behaviours of the START "
@@ -1365,7 +1271,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::Text("Reset");
         ImGui::SameLine(64);
         ImGui::ComboAnon(
-            2, &m_record_reset_opt, record_reset_selector, uninit);
+            2, &m_reset_opt, record_reset_selector, uninit);
         ImGui::HelpMarker(
             "(?)",
             "The RESTART option allow to control the behaviours of the "
@@ -1383,16 +1289,12 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::Text("Encoder");
         ImGui::SameLine(64);
         if(ImGui::ComboAnon(
-                3, &m_record_encoder, record_encoder_selector, disabled)) {
+                3, &m_encoder, backend.encoderTable(), disabled)) {
             mq_log(
                 MQ_LOG_ERROR,
                 "encoder changed for %d -> %s",
-                m_record_encoder,
-                record_encoder_selector[m_record_encoder]
-            );
-            m_record_encoder_is_valid = record_encoder_check(
-                backend,
-                record_encoder_selector[m_record_encoder]
+                m_encoder,
+                backend.encoder(m_encoder)
             );
         }
         ImGui::HelpMarker(
@@ -1412,50 +1314,37 @@ void RecordWindow::renderContents(mqMachine *omach)
             return;
         }
 
-        /* potential encoder error */
-        if(!m_record_encoder_is_valid) {
-            ImGui::ButtonWSized("Start", w_button, true);
-            ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            ImGui::ButtonWSized("Pause", w_button, true);
-            ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            ImGui::ButtonWSized("Stop", w_button, true);
-            ImGui::TextCenteredColor(
-                    "Selected encoder not available", 0xff0000);
-            return;
-        }
-
         /* delayed initialisation */
-        mqRecordRequest request = this->request(".mp4");
-        if(backend->status == MQ_RECORD_STATUS_INIT) {
-            if(record_init(backend, &request, display) != 0) {
-                record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
-                mq_log(MQ_LOG_ERROR, "%s", backend->error);
+        if(m_record_status == MQ_RECORD_STATUS_START) {
+            if(!backend.start(display, m_encoder, m_scale)) {
+                mq_log(MQ_LOG_ERROR, "backend.start() - fails");
+                m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
             } else {
-                record_show(backend);
-                record_set_status(backend, MQ_RECORD_STATUS_START);
+                backend.debug();
+                m_record_status = MQ_RECORD_STATUS_RECORDING;
                 if(omach->cyclesPending == 0)
                     gui.actions.machineSetPendingCycles = -1;
             }
         }
-        if (backend->status == MQ_RECORD_STATUS_INIT_DELAY) {
+        if (m_record_status == MQ_RECORD_STATUS_START_WAIT_EMU) {
             if (omach->cyclesPending != 0) {
-                if(record_init(backend, &request, display) != 0) {
-                    record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
-                    mq_log(MQ_LOG_ERROR, "%s", backend->error);
+                if(!backend.start(display, m_encoder, m_scale)) {
+                    mq_log(MQ_LOG_ERROR, "backend.start() - fails");
+                    m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
                 } else {
-                    record_show(backend);
-                    record_set_status(backend, MQ_RECORD_STATUS_START);
+                    backend.debug();
+                    m_record_status = MQ_RECORD_STATUS_RECORDING;
                 }
             }
         }
 
         /* addin selected, but no record requested */
-        if(backend->status == MQ_RECORD_STATUS_UNINIT) {
+        if(m_record_status == MQ_RECORD_STATUS_NOTSTARTED) {
             if(ImGui::ButtonWSized("Start", w_button, false)) {
-                if(m_record_start_opt == 0)
-                    record_set_status(backend, MQ_RECORD_STATUS_INIT);
+                if(m_start_opt == 0)
+                    m_record_status = MQ_RECORD_STATUS_START;
                 else
-                    record_set_status(backend, MQ_RECORD_STATUS_INIT_DELAY);
+                    m_record_status = MQ_RECORD_STATUS_START_WAIT_EMU;
             }
             ImGui::SameLine(0, style.ItemInnerSpacing.x);
             ImGui::ButtonWSized("Pause", w_button, true);
@@ -1463,21 +1352,24 @@ void RecordWindow::renderContents(mqMachine *omach)
             ImGui::ButtonWSized("Stop", w_button, true);
             ImGui::Spacing();
             const char *text = "Start recording and emulation";
-            if(m_record_start_opt == 1)
+            if(m_start_opt == MQ_RECORD_STARTOPT_WAIT_EMULATION)
                 text = "Start recording and wait emulation...";
             if(omach->cyclesPending != 0)
                 text = "Start recording";
             ImGui::TextCenteredColor(text, 0x00ffff);
+            if(!backend.lasterror().empty())
+                ImGui::TextCenteredColor(backend.lasterror().c_str(), 0xff0000);
             return;
         }
+
         /* record waiting */
-        if(backend->status == MQ_RECORD_STATUS_INIT_DELAY) {
+        if(m_record_status == MQ_RECORD_STATUS_START_WAIT_EMU) {
             ImGui::ButtonWSized("Start", w_button, true);
             ImGui::SameLine(0, style.ItemInnerSpacing.x);
             ImGui::ButtonWSized("Pause", w_button, true);
             ImGui::SameLine(0, style.ItemInnerSpacing.x);
             if(ImGui::ButtonWSized("Stop", w_button, false))
-                record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
+                m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
             ImGui::Spacing();
             ImGui::BeginDisabled();
             ImGui::TextCenteredColor("Waiting emulation start...", 0xffffff);
@@ -1486,63 +1378,90 @@ void RecordWindow::renderContents(mqMachine *omach)
         }
 
         /* start/pause/stop button */
-
         if(omach->cyclesPending == 0) {
-            if(gui.actions.machineSetPendingCycles == 0)
-                record_set_status(backend, MQ_RECORD_STATUS_PAUSED);
+            if(gui.actions.machineSetPendingCycles == 0) {
+                if(!backend.pause())
+                    mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+                m_record_status = MQ_RECORD_STATUS_PAUSED;
+            }
         }
-
-        bool started = (backend->status != MQ_RECORD_STATUS_PAUSED);
-        bool paused = (backend->status != MQ_RECORD_STATUS_START);
-        if(ImGui::ButtonWSized("Continue", w_button, started))
-            record_set_status(backend, MQ_RECORD_STATUS_START);
+        bool started = (m_record_status == MQ_RECORD_STATUS_RECORDING);
+        bool paused = (m_record_status == MQ_RECORD_STATUS_PAUSED);
+        if(ImGui::ButtonWSized("Continue", w_button, started)) {
+            if(!backend.unpause())
+                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+            m_record_status = MQ_RECORD_STATUS_RECORDING;
+        }
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        if(ImGui::ButtonWSized("Pause", w_button, paused))
-            record_set_status(backend, MQ_RECORD_STATUS_PAUSED);
+        if(ImGui::ButtonWSized("Pause", w_button, paused)) {
+            if(!backend.pause())
+                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+            m_record_status = MQ_RECORD_STATUS_PAUSED;
+        }
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
         if(ImGui::ButtonWSized("Stop", w_button, false)) {
-            record_quit(backend);
-            record_set_status(backend, MQ_RECORD_STATUS_UNINIT);
+            if(!backend.stop())
+                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+            m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
         } else {
-            if(gui.actions.display.dirty) {
-                if(record_add_frame(backend, &gui.actions.display) != 0)
-                mq_log(MQ_LOG_ERROR, "%s", backend->error);
+            if(m_record_status != MQ_RECORD_STATUS_PAUSED) {
+                if(gui.actions.display.dirty) {
+                    if(!backend.frame_add(&gui.actions.display))
+                        mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+                }
             }
         }
 
         /* recording information */
         char buffer[128];
-        snprintf(
-            buffer, 128,
-            "%s (%02d:%02d:%02d)",
-            (paused) ? "Paused" : "Recording...",
-            backend->stats.time_min,
-            backend->stats.time_sec,
-            backend->stats.time_ms
-        );
-        if(paused)
-            ImGui::BeginDisabled();
-        ImGui::TextCenteredColor(buffer, 0xffffff);
-        if(paused)
-            ImGui::EndDisabled();
+        mqRecordStats const*stats = backend.stats();
+        if(stats != NULL) {
+            snprintf(
+                buffer, 128,
+                "%s (%02d:%02d:%02d)",
+                (paused) ? "Paused" : "Recording...",
+                stats->time_min,
+                stats->time_sec,
+                stats->time_ms
+            );
+            if(paused)
+                ImGui::BeginDisabled();
+            ImGui::TextCenteredColor(buffer, 0xffffff);
+            if(paused)
+                ImGui::EndDisabled();
+        } else {
+            ImGui::TextCenteredColor("unable to fetch stats", 0xff0000);
+        }
+
+        /* display error log if available */
+        if(!backend.lasterror().empty())
+            ImGui::TextCenteredColor(backend.lasterror().c_str(), 0xff0000);
     };
 }
 
 void RecordWindow::resetState()
 {
-    mqRecord *backend = &gui.record_info;
-    if(backend->status == MQ_RECORD_STATUS_START ||
-            backend->status == MQ_RECORD_STATUS_PAUSED) {
+    mq_log(MQ_LOG_WARNING, "record:: reset!!");
+    mqRecord &backend = gui.record_info;
+
+    if(
+        m_record_status == MQ_RECORD_STATUS_RECORDING ||
+        m_record_status == MQ_RECORD_STATUS_PAUSED
+    ) {
         mq_log(MQ_LOG_WARNING, "Record: stopping current recording");
-        record_quit(backend);
-    }
-    if(m_record_reset_opt == 1) {
+        if(!backend.stop())
+            mq_log(MQ_LOG_ERROR, "mqRecord::stop() - fail");
+        m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
+    } /* else {
+        backend.resetCache();
+    } */
+    backend.filenameUpdate(m_filename_format);
+    backend.scaleTable(NULL);
+    if(m_reset_opt == 1) {
         mq_log(MQ_LOG_WARNING, "Record: restart recording");
-        if(m_record_start_opt == 0)
-            record_set_status(backend, MQ_RECORD_STATUS_INIT);
+        if(m_start_opt == 0)
+            m_record_status = MQ_RECORD_STATUS_START;
         else
-            record_set_status(backend, MQ_RECORD_STATUS_INIT_DELAY);
+            m_record_status = MQ_RECORD_STATUS_START_WAIT_EMU;
     }
-    mq_log(MQ_LOG_DEBUG, "Record: reset state");
-    m_dirty = true;
 }

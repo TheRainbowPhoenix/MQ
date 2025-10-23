@@ -531,7 +531,7 @@ int main(int argc, char **argv)
 
     gui.DGW.cleanup();
 
-    record_quit(&gui.record_info);
+    // record_quit(&gui.record_info);
     watch_quit(&gui.watch_info);
 
     azur_quit();

@@ -268,15 +268,27 @@ void HelpMarker(char const *title, char const *desc)
     }
 }
 
-bool ComboAnon(int id, int *index, const char *selector[], bool disabled)
-{
-    int size = 0;
-    while(selector[size] != nullptr)
-        size += 1;
+bool ComboAnon(
+    int id,
+    int *index,
+    std::vector<std::string> const &selector,
+    bool disabled
+) {
+    // convert the vector into old C-style `char *table[]`
+    std::vector<char*> cselector;
+    cselector.reserve(selector.size());
+    for(size_t i = 0; i < selector.size(); ++i)
+        cselector.push_back(const_cast<char*>(selector[i].c_str()));
+
+    // display the combo
     if(disabled)
         ImGui::BeginDisabled();
     bool status = ImGui::Combo(
-        ("##combo" + std::to_string(id)).c_str(), index, selector, size);
+        ("##combo" + std::to_string(id)).c_str(),
+        index,
+        &cselector[0],
+        cselector.size()
+    );
     if(disabled)
         ImGui::EndDisabled();
     return status;
