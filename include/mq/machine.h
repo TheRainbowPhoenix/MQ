@@ -23,6 +23,25 @@ struct mqMemory;
    TODO: Provide background process hooks with more precising timing info */
 typedef void mq_process_t(struct mqMachine *mach, int cyclesElapsed);
 
+/* Emulated calculator. This includes a processor and some memory; usually not
+   all of the RAM and ROM are emulated, only the segments used by add-ins and a
+   bit of OS metadata. The machine also includes the SoC's peripheral modules
+   and the user interface devices, i.e. keyboard and display.
+
+   TODO: Deterministic time sources should be used for replayable runs.
+
+   Machines can be paused in 4 different ways:
+   * Stuck: the machine has encountered a critical error and cannot continue
+     emulating. It remains unusable until it's initialized again.
+   * Delay: the machine is idling by waiting for a given amount of time to
+     elapse. This used e.g. for high-level emulation of sleeping syscalls.
+     Background processes still run at their normal pace.
+   * Blocked: the machine is running a high-level emulation of a blocking
+     function, like GetKey(). Background processes run normally and unblock the
+     machine once the unblocking condition is fulfilled (e.g. key press).
+   * Sleeping: the CPU is sleeping. Background processes run normally and wake
+     up the CPU once an interrupt occurs. */
+
 // TODO
 struct mqMachine
 {

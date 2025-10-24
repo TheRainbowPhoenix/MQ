@@ -41,8 +41,8 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   endif()
 else()
   # In Release mode, optimizations are enabled and LTO is too
-  set(MQ_OPT_CC -O3 -flto=auto)
-  set(MQ_OPT_LD -flto=auto)
+  set(MQ_OPT_CC -O3)# -flto=auto)
+  set(MQ_OPT_LD)# -flto=auto)
 endif()
 
 # Adjust options based on availability

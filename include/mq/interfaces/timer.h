@@ -42,10 +42,13 @@ void mq_timer_start(mqTimer *timer);
 bool mq_timer_isRunning(mqTimer *timer);
 
 /* Update the timer. This fetches the current time and adds any new ticks to
-   the total counter. If this function is not called regularly the timer will
-   not advance at all. Returns the number of full ticks elapsed since the last
-   update. */
+   the total counter. The timer only advances when this function is called.
+   Returns the number of full ticks elapsed since the last update. */
 u64 mq_timer_update(mqTimer *timer);
+/* Update the timer, but only report up to `maxTicks` ticks elapsed. If time
+   advanced more than that, extra ticks will be remembered and counted in a
+   later update. maxTicks = 0 disables the limit, like mq_timer_update(). */
+u64 mq_timer_updateWithLimit(mqTimer *timer, u64 maxTicks);
 
 /* Number of full ticks elapsed between starting the timer and the last time
    the timer was updated. */

@@ -66,12 +66,21 @@ static u64 mq_timer_update_ns(mqTimer *timer)
 
 u64 mq_timer_update(mqTimer *timer)
 {
+    return mq_timer_updateWithLimit(timer, 0);
+}
+
+u64 mq_timer_updateWithLimit(mqTimer *timer, u64 maxTicks)
+{
     u64 ns = mq_timer_update_ns(timer);
     timer->remainder += ns;
-    u64 fullTicks = timer->remainder / timer->tickResolution;
-    timer->remainder %= timer->tickResolution;
-    timer->ticks += fullTicks;
-    return fullTicks;
+
+    u64 ticksCounted = timer->remainder / timer->tickResolution;
+    if(maxTicks != 0 && ticksCounted > maxTicks)
+        ticksCounted = maxTicks;
+
+    timer->remainder -= ticksCounted * timer->tickResolution;
+    timer->ticks += ticksCounted;
+    return ticksCounted;
 }
 
 u64 mq_timer_elapsedTicks(mqTimer *timer)

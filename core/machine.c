@@ -310,6 +310,29 @@ bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
         mach->memory, 0x81800000, data + 0x7000, size - 0x7000);
 }
 
+static void mq_machine_advanceInternalPause(mqMachine *mach)
+{
+    /* TODO[machine]: Count cycles during internal pauses
+       Ideally we'd have a way to map cycles to internal pause ticks, e.g.
+       force internal pauses to be in 100 MHz units, and then map one tick to
+       one cycle. The point is that running a cycle only takes a small amount
+       of time, so we have a cycle counting system that:
+       1. is deterministic (assuming deterministic time sources);
+       2. finishes every cycle within a bounded amount of emulation work;
+       3. spends a ROUGHLY consistent amount of time in each cycle */
+    if(!mach->internallyPaused)
+        return;
+
+    int ticks = mq_timer_update(&mach->internalPauseTimer);
+
+    /* Stop the internal timer when reaching the end of the sleep period */
+    if((mach->internalPauseTicksRemaining -= ticks) <= 0) {
+        mach->internallyPaused = false;
+        mq_timer_reset(&mach->internalPauseTimer, 0);
+        mach->internalPauseTicksRemaining = 0;
+    }
+}
+
 #if MQ_CONTROLLER_SETJMP
 # define CHECK_STUCK() (void)0
 #else
@@ -328,27 +351,14 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     int cyclesRequested = cycles;
     int cyclesRemaining = cycles;
     mq_timer_unfreeze();
+    mq_machine_advanceInternalPause(mach);
 
-    // TODO[machine]: Host system sleep for long high-level internal pauses
-    // TODO[machine]: Not counting cycles during sleep hampers determinism
-    if(mach->internallyPaused) {
-        int ticks = mq_timer_update(&mach->internalPauseTimer);
+    if(mach->internallyPaused)
+        return 0;
 
-        /* Stop the internal timer when reaching the end of the sleep period */
-        if((mach->internalPauseTicksRemaining -= ticks) <= 0) {
-            mach->internallyPaused = false;
-            mq_timer_reset(&mach->internalPauseTimer, 0);
-            mach->internalPauseTicksRemaining = 0;
-        }
-        /* Otherwise, run background processes and leave */
-        else {
-            if(--mach->processTimer == 0)
-                mq_machine_runProcesses(mach, mach->processFrequency);
-            return 0;
-        }
-    }
-
-    /* While blocked, just run background processes */
+    /* If the machine is emulating a blocking syscall, run background processes
+       until is get unblocked.
+       TODO: We could limit the speed of these process updates */
     while(mach->internallyBlocked && cyclesRemaining >= mach->processTimer) {
         cyclesRemaining -= mach->processTimer;
         mach->processTimer = 0;
@@ -356,6 +366,10 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     }
     if(mach->internallyBlocked)
         goto endRun;
+
+    //=== Run the processor ==================================================//
+    // TODO: Unwind somewhere if the machine enters a paused state. This way
+    // we can remove the sleep check in mq_cpu_cycle.
 
     /* Unroll a bit for speed, but only if the process timers are aligned,
        because we want to invoke processes at deterministic times and it has to
