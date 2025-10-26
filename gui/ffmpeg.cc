@@ -274,14 +274,12 @@ int mqFFmpeg::ffmpeg_output_frame_write(AVFrame *frame)
     while(err >= 0) {
         // receive the pending packet
         err = avcodec_receive_packet(m_core.codec_ctx, m_core.packet);
-        if(err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
-            err = 0;
-            break;
-        }
-        if(err < 0) {
-            ffmpeg_error(err, "receive packet error");
-            break;
-        }
+        if(err == AVERROR(EAGAIN))
+            return 0;
+        if(err == AVERROR_EOF)
+            return 1;
+        if(err < 0)
+            return ffmpeg_error(err, "receive packet error");
         // We set the packet PTS and DTS taking in the account our FPS
         // (second argument), and the time base that our selected format
         // uses (third argument).
@@ -668,7 +666,7 @@ int mqFFmpeg::frame_add(mqDisplay const *display)
         return err;
     }
     if(err > 0) {
-        mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
+        // mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
         return 0;
     }
     err = ffmpeg_output_frame_write(frame_out);
@@ -704,8 +702,21 @@ int mqFFmpeg::stats(struct mqFFmpegStats *stats)
 
 int mqFFmpeg::stop()
 {
+    int err;
+
     if(!m_core.format_ctx)
         return 0;
+
+    // force-flush pending frame
+    while (true) {
+        err = ffmpeg_output_frame_write(NULL);
+        if(err > 0)
+            break;
+        if(err < 0) {
+            mq_log(MQ_LOG_ERROR, "mqFFmpeg::stop() - flush fails");
+            break;
+        }
+    }
 
     // Writing the end of the file.
     av_write_trailer(m_core.format_ctx);
