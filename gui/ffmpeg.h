@@ -3,7 +3,6 @@
 
 #include <string>
 #include <vector>
-using namespace std;
 
 #include <mq/interfaces/display.h>
 

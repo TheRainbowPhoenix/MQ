@@ -134,12 +134,12 @@ void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
     DB(*Windows.MMU, dock_left_bottom);
     DB(*Windows.HexViewer, dock_left_bottom_right);
 
-    ImGui::SetWindowFocus(Windows.Control->uniqueTitle().c_str());
     ImGui::SetWindowFocus(Windows.Messages->uniqueTitle().c_str());
     ImGui::SetWindowFocus(Windows.MemoryTree->uniqueTitle().c_str());
     ImGui::SetWindowFocus(Windows.Keyboard->uniqueTitle().c_str());
     ImGui::SetWindowFocus(Windows.Display->uniqueTitle().c_str());
     ImGui::SetWindowFocus(Windows.HexViewer->uniqueTitle().c_str());
+    ImGui::SetWindowFocus(Windows.Control->uniqueTitle().c_str());
 
     ImGui::DockBuilderFinish(dock);
 }
@@ -1155,11 +1155,11 @@ void RecordWindow::renderContents(mqMachine *omach)
     bool disabled = uninit;// || record_started;
 
     mqRecord &backend = gui.record_info;
-    mqDisplay *display = &gui.actions.display;
+    mqDisplay *display = &gui.lastDisplayFrame;
 
     /* common section */
     {
-        ImGui::SeparatorTextD("Common");
+        ImGui::SeparatorTextD("Input");
         ImGui::TextWrapped(
             "You can change shared configuration for both screenshot and "
             "record. By default, the scalling change in function of the "
@@ -1177,7 +1177,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         );
         ImGui::HelpMarker(
             "(?)",
-            "The Scalling\n"
+            "The Scaling\n"
             "todo"
         );
         ImGui::AlignTextToFramePadding();
@@ -1191,8 +1191,8 @@ void RecordWindow::renderContents(mqMachine *omach)
             ImGui::EndDisabled();
         ImGui::HelpMarker(
             "(?)",
-            "You can use special placeholder to indicate\n"
-            "to MQ to inject dynamic information. Currently\n"
+            "You can use special placeholder to indicate "
+            "to MQ to inject dynamic information. Currently "
             "supported variable are:\n"
             "- %ADDIN% which add the selected addin name\n"
             "- %DATE% which add the current date information\n"
@@ -1209,12 +1209,8 @@ void RecordWindow::renderContents(mqMachine *omach)
     {
         ImGui::SeparatorTextD("Screenshot");
         ImGui::TextWrapped(
-            "The default create a PNG file, which is suitable for most "
-            "user and purposes. You can change the default scalling of "
-            "the generated image in the COMMON section above"
-        );
+            "Outputs a PNG. Uses the scaling setting above.");
         ImGui::Spacing();
-        //fixme: if addin not started, disable screenshot
         if(ImGui::ButtonWSized("Take Screenshot", -1, uninit))
             backend.screenshot(display, m_scale);
         std::string err = backend.screenshot_lasterror();
@@ -1244,15 +1240,12 @@ void RecordWindow::renderContents(mqMachine *omach)
         };
         ImGui::SeparatorTextD("Video recorder");
         ImGui::TextWrapped(
-            "The default create a MP4 file, which is suitable for most "
-            "users and purposes. As for screenshot, you a tweak the "
-            "behaviour of the recording through scalling, start/stop "
-            "options, file name, ...\n"
+            "Outputs an MP4. For quality, use a software encoder. For speed, "
+            "use a hardware encoder.");
             // "Small note concerning hardware encoder. When you enable this "
             // "option for the first time, MQ will try to automatically find "
             // "all available encoder. This can take some time and will "
             // "freeze the application a short amont of time."
-        );
         ImGui::Spacing();
         ImGui::AlignTextToFramePadding();
         ImGui::SetCursorPosX(32);
@@ -1397,9 +1390,10 @@ void RecordWindow::renderContents(mqMachine *omach)
             m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
         } else {
             if(m_record_status != MQ_RECORD_STATUS_PAUSED) {
-                if(gui.actions.display.dirty) {
-                    if(!backend.frame_add(&gui.actions.display))
+                if(gui.lastDisplayFrame.dirty) {
+                    if(!backend.frame_add(&gui.lastDisplayFrame))
                         mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
+                    gui.lastDisplayFrame.dirty = false;
                 }
             }
         }

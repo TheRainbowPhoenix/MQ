@@ -5,7 +5,6 @@
 
 #include <string>
 #include <vector>
-using namespace std;
 
 #include "./ffmpeg.h"
 #include <mq/interfaces/display.h>
@@ -23,7 +22,7 @@ class mqRecord
 {
 public:
     std::vector<std::string> const &scaleTable(mqDisplay *display);
-    int scale(int scale_idx) const;
+    int scale(uint scale_idx) const;
     std::vector<std::string> const &encoderTable();
     std::string encoder(unsigned int encoder_idx) const;
 

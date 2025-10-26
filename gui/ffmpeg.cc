@@ -9,6 +9,7 @@ extern "C" {
 
 //todo: move me
 //fixme: support window
+// FIXME: Should probably use the machine's time source (once properly defined)
 static u64 mq_utils_get_time_ms()
 {
     struct timeval t;
@@ -703,6 +704,9 @@ int mqFFmpeg::stats(struct mqFFmpegStats *stats)
 
 int mqFFmpeg::stop()
 {
+    if(!m_core.format_ctx)
+        return 0;
+
     // Writing the end of the file.
     av_write_trailer(m_core.format_ctx);
 

@@ -28,7 +28,7 @@ void TextLR(char const *left, char const *fmt, ...);
 
 /* A full-line centered text with color and bold support 
    (todo) maybe too specific? */
-void TextCenteredColor(char const *text, int color);
+void TextCenteredColor(char const *text, u32 color);
 
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
@@ -69,7 +69,7 @@ bool Checkbox2(Args... args) {
 void HelpMarker(const char *title, const char* desc);
 
 /* anonym combo */
-bool ComboAnon(int id,
+void ComboAnon(int id,
     int *index,
     std::vector<std::string> const &selector,
     bool disabled

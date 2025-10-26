@@ -52,9 +52,6 @@ struct GUIActions
         viewHex = ViewHex { buffer, offset, size, address };
     }
 
-    /* current frame display information */
-    mqDisplay display;
-
     /* Keys whose status should be reassigned this frame, identified by key
        numbers from the keyboard structure */
     std::map<uint, bool> physicalKeysAssigned;
@@ -106,6 +103,10 @@ struct GUI
     std::filesystem::path current_program_path = "";
 
     //=== Recording ==========================================================//
+
+    /* Copy of the last frame obtained from the machine. `dirty` indicates
+       whether the frame is new for the recorder. */
+    mqDisplay lastDisplayFrame;
 
     mqRecord record_info;
 

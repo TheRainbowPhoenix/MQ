@@ -280,6 +280,7 @@ public:
 
 //=== Record =================================================================//
 
+// TODO: Figure out why this is here and not in mqRecord
 enum {
     MQ_RECORD_STATUS_NOTSTARTED,
     MQ_RECORD_STATUS_START,
