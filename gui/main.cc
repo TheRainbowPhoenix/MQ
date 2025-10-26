@@ -1,8 +1,10 @@
+#include "record.h"
 #include "gui.h"
 #include "windows.h"
 #include "watch.h"
 
 #include <mq/mq.h>
+#include <mq/defs.h>
 #include <mq/controller.h>
 #include <mq/machine.h>
 #include <mq/system/casiowin.h>
@@ -107,30 +109,43 @@ static void render(void)
         // printf("[Main] Locked machine for render\n");
         emu0->omach = mq_machine_createObserver(mach);
 
-        if(mach->display && mach->display->dirty) {
-            mqDisplay *d = mach->display;
-            gui.displayTexture->bind();
-            if(d->format == MQ_DISPLAY_FORMAT_L8) {
-                gui.displayTexture->setFormat(GL_R8, d->width, d->height);
-                gui.displayTexture->loadData(
-                    d->data, GL_RED, GL_UNSIGNED_BYTE, d->width, 0);
-            }
-            else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
-                gui.displayTexture->setFormat(GL_RGB565, d->width, d->height);
-                gui.displayTexture->loadData(
-                    d->data, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, d->width, 0);
-            }
-            else
-                printf("warning: display not updated, unknown format!\n");
+        /* copy display information */
+        gui.actions.display.dirty = false;
+        if(mach->display) {
+            gui.actions.display.dirty  = mach->display->dirty;
+            gui.actions.display.format = mach->display->format;
+            gui.actions.display.width  = mach->display->width;
+            gui.actions.display.height = mach->display->height;
+            if(mach->display->dirty) {
+                mqDisplay *d = mach->display;
+                gui.actions.display.data = memdup(
+                    mach->display->data,
+                    mq_display_framebufferSize(mach->display)
+                );
+                gui.displayTexture->bind();
+                if(d->format == MQ_DISPLAY_FORMAT_L8) {
+                    gui.displayTexture->setFormat(GL_R8, d->width, d->height);
+                    gui.displayTexture->loadData(
+                        d->data, GL_RED, GL_UNSIGNED_BYTE, d->width, 0);
+                }
+                else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
+                    gui.displayTexture->setFormat(GL_RGB565, d->width, d->height);
+                    gui.displayTexture->loadData(
+                        d->data, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, d->width, 0);
+                }
+                else
+                    printf("warning: display not updated, unknown format!\n");
 
-            gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
-            mq_display_setDirty(d, false);
-            render_needed = std::max(render_needed, 1);
+                gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
+                mq_display_setDirty(d, false);
+                render_needed = std::max(render_needed, 1);
+            }
         }
 
         // printf("[Main] Unlocking machine after render\n");
         mq_machine_unlock(mach);
         // printf("[Main] Unlocked machine after render\n");
+
     }
 
     if(!render_needed)
@@ -466,6 +481,7 @@ int main(int argc, char **argv)
         std::make_unique<HexViewerWindow>("Hex Viewer", gui.HV);
     gui.Windows.Display = std::make_unique<DisplayWindow>("Display", gui.DGW);
     gui.Windows.Keyboard = std::make_unique<KeyboardWindow>("Keyboard");
+    gui.Windows.Record = std::make_unique<RecordWindow>("Record");
 
     mq_log_handler(handle_log);
 
@@ -515,6 +531,7 @@ int main(int argc, char **argv)
 
     gui.DGW.cleanup();
 
+    // record_quit(&gui.record_info);
     watch_quit(&gui.watch_info);
 
     azur_quit();

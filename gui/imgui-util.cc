@@ -47,6 +47,16 @@ bool IconButton(int iconID, char const *tooltip, bool disabled)
     return b;
 }
 
+bool ButtonWSized(char const *name, float width, bool disabled)
+{
+    if(disabled)
+        ImGui::BeginDisabled();
+    bool b = ImGui::Button(name, ImVec2(width, 0));
+    if(disabled)
+        ImGui::EndDisabled();
+    return b;
+}
+
 void TextMono(char const *fmt, ...)
 {
     va_list args;
@@ -55,6 +65,26 @@ void TextMono(char const *fmt, ...)
     ImGui::TextV(fmt, args);
     ImGui::PopFont();
     va_end(args);
+}
+
+void TextCenteredColor(char const *text, int color)
+{
+    auto w_widget = ImGui::GetContentRegionAvail().x;
+    auto w_text = ImGui::CalcTextSize(text).x;
+    ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
+    if (color == 0x00000000) {
+        ImGui::TextDisabled(text);
+    } else {
+        ImGui::TextColored(
+            ImVec4(
+                (color >> 16) & 0xff,
+                (color >>  8) & 0xff,
+                (color >>  0) & 0xff,
+                1.0f
+            ),
+            text
+        );
+    }
 }
 
 void TextError(char const *fmt, ...)
@@ -222,6 +252,46 @@ void CustomMenuSeparator()
     ImGui::GetWindowDrawList()->AddRectFilled(min, max,
         ImGui::ColorConvertFloat4ToU32(color));
     ImGui::Dummy(ImVec2(1, 1));
+}
+
+void HelpMarker(char const *title, char const *desc)
+{
+    float available_x = ImGui::GetContentRegionAvail().x;
+    float title_width = ImGui::CalcTextSize(title).x;
+    ImGui::SameLine(available_x - title_width);
+    ImGui::TextDisabled(title);
+    if(ImGui::BeginItemTooltip()) {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+bool ComboAnon(
+    int id,
+    int *index,
+    std::vector<std::string> const &selector,
+    bool disabled
+) {
+    // convert the vector into old C-style `char *table[]`
+    std::vector<char*> cselector;
+    cselector.reserve(selector.size());
+    for(size_t i = 0; i < selector.size(); ++i)
+        cselector.push_back(const_cast<char*>(selector[i].c_str()));
+
+    // display the combo
+    if(disabled)
+        ImGui::BeginDisabled();
+    bool status = ImGui::Combo(
+        ("##combo" + std::to_string(id)).c_str(),
+        index,
+        &cselector[0],
+        cselector.size()
+    );
+    if(disabled)
+        ImGui::EndDisabled();
+    return status;
 }
 
 } /* namespace ImGui */
