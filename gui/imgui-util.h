@@ -26,11 +26,18 @@ namespace ImGui {
    right-aligned on the right side of the current drawing region. */
 void TextLR(char const *left, char const *fmt, ...);
 
+/* A full-line centered text with color and bold support 
+   (todo) maybe too specific? */
+void TextCenteredColor(char const *text, u32 color);
+
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
 
 /* Icon button with a tooltip text. */
 bool IconButton(int iconID, char const *tooltip, bool disabled=false);
+
+/* button with custom width and enabled/disabled status */
+bool ButtonWSized(char const *name, float width, bool disabled);
 
 /* Move cursor by a given amount. */
 static inline void MoveCursorScreenPos(ImVec2 diff) {
@@ -57,6 +64,16 @@ bool Checkbox2(Args... args) {
     ImGui::PopStyleVar();
     return b;
 }
+
+/* Help mark tooltips */
+void HelpMarker(const char *title, const char* desc);
+
+/* anonym combo */
+void ComboAnon(int id,
+    int *index,
+    std::vector<std::string> const &selector,
+    bool disabled
+);
 
 } /* namespace ImGui */
 

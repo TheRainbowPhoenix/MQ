@@ -108,8 +108,9 @@ set(GUI_SOURCES
   gui/gui.cc
   gui/imgui-util.cc
   gui/main.cc
-  gui/stb.cc
   gui/util.cc
+  gui/record.cc
+  gui/ffmpeg.cc
   gui/watch.cc)
 
 set(ASSETS
@@ -134,6 +135,7 @@ target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_BINARY_DIR}"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
+target_link_libraries(mq PRIVATE -lswscale -lavutil -lavformat -lavcodec)
 target_link_options(mq PRIVATE ${MQ_OPT_LD} -pthread)
 
 # TODO: Use Tracy's CMake integration just to make things a bit cleaner.

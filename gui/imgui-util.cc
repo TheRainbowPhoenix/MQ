@@ -37,13 +37,19 @@ bool IconButton(int iconID, char const *tooltip, bool disabled)
     char str[32];
     sprintf(str, "%lc", 0xe000 + iconID);
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-    if(disabled)
-        ImGui::BeginDisabled();
+    ImGui::BeginDisabled(disabled);
     bool b = ImGui::Button(str, ImVec2(20, 20));
-    if(disabled)
-        ImGui::EndDisabled();
+    ImGui::EndDisabled();
     ImGui::SetItemTooltip("%s", tooltip);
     ImGui::PopStyleVar();
+    return b;
+}
+
+bool ButtonWSized(char const *name, float width, bool disabled)
+{
+    ImGui::BeginDisabled(disabled);
+    bool b = ImGui::Button(name, ImVec2(width, 0));
+    ImGui::EndDisabled();
     return b;
 }
 
@@ -55,6 +61,23 @@ void TextMono(char const *fmt, ...)
     ImGui::TextV(fmt, args);
     ImGui::PopFont();
     va_end(args);
+}
+
+void TextCenteredColor(char const *text, u32 color)
+{
+    float w_widget = ImGui::GetContentRegionAvail().x;
+    float w_text = ImGui::CalcTextSize(text).x;
+    ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
+    if (color == 0x00000000)
+        ImGui::TextDisabled(text);
+    else {
+        ImGui::TextColored({
+            (float)((color >> 16) & 0xff),
+            (float)((color >>  8) & 0xff),
+            (float)((color >>  0) & 0xff),
+            1.0f},
+            text);
+    }
 }
 
 void TextError(char const *fmt, ...)
@@ -77,6 +100,43 @@ void TextErrorMono(char const *fmt, ...)
     ImGui::PopStyleColor();
     ImGui::PopFont();
     va_end(args);
+}
+
+void HelpMarker(char const *title, char const *desc)
+{
+    float available_x = ImGui::GetContentRegionAvail().x;
+    float title_width = ImGui::CalcTextSize(title).x;
+    ImGui::SameLine(available_x - title_width);
+    ImGui::TextDisabled(title);
+    if(ImGui::BeginItemTooltip()) {
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+void ComboAnon(
+    int id,
+    int *index,
+    std::vector<std::string> const &selector,
+    bool disabled
+) {
+    ImGui::BeginDisabled(disabled);
+
+    std::string idstr = "##combo" + std::to_string(id);
+    char const *preview =
+        *index < (int)selector.size() ? selector[*index].c_str() : "";
+
+    if(ImGui::BeginCombo(idstr.c_str(), preview)) {
+        for(uint i = 0; i < selector.size(); i++) {
+            if(ImGui::Selectable(selector[i].c_str(), *index == (int)i))
+                *index = i;
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::EndDisabled();
 }
 
 } /* namespace ImGui */
