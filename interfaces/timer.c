@@ -11,11 +11,32 @@
 static u64 globalDelay = 0;
 static u64 globalFreezeStart = 0;
 
+/* Ugly hack to improve perf on web
+ * (Timers are sloow) */
+// EMSCRIPTEN IFDEF
+int _timer_lock = 0;
+u64 _locked_time;
+// ENDIF
+
 static u64 currentTime(void)
 {
+// EMSCRIPTEN IFDEF
+    if(_timer_lock > 1)
+        return _locked_time;
+// ENDIF
+
     struct timespec tp;
     clock_gettime(CLOCK_MONOTONIC, &tp);
-    return (1000000000ull * tp.tv_sec) + tp.tv_nsec;
+    u64 time = (1000000000ull * tp.tv_sec) + tp.tv_nsec;
+
+// EMSCRIPTEN IFDEF
+    if(_timer_lock){
+      _locked_time = time;
+      _timer_lock = 2;
+    }
+// ENDIF
+
+    return time;
 }
 
 void mq_timer_freeze(void)

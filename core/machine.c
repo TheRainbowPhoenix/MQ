@@ -369,9 +369,11 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         }
     }
     else if(cyclesRemaining > 100) {
+// EMSCRIPTEN IFDEF
         mq_log(MQ_LOG_WARNING,
             "slow run of %d cycles due to misaligned background processes",
             cyclesRemaining);
+// ENDIF
     }
 
     while(cyclesRemaining > 0) {

@@ -57,8 +57,14 @@ static void notifyINTC(mqMachine *mach, int n)
 
 static void mq_cmod_process(mqMachine *mach, int cyclesElapsed)
 {
+// EMSCRIPTEN IFDEF
+    extern int _timer_lock;
+    _timer_lock = 1;
+// ENDIF
+
     mqCmod *Cmod = mach->modules[moduleID];
     (void)cyclesElapsed;
+
 
     /* Ignore number of cycles elapsed and use real-time */
     for(int i = 0; i < 6; i++) {
@@ -88,12 +94,21 @@ static void mq_cmod_process(mqMachine *mach, int cyclesElapsed)
             RT->RTCNT += RT->RTCOR;
             underflows++;
         }
+
+// EMSCRIPTEN IFDEF
         if(underflows > 1)
             mq_log(MQ_LOG_WARNING, "ETMU%d underflowed x%d!", i, underflows);
+// ENDIF
 
         RT->RTCR |= (1 << 1); /* UNF */
         notifyINTC(mach, i);
     }
+
+
+// EMSCRIPTEN IFDEF
+    _timer_lock = 0;
+// ENDIF
+
 }
 
 static void updateProcess(mqMachine *mach)
