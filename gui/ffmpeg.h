@@ -92,6 +92,8 @@ private:
     std::vector<std::string> m_encoders;
     int m_error_errno;
     std::string m_error_info;
+    u64 m_time_ms_ref;
+    bool m_paused;
 };
 
 #endif /* MQ_UI_FFMPEG_H */

@@ -1,6 +1,21 @@
 #include "./ffmpeg.h"
 #include <mq/defs.h>
 
+//=== time ms ================================================================//
+
+extern "C" {
+#include <sys/time.h>
+}
+
+//todo: move me
+//fixme: support window
+static u64 mq_utils_get_time_ms()
+{
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return t.tv_sec * 1000LL + t.tv_usec / 1000;
+}
+
 //=== ffmpeg hwdevice ========================================================//
 
 int mqFFmpeg::ffmpeg_hwdevice_config(
@@ -87,7 +102,7 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
 
     // per-encoder codec context configuration
     avcodec_opt = NULL;
-    err = av_dict_set(&avcodec_opt, "crf", "32", 0);
+    err = av_dict_set(&avcodec_opt, "crf", "16", 0);
     if(err < 0) {
         ffmpeg_error(err, "Could not generate codec options");
         goto codec_config_error;
@@ -395,6 +410,8 @@ int mqFFmpeg::ffmpeg_scale_conv(
     u8 *vram8;
     int idx_out;
     int idx_in;
+    u64 time_ms_ref_curr;
+    int iframe;
     int err;
 
     if(frame_out == NULL)
@@ -468,8 +485,19 @@ int mqFFmpeg::ffmpeg_scale_conv(
     // The PTS of the frame are just in a reference unit,
     // unrelated to the format we are using. We set them,
     // for instance, as the corresponding frame number.
-    // fixme: real-time frame
-    (*frame_out)->pts = m_core.iframe++;
+    time_ms_ref_curr = mq_utils_get_time_ms();
+    if(m_time_ms_ref == 0) {
+        (*frame_out)->pts = m_core.iframe++;
+    } else {
+        iframe = (time_ms_ref_curr - m_time_ms_ref) / (1000 / m_config.fps);
+        if(iframe == 0) {
+            // mq_log(MQ_LOG_ERROR, "ffmpeg::frame_add() - too short delta");
+            return 1; //ffmpeg_error(EINVAL, "too short timing");
+        }
+        m_core.iframe += iframe;
+        (*frame_out)->pts = m_core.iframe;
+    }
+    m_time_ms_ref = time_ms_ref_curr;
     return 0;
 }
 
@@ -501,8 +529,8 @@ mqFFmpeg::mqFFmpeg()
         hwdevices.push_back(hwdevice_name);
     }
 
-    // detect all hardware accelerated encoder, but manually add the default
-    // `libx264` software encoder.
+    // detect all hardware accelerated encoder, but manually add default
+    // `libx264` and `libvpx-vp9` software encoder.
     m_encoders.push_back("libx264");
     m_encoders.push_back("libvpx-vp9");
     while ((codec = av_codec_iterate(&i))) {
@@ -634,9 +662,13 @@ int mqFFmpeg::frame_add(mqDisplay const *display)
     int err;
 
     err = ffmpeg_scale_conv(&frame_out, display);
-    if(err != 0) {
+    if(err < 0) {
         mq_log(MQ_LOG_ERROR, "unable to convert/scale display");
         return err;
+    }
+    if(err > 0) {
+        mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
+        return 0;
     }
     err = ffmpeg_output_frame_write(frame_out);
     if(err != 0) {
@@ -648,13 +680,14 @@ int mqFFmpeg::frame_add(mqDisplay const *display)
 
 int mqFFmpeg::pause()
 {
-    //todo: support real PTS
+    m_paused = true;
     return 0;
 }
 
 int mqFFmpeg::unpause()
 {
-//todo: support real PTS
+    m_time_ms_ref = 0;
+    m_paused = false;
     return 0;
 }
 

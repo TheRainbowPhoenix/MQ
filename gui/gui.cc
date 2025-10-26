@@ -1288,15 +1288,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SetCursorPosX(14);
         ImGui::Text("Encoder");
         ImGui::SameLine(64);
-        if(ImGui::ComboAnon(
-                3, &m_encoder, backend.encoderTable(), disabled)) {
-            mq_log(
-                MQ_LOG_ERROR,
-                "encoder changed for %d -> %s",
-                m_encoder,
-                backend.encoder(m_encoder)
-            );
-        }
+        ImGui::ComboAnon(3, &m_encoder, backend.encoderTable(), disabled);
         ImGui::HelpMarker(
             "(?)",
             "Hardware encoder\n"
@@ -1395,19 +1387,19 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
         if(ImGui::ButtonWSized("Pause", w_button, paused)) {
             if(!backend.pause())
-                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
             m_record_status = MQ_RECORD_STATUS_PAUSED;
         }
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
         if(ImGui::ButtonWSized("Stop", w_button, false)) {
             if(!backend.stop())
-                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
             m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
         } else {
             if(m_record_status != MQ_RECORD_STATUS_PAUSED) {
                 if(gui.actions.display.dirty) {
                     if(!backend.frame_add(&gui.actions.display))
-                        mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+                        mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
                 }
             }
         }
@@ -1452,9 +1444,7 @@ void RecordWindow::resetState()
         if(!backend.stop())
             mq_log(MQ_LOG_ERROR, "mqRecord::stop() - fail");
         m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
-    } /* else {
-        backend.resetCache();
-    } */
+    }
     backend.filenameUpdate(m_filename_format);
     backend.scaleTable(NULL);
     if(m_reset_opt == 1) {
