@@ -24,6 +24,9 @@ enum mqKeyboardKeycode {
    /* Arrow keys and similar directional keys */
    MQ_KEY_UP, MQ_KEY_DOWN, MQ_KEY_LEFT, MQ_KEY_RIGHT,
    MQ_KEY_PREVTAB, MQ_KEY_NEXTTAB, MQ_KEY_PAGEUP, MQ_KEY_PAGEDOWN,
+   /* Number keys */
+   MQ_KEY_0, MQ_KEY_1, MQ_KEY_2, MQ_KEY_3, MQ_KEY_4, MQ_KEY_5, MQ_KEY_6,
+   MQ_KEY_7, MQ_KEY_8, MQ_KEY_9,
 };
 
 /* A physical keyboard key. */

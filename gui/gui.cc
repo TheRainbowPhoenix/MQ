@@ -16,7 +16,13 @@ void GUIWindow::render(mqMachine *omach)
 
 void GUI::Render(mqMachine *omach)
 {
+    bool paused = omach->cyclesPending == 0;
+    bool stuck = omach->stuck;
+    bool canRunMachine = omach->initialized && !stuck;
+
     bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
+    bool pauseUnpause = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Space,
+        ImGuiInputFlags_RouteGlobal);
     actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
         ImGuiInputFlags_RouteGlobal);
 
@@ -35,6 +41,12 @@ void GUI::Render(mqMachine *omach)
         }
         ImGui::EndCustomMenu();
         if(ImGui::BeginCustomMenu("Machine")) {
+            ImGui::BeginDisabled(!canRunMachine);
+            pauseUnpause |= ImGui::MenuItem("Run/Pause", "Ctrl+Space");
+            ImGui::EndDisabled();
+
+            ImGui::Separator();
+
             if(ImGui::MenuItem("Reset to blank FX add-in"))
                 actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
             if(ImGui::MenuItem("Reset to blank CG add-in"))
@@ -50,14 +62,10 @@ void GUI::Render(mqMachine *omach)
             ImGui::CustomMenuSeparator();
             ImGui::SameLine(0, 6);
 
-            bool paused = omach->cyclesPending == 0;
-            bool stuck = omach->stuck;
-            ImGui::BeginDisabled(!omach->initialized || stuck);
-
-            if(paused && ImGui::IconButton(0, "Run"))
-                actions.machineSetPendingCycles = -1;
-            if(!paused && ImGui::IconButton(1, "Pause"))
-                actions.machineSetPendingCycles = 0;
+            ImGui::BeginDisabled(!canRunMachine);
+            pauseUnpause |= paused
+                ? ImGui::IconButton(0, "Run (Ctrl+Space)")
+                : ImGui::IconButton(1, "Pause (Ctrl+Space)");
             ImGui::SameLine(0, 6);
 
             if(ImGui::IconButton(2, "Step", !paused))
@@ -77,10 +85,13 @@ void GUI::Render(mqMachine *omach)
     }
     ImGui::EndCustomMenuBar();
 
-    /* On native builds tihs fills inputFile instantly, while on emscripten
+    /* On native builds this fills inputFile instantly, while on emscripten
        this fills it asynchronously and we'll get it in a future frame */
     if(open)
         openFileDialog(&inputFile);
+
+    if(pauseUnpause && canRunMachine)
+        actions.machineSetPendingCycles = paused ? -1 : 0;
 
     auto dock = ImGui::DockSpaceOverViewport();
 
@@ -1111,34 +1122,51 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         gui.actions.physicalKeysAssigned[i] = ImGui::IsItemActive();
     }
 
+    static const map<ImGuiKey, mqKeyboardKeycode> keymap = {
+        {ImGuiKey_LeftArrow,    MQ_KEY_LEFT},
+        {ImGuiKey_UpArrow,      MQ_KEY_UP},
+        {ImGuiKey_DownArrow,    MQ_KEY_DOWN},
+        {ImGuiKey_RightArrow,   MQ_KEY_RIGHT},
+        {ImGuiKey_LeftShift,    MQ_KEY_SHIFT},
+        {ImGuiKey_RightShift,   MQ_KEY_SHIFT},
+        {ImGuiKey_Enter,        MQ_KEY_EXE},
+        {ImGuiKey_KeypadEnter,  MQ_KEY_EXE},
+        {ImGuiKey_Escape,       MQ_KEY_EXIT},
+        {ImGuiKey_Home,         MQ_KEY_MENU},
+        {ImGuiKey_F1,           MQ_KEY_F1},
+        {ImGuiKey_F2,           MQ_KEY_F2},
+        {ImGuiKey_F3,           MQ_KEY_F3},
+        {ImGuiKey_F4,           MQ_KEY_F4},
+        {ImGuiKey_F5,           MQ_KEY_F5},
+        {ImGuiKey_F6,           MQ_KEY_F6},
+        {ImGuiKey_0,            MQ_KEY_0},
+        {ImGuiKey_1,            MQ_KEY_1},
+        {ImGuiKey_2,            MQ_KEY_2},
+        {ImGuiKey_3,            MQ_KEY_3},
+        {ImGuiKey_4,            MQ_KEY_4},
+        {ImGuiKey_5,            MQ_KEY_5},
+        {ImGuiKey_6,            MQ_KEY_6},
+        {ImGuiKey_7,            MQ_KEY_7},
+        {ImGuiKey_8,            MQ_KEY_8},
+        {ImGuiKey_9,            MQ_KEY_9},
+        {ImGuiKey_Keypad0,      MQ_KEY_0},
+        {ImGuiKey_Keypad1,      MQ_KEY_1},
+        {ImGuiKey_Keypad2,      MQ_KEY_2},
+        {ImGuiKey_Keypad3,      MQ_KEY_3},
+        {ImGuiKey_Keypad4,      MQ_KEY_4},
+        {ImGuiKey_Keypad5,      MQ_KEY_5},
+        {ImGuiKey_Keypad6,      MQ_KEY_6},
+        {ImGuiKey_Keypad7,      MQ_KEY_7},
+        {ImGuiKey_Keypad8,      MQ_KEY_8},
+        {ImGuiKey_Keypad9,      MQ_KEY_9},
+    };
+
     if(ImGui::IsWindowFocused()) {
         ImGui::SetNextFrameWantCaptureKeyboard(true);
-        if(ImGui::IsKeyDown(ImGuiKey_LeftArrow))
-            gui.actions.logicalKeysAssigned[MQ_KEY_LEFT] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_UpArrow))
-            gui.actions.logicalKeysAssigned[MQ_KEY_UP] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_DownArrow))
-            gui.actions.logicalKeysAssigned[MQ_KEY_DOWN] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_RightArrow))
-            gui.actions.logicalKeysAssigned[MQ_KEY_RIGHT] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_LeftShift))
-            gui.actions.logicalKeysAssigned[MQ_KEY_SHIFT] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_Enter))
-            gui.actions.logicalKeysAssigned[MQ_KEY_EXE] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_Escape))
-            gui.actions.logicalKeysAssigned[MQ_KEY_EXIT] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_F1))
-            gui.actions.logicalKeysAssigned[MQ_KEY_F1] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_F2))
-            gui.actions.logicalKeysAssigned[MQ_KEY_F2] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_F3))
-            gui.actions.logicalKeysAssigned[MQ_KEY_F3] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_F4))
-            gui.actions.logicalKeysAssigned[MQ_KEY_F4] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_F5))
-            gui.actions.logicalKeysAssigned[MQ_KEY_F5] = true;
-        if(ImGui::IsKeyDown(ImGuiKey_F6))
-            gui.actions.logicalKeysAssigned[MQ_KEY_F6] = true;
+        for(auto const &[imguiCode, mqCode]: keymap) {
+            if(ImGui::IsKeyDown(imguiCode))
+                gui.actions.logicalKeysAssigned[mqCode] = true;
+        }
     }
 }
 
