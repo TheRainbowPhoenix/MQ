@@ -431,7 +431,7 @@ int mqFFmpeg::ffmpeg_scale_conv(
     if(m_config.vram_format == MQ_DISPLAY_FORMAT_RGB565) {
         for (uint y = 0; y < m_config.height_in; y++) {
             idx_in = (y * 2) * m_config.width_in;
-            idx_out = (y * m_core.frame_out->linesize[0]);
+            idx_out = (y * m_core.frame_in->linesize[0]);
             for (uint x = 0; x < m_config.width_in; x++) {
                 m_core.frame_in->data[0][idx_out + 0] = vram8[idx_in + 0];
                 m_core.frame_in->data[0][idx_out + 1] = vram8[idx_in + 1];
@@ -443,7 +443,7 @@ int mqFFmpeg::ffmpeg_scale_conv(
     else if(m_config.vram_format == MQ_DISPLAY_FORMAT_L8) {
         for (uint y = 0; y < m_config.height_in; y++) {
             idx_in = y * m_config.width_in;
-            idx_out = y * m_core.frame_out->linesize[0];
+            idx_out = y * m_core.frame_in->linesize[0];
             for (uint x = 0; x < m_config.width_in; x++) {
                 if(vram8[idx_in] == 0xff) {
                     m_core.frame_in->data[0][idx_out + 0] = 0xff;
