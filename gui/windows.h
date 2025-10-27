@@ -120,13 +120,6 @@ public:
     /* Window title */
     char const *title() const { return m_title; }
     void setTitle(char const *title) { m_title = title ? title : ""; }
-    std::string uniqueTitle() const {
-        return (
-            std::string(title()) + "##" +
-            std::string(title()) + "." +
-            std::to_string(m_instanceId)
-        );
-    }
 
 private:
     int m_instanceId = -1;
@@ -276,37 +269,6 @@ class KeyboardWindow: public GUIWindow
 public:
     KeyboardWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
-};
-
-//=== Record =================================================================//
-
-// TODO: Figure out why this is here and not in mqRecord
-enum {
-    MQ_RECORD_STATUS_NOTSTARTED,
-    MQ_RECORD_STATUS_START,
-    MQ_RECORD_STATUS_START_WAIT_EMU,
-    MQ_RECORD_STATUS_RECORDING,
-    MQ_RECORD_STATUS_PAUSED,
-};
-enum {
-    MQ_RECORD_STARTOPT_START_EMULATION,
-    MQ_RECORD_STARTOPT_WAIT_EMULATION,
-};
-
-class RecordWindow: public GUIWindow
-{
-public:
-    RecordWindow(char const *title): GUIWindow(-1, title) {}
-    void renderContents(mqMachine *omach) override;
-    void resetState() override;
-
-private:
-    char m_filename_format[128] = "mq_%ADDIN%";
-    int m_scale = 0;
-    int m_encoder = 0;
-    int m_start_opt = 0;
-    int m_reset_opt = 0;
-    int m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
 };
 
 #endif /* MQ_UI_WINDOWS_H */

@@ -1,4 +1,3 @@
-#include "record.h"
 #include "gui.h"
 #include "windows.h"
 #include "watch.h"
@@ -108,29 +107,8 @@ static void render(void)
         // printf("[Main] Locked machine for render\n");
         emu0->omach = mq_machine_createObserver(mach);
 
-        /* Make a copy of the current frame */
-        bool frameUpdate = false;
         if(mach->display && mach->display->dirty) {
             mqDisplay *d = mach->display;
-            gui.lastDisplayFrame.format = d->format;
-            gui.lastDisplayFrame.width  = d->width;
-            gui.lastDisplayFrame.height = d->height;
-            gui.lastDisplayFrame.data = memdup(
-                d->data, mq_display_framebufferSize(d));
-            gui.lastDisplayFrame.dirty = true;
-
-            frameUpdate = true;
-            mq_display_setDirty(d, false);
-        }
-
-        // printf("[Main] Unlocking machine after render\n");
-        mq_machine_unlock(mach);
-        // printf("[Main] Unlocked machine after render\n");
-
-        /* Now that we have a local copy of the framebuffer, upload it to the
-           GPU (while the machine can keep working) */
-        if(frameUpdate) {
-            mqDisplay const *d = &gui.lastDisplayFrame;
             gui.displayTexture->bind();
             if(d->format == MQ_DISPLAY_FORMAT_L8) {
                 gui.displayTexture->setFormat(GL_R8, d->width, d->height);
@@ -143,11 +121,16 @@ static void render(void)
                     d->data, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, d->width, 0);
             }
             else
-                printf("warning: display not updated: unknown format!\n");
+                printf("warning: display not updated, unknown format!\n");
 
             gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
+            mq_display_setDirty(d, false);
             render_needed = std::max(render_needed, 1);
         }
+
+        // printf("[Main] Unlocking machine after render\n");
+        mq_machine_unlock(mach);
+        // printf("[Main] Unlocked machine after render\n");
     }
 
     if(!render_needed)
@@ -483,7 +466,6 @@ int main(int argc, char **argv)
         std::make_unique<HexViewerWindow>("Hex Viewer", gui.HV);
     gui.Windows.Display = std::make_unique<DisplayWindow>("Display", gui.DGW);
     gui.Windows.Keyboard = std::make_unique<KeyboardWindow>("Keyboard");
-    gui.Windows.Record = std::make_unique<RecordWindow>("Record");
 
     mq_log_handler(handle_log);
 
@@ -533,7 +515,6 @@ int main(int argc, char **argv)
 
     gui.DGW.cleanup();
 
-    gui.record_info.stop();
     watch_quit(&gui.watch_info);
 
     azur_quit();

@@ -6,7 +6,6 @@
 #include "windows.h"
 #include "util.h"
 #include "watch.h"
-#include "record.h"
 #include <mq/controller.h>
 #include <azur/opengl.h>
 #include <filesystem>
@@ -57,6 +56,7 @@ struct GUIActions
     std::map<uint, bool> physicalKeysAssigned;
     /* Keys whose status should be reassigned, identified by logical keycode */
     std::map<mqKeyboardKeycode, bool> logicalKeysAssigned;
+
 };
 
 /* Set of windows. Each window type can instanced on multiple machines. */
@@ -73,13 +73,11 @@ struct GUIWindowSet
     std::unique_ptr<HexViewerWindow> HexViewer;
     std::unique_ptr<DisplayWindow> Display;
     std::unique_ptr<KeyboardWindow> Keyboard;
-    std::unique_ptr<RecordWindow> Record;
 
     void resetState() {
         MemoryTree->resetState();
         MemoryBuffers->resetState();
         HexViewer->resetState();
-        Record->resetState();
     }
 };
 
@@ -101,14 +99,6 @@ struct GUI
 
     /* Path of the currently-running program, "" if none. */
     std::filesystem::path current_program_path = "";
-
-    //=== Recording ==========================================================//
-
-    /* Copy of the last frame obtained from the machine. `dirty` indicates
-       whether the frame is new for the recorder. */
-    mqDisplay lastDisplayFrame;
-
-    mqRecord record_info;
 
     //=== Widgets and co. ====================================================//
 
