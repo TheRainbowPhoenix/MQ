@@ -396,11 +396,18 @@ void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
 {
     TracyCZoneN(_ctx, "processes", true);
 
+// EMSCRIPTEN IFDEF
+    extern int _timer_lock;
+    _timer_lock = 1;
+// ENDIF
+
     for(int i = 0; i < mq_process_count(); i++) {
         mq_process_t *proc = mach->processes[i];
         if(proc)
             proc(mach, cyclesElapsed);
     }
+
+    _timer_lock = 0;
 
     mach->processTimer += mach->processFrequency;
 

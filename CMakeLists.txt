@@ -23,7 +23,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   if(MQ_DISABLE_OPTIMIZATIONS)
     set(MQ_OPT_CC -O0)
   else()
-    set(MQ_OPT_CC -O3)
+    set(MQ_OPT_CC -O3 --profiling -g)
   endif()
   set(MQ_OPT_LD)
 

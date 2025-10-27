@@ -7,6 +7,7 @@
 #include <mq/interfaces/timer.h>
 #include <string.h>
 #include <time.h>
+#include <emscripten.h>
 
 static u64 globalDelay = 0;
 static u64 globalFreezeStart = 0;
@@ -18,16 +19,31 @@ int _timer_lock = 0;
 u64 _locked_time;
 // ENDIF
 
+double time_origin;
+int to_set = 0;
+
+EM_JS(double, web_gettime, (),{
+  return performance.now();
+});  
+
+EM_JS(double, web_timeorigin, (),{
+  return performance.timeOrigin; 
+});
+
 static u64 currentTime(void)
 {
+  if(!to_set){
+    time_origin = web_timeorigin();
+    to_set = 1;
+  }
+
 // EMSCRIPTEN IFDEF
     if(_timer_lock > 1)
         return _locked_time;
 // ENDIF
 
     struct timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    u64 time = (1000000000ull * tp.tv_sec) + tp.tv_nsec;
+    u64 time = 10e6 * (time_origin + web_gettime());
 
 // EMSCRIPTEN IFDEF
     if(_timer_lock){

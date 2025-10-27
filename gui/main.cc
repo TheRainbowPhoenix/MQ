@@ -48,22 +48,6 @@ void update_machine(mqMachine *mach, bool startRunning);
 
 static void handle_log(enum mq_log_priority priority, char *str)
 {
-    /* Print to terminal */
-    mq_log_default_handler(priority, str);
-    /* Also print to internal console */
-    RichText::Line *line;
-    if(priority == MQ_LOG_DEBUG)
-        line = RichText::Line::make((std::string("debug: ") + str).c_str());
-    else if(priority == MQ_LOG_WARNING)
-        line = RichText::Line::make((std::string("warning: ") + str).c_str());
-    else if(priority == MQ_LOG_ERROR)
-        line = RichText::Line::make((std::string("error: ") + str).c_str());
-    else
-        line = RichText::Line::make(str);
-
-    gui.ConsoleText.lock();
-    gui.ConsoleText.addLine(line);
-    gui.ConsoleText.unlock();
 }
 
 static void resetWindowStates(void)
