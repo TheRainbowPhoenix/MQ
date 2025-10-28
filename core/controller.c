@@ -76,14 +76,15 @@ void mq_controller_destroy(mqController *controller)
 
 bool mq_controller_startThread(mqController *controller, mqMachine *mach)
 {
+    controller->mach = mach;
+    controller->omach = NULL;
+
     int rc = pthread_create(&controller->td, NULL, thread_run, controller);
     if(rc) {
         mq_log(MQ_LOG_ERROR, "could not start thread: %s\n", strerror(rc));
         return false;
     }
 
-    controller->mach = mach;
-    controller->omach = NULL;
     controller->hasThread = true;
     return true;
 }
