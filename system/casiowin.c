@@ -259,6 +259,9 @@ bool mq_casiowin_setup(mqMachine *mach, mqCasiowin_Version version)
 void mq_casiowin_initialize(mqMachine *mach)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    if(!Casiowin)
+        return;
+
     mqCasiowin_OSInfo const *info = Casiowin->info;
 
     mach->cpu.CPUOPM = 0x00000320;
