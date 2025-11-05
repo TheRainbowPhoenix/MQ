@@ -274,14 +274,12 @@ int mqFFmpeg::ffmpeg_output_frame_write(AVFrame *frame)
     while(err >= 0) {
         // receive the pending packet
         err = avcodec_receive_packet(m_core.codec_ctx, m_core.packet);
-        if(err == AVERROR(EAGAIN) || err == AVERROR_EOF) {
-            err = 0;
-            break;
-        }
-        if(err < 0) {
-            ffmpeg_error(err, "receive packet error");
-            break;
-        }
+        if(err == AVERROR(EAGAIN))
+            return 0;
+        if(err == AVERROR_EOF)
+            return 1;
+        if(err < 0)
+            return ffmpeg_error(err, "receive packet error");
         // We set the packet PTS and DTS taking in the account our FPS
         // (second argument), and the time base that our selected format
         // uses (third argument).
@@ -431,7 +429,7 @@ int mqFFmpeg::ffmpeg_scale_conv(
     if(m_config.vram_format == MQ_DISPLAY_FORMAT_RGB565) {
         for (uint y = 0; y < m_config.height_in; y++) {
             idx_in = (y * 2) * m_config.width_in;
-            idx_out = (y * m_core.frame_out->linesize[0]);
+            idx_out = (y * m_core.frame_in->linesize[0]);
             for (uint x = 0; x < m_config.width_in; x++) {
                 m_core.frame_in->data[0][idx_out + 0] = vram8[idx_in + 0];
                 m_core.frame_in->data[0][idx_out + 1] = vram8[idx_in + 1];
@@ -443,7 +441,7 @@ int mqFFmpeg::ffmpeg_scale_conv(
     else if(m_config.vram_format == MQ_DISPLAY_FORMAT_L8) {
         for (uint y = 0; y < m_config.height_in; y++) {
             idx_in = y * m_config.width_in;
-            idx_out = y * m_core.frame_out->linesize[0];
+            idx_out = y * m_core.frame_in->linesize[0];
             for (uint x = 0; x < m_config.width_in; x++) {
                 if(vram8[idx_in] == 0xff) {
                     m_core.frame_in->data[0][idx_out + 0] = 0xff;
@@ -668,7 +666,7 @@ int mqFFmpeg::frame_add(mqDisplay const *display)
         return err;
     }
     if(err > 0) {
-        mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
+        // mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
         return 0;
     }
     err = ffmpeg_output_frame_write(frame_out);
@@ -704,8 +702,21 @@ int mqFFmpeg::stats(struct mqFFmpegStats *stats)
 
 int mqFFmpeg::stop()
 {
+    int err;
+
     if(!m_core.format_ctx)
         return 0;
+
+    // force-flush pending frame
+    while (true) {
+        err = ffmpeg_output_frame_write(NULL);
+        if(err > 0)
+            break;
+        if(err < 0) {
+            mq_log(MQ_LOG_ERROR, "mqFFmpeg::stop() - flush fails");
+            break;
+        }
+    }
 
     // Writing the end of the file.
     av_write_trailer(m_core.format_ctx);
