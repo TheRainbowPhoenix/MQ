@@ -171,12 +171,18 @@ if(AZUR_PLATFORM STREQUAL linux)
 endif()
 
 if(AZUR_PLATFORM STREQUAL emscripten)
+  target_compile_options(mq PRIVATE -Wno-c23-extensions)
   target_link_libraries(mq PRIVATE Azur::Azur Azur::GLM Azur::ImGui)
   # Export _malloc and a few other functions even if unused, because the file
   # dialog calls them from JS code that's not evaluated at compile time
-  target_link_options(mq PRIVATE
+  target_link_options(mq PRIVATE -g2 -sASSERTIONS
     "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free','ccall']"
-    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']")
+    "-sEXPORTED_RUNTIME_METHODS=['HEAPU8']"
+    "-sPTHREAD_POOL_SIZE=2"
+    "-sALLOW_MEMORY_GROWTH")
+    # -sINITIAL_MEMORY=33554432
+    # start with 32 MiB instead of 16 MiB, to avoid resizes that apparently
+    # are slow when pthreads is enabled
 
   # Embed assets to load them without filesystem access
   foreach(ASSET IN LISTS ASSETS)

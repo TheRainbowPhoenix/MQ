@@ -9,3 +9,10 @@
 
 /* Enable video capture with ffmpeg on platforms that support it */
 #cmakedefine01 MQ_VIDEO_FFMPEG
+
+/* Use setjmp/longjmp for stuck conditions instead of checking mach->stuck at
+   each cycle. This is faster on native builds but horrendously slow when using
+   emscripten because setjmp/longjmp requires a JS context switch to save the
+   state and stack, which in turns requires a use of the dynamic function table
+   to jump back. All of this adds up to a huge cost and no benefits. */
+#define MQ_CONTROLLER_SETJMP (!AZUR_PLATFORM_EMSCRIPTEN)

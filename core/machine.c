@@ -312,6 +312,12 @@ bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
         mach->memory, 0x81800000, data + 0x7000, size - 0x7000);
 }
 
+#if MQ_CONTROLLER_SETJMP
+# define CHECK_STUCK() (void)0
+#else
+# define CHECK_STUCK() if(mach->stuck) goto endRun
+#endif
+
 int mq_machine_cycle(mqMachine *mach, int cycles)
 {
     // printf("mq_machine_cycle: %d / %d\n", cycles, mach->cyclesPending);
@@ -359,9 +365,13 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(mach->processTimer % 4 == 0 && mach->processFrequency % 4 == 0) {
         while(cyclesRemaining > 4) {
             mq_cpu_cycle(mach, &mach->cpu);
+            CHECK_STUCK();
             mq_cpu_cycle(mach, &mach->cpu);
+            CHECK_STUCK();
             mq_cpu_cycle(mach, &mach->cpu);
+            CHECK_STUCK();
             mq_cpu_cycle(mach, &mach->cpu);
+            CHECK_STUCK();
 
             if((mach->processTimer -= 4) <= 0)
                 mq_machine_runProcesses(mach, mach->processFrequency);
@@ -376,6 +386,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
     while(cyclesRemaining > 0) {
         mq_cpu_cycle(mach, &mach->cpu);
+        CHECK_STUCK();
 
         if(--mach->processTimer == 0)
             mq_machine_runProcesses(mach, mach->processFrequency);

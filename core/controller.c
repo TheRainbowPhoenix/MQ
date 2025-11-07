@@ -22,6 +22,8 @@ static void *thread_run(void *userdata)
         // printf("[Emu] Locked machine\n");
 
         int cycles = 20000;
+
+#if MQ_CONTROLLER_SETJMP
         int rc = mq_machine_setStuckJumpBuffer(mach);
 
         if(rc == 0) {
@@ -35,6 +37,16 @@ static void *thread_run(void *userdata)
         }
 
         mq_machine_clearStuckJumpBuffer(mach);
+#else
+        TracyCZoneN(_ctxA, "cycles", true);
+        mq_machine_cycle(mach, cycles);
+        TracyCZoneEnd(_ctxA);
+
+        if(mach->stuck) {
+            mq_log(MQ_LOG_WARNING, "machine is stuck!");
+            mach->cyclesPending = 0;
+        }
+#endif
 
         // printf("[Emu] Unlocking machine and waiting for work\n");
         TracyCZoneN(_ctxB, "wait", true);
