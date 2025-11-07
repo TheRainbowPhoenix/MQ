@@ -1,0 +1,11 @@
+//--  ____  -----------------------------------------------------------------//
+//   [>___] /010  MQ: A user/hardware-level emulator for CASIO calculators.  //
+//   |...+|/110   Written by Lephe' with help from Yatis.                    //
+//   |:::o/010    License: MIT <https://opensource.org/licenses/MIT>         //
+//-- `---/101 ---------------------------------------------------------------//
+// mq.config: Build-time configuration macros
+
+#include <azur/config.h>
+
+/* Enable video capture with ffmpeg on platforms that support it */
+#cmakedefine01 MQ_VIDEO_FFMPEG

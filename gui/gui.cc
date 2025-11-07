@@ -641,7 +641,7 @@ void MemoryBuffersWindow::renderContents(mqMachine *omach)
         ImGui::TableNextColumn();
 
         std::string sizeStr = memorySizeString(blockSize);
-        ImGui::Text(sizeStr.c_str());
+        ImGui::TextUnformatted(sizeStr.c_str());
         ImGui::TableNextColumn();
 
         if(blockBuffer) {
@@ -1172,6 +1172,8 @@ void KeyboardWindow::renderContents(mqMachine *omach)
 
 //=== Record =================================================================//
 
+#if MQ_RECORD_FFMPEG
+
 void RecordWindow::renderContents(mqMachine *omach)
 {
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -1477,3 +1479,17 @@ void RecordWindow::resetState()
             m_record_status = MQ_RECORD_STATUS_START_WAIT_EMU;
     }
 }
+
+#else /* MQ_VIDEO_FFMPEG */
+
+void RecordWindow::renderContents(mqMachine *)
+{
+    ImGui::TextWrapped(
+        "Video recording with ffmpeg was not enabled in this build.");
+}
+
+void RecordWindow::resetState()
+{
+}
+
+#endif /* MQ_VIDEO_FFMPEG */

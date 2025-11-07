@@ -9,6 +9,11 @@ set(CMAKE_C_STANDARD_REQUIRED TRUE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
 
+option(MQ_VIDEO_FFMPEG
+  "Enable video capture with ffmpeg (no effect on emscripten)" TRUE)
+option(MQ_DISABLE_OPTIMIZATIONS
+  "Disable optimizations (applies to Debug builds only)" FALSE)
+
 if(AZUR_PLATFORM STREQUAL gint)
   message(FATAL_ERROR "gint not supported, this only runs on computer!")
 endif()
@@ -39,6 +44,15 @@ else()
   set(MQ_OPT_CC -O3 -flto=auto)
   set(MQ_OPT_LD -flto=auto)
 endif()
+
+# Adjust options based on availability
+if(AZUR_PLATFORM STREQUAL emscripten)
+  set(MQ_VIDEO_FFMPEG FALSE)
+endif()
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/mq/config.h.in"
+  "${AUTOGEN}/mq/config.h")
 
 set(LIB_SOURCES
   core/controller.c
@@ -132,10 +146,10 @@ target_compile_options(mq PRIVATE
   ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith -pthread)
 target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  "${CMAKE_CURRENT_BINARY_DIR}"
+  "${CMAKE_CURRENT_BINARY_DIR}" # for auto-generated source fragments
+  "${CMAKE_CURRENT_BINARY_DIR}/autogen" # for auto-generated headers
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
-target_link_libraries(mq PRIVATE -lswscale -lavutil -lavformat -lavcodec)
 target_link_options(mq PRIVATE ${MQ_OPT_LD} -pthread)
 
 # TODO: Use Tracy's CMake integration just to make things a bit cleaner.
@@ -144,6 +158,10 @@ if(MQ_PROFILING_TRACY)
   target_compile_options(mq PRIVATE -pthread)
   target_link_options(mq PRIVATE -pthread)
   target_link_libraries(mq PRIVATE -ldl)
+endif()
+
+if(MQ_VIDEO_FFMPEG)
+  target_link_libraries(mq PRIVATE -lswscale -lavutil -lavformat -lavcodec)
 endif()
 
 if(AZUR_PLATFORM STREQUAL linux)

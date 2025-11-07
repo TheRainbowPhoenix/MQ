@@ -1,5 +1,7 @@
-#include <azur/stb_image_write.h>
 #include <mq/interfaces/display.h>
+#if MQ_VIDEO_FFMPEG
+
+#include <azur/stb_image_write.h>
 #include <sys/stat.h>
 #include <iomanip>
 #include <sstream>
@@ -257,7 +259,6 @@ std::string mqRecord::filename(char const *ext)
 {
     filenameCacheRefresh();
     return m_cache.filename + ext;
-
 }
 
 bool mqRecord::filenameExist(char const *ext)
@@ -283,3 +284,5 @@ std::string mqRecord::encoder(unsigned int encoder_idx) const
 {
     return m_ffmpeg.encoder(encoder_idx);
 }
+
+#endif /* MQ_VIDEO_FFMPEG */

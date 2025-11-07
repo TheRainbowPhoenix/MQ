@@ -108,7 +108,9 @@ struct GUI
        whether the frame is new for the recorder. */
     mqDisplay lastDisplayFrame;
 
+#if MQ_VIDEO_FFMPEG
     mqRecord record_info;
+#endif
 
     //=== Widgets and co. ====================================================//
 

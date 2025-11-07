@@ -1,5 +1,6 @@
 #include "./ffmpeg.h"
-#include <mq/defs.h>
+
+#if MQ_VIDEO_FFMPEG
 
 //=== time ms ================================================================//
 
@@ -775,3 +776,5 @@ int mqFFmpeg::debug()
     mq_log(MQ_LOG_DEBUG, "    `-- scale: %d", m_config.scale);
     return 0;
 }
+
+#endif /* MQ_VIDEO_FFMPEG */

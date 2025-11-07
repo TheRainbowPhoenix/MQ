@@ -3,11 +3,16 @@
 #ifndef MQ_UI_RECORD_H
 #define MQ_UI_RECORD_H
 
+#include <mq/defs.h>
+#if MQ_VIDEO_FFMPEG
+
 #include <string>
 #include <vector>
 
-#include "./ffmpeg.h"
+#include "ffmpeg.h"
 #include <mq/interfaces/display.h>
+
+// TODO[record]: Pull screenshots out of ffmpeg abstractions
 
 //=== Record class ===========================================================//
 
@@ -63,5 +68,7 @@ private:
         mqRecordStats record_stats;
     } m_cache;
 };
+
+#endif /* MQ_VIDEO_FFMPEG */
 
 #endif /* MQ_UI_RECORD_H */

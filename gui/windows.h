@@ -107,6 +107,7 @@ class GUIWindow
 public:
     GUIWindow(int instanceId, char const *title, ImGuiWindowFlags flags = 0):
         m_instanceId{instanceId}, m_title{title}, m_flags{flags} {}
+    virtual ~GUIWindow() {}
 
     /* Render the contents of the window, without Begin()/End() */
     // TODO: Give windows an [mqMachine const *] to enforce observer semantics
@@ -301,12 +302,14 @@ public:
     void resetState() override;
 
 private:
+#if MQ_VIDEO_FFMPEG
     char m_filename_format[128] = "mq_%ADDIN%";
     int m_scale = 0;
     int m_encoder = 0;
     int m_start_opt = 0;
     int m_reset_opt = 0;
     int m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
+#endif /* MQ_VIDEO_FFMPEG */
 };
 
 #endif /* MQ_UI_WINDOWS_H */

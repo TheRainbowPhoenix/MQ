@@ -20,6 +20,9 @@
 # define MQ_STATIC_ASSERT _Static_assert
 #endif
 
+/* Build-time configuration macros */
+#include <mq/config.h>
+
 /* Macros and tools for profiling */
 
 #ifdef __cplusplus

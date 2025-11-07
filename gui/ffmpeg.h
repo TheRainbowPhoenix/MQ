@@ -1,6 +1,10 @@
 #ifndef MQ_UI_FFMPEG_H
 #define MQ_UI_FFMPEG_H
 
+#include <mq/defs.h>
+
+#if MQ_VIDEO_FFMPEG
+
 #include <string>
 #include <vector>
 
@@ -94,5 +98,7 @@ private:
     u64 m_time_ms_ref;
     bool m_paused;
 };
+
+#endif /* MQ_VIDEO_FFMPEG */
 
 #endif /* MQ_UI_FFMPEG_H */

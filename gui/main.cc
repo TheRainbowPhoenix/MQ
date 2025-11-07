@@ -533,7 +533,9 @@ int main(int argc, char **argv)
 
     gui.DGW.cleanup();
 
+#if MQ_VIDEO_FFMPEG
     gui.record_info.stop();
+#endif
     watch_quit(&gui.watch_info);
 
     azur_quit();
