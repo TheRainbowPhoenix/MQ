@@ -302,7 +302,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         mq_cpu_checkDSPLoop(cpu);
 
         /* Decode and execute the instruction. */
-        TracyCZoneN(_ctx, "exec", true);
+        TracyCZoneN(_ctx, "exec", mach->profilingCycles);
         _mq_cpu_execute(mach, cpu, ins);
         TracyCZoneEnd(_ctx);
     }
@@ -328,7 +328,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
     if(MQ_LIKELY(ins2 != 0)) {
         mq_cpu_checkDSPLoop(cpu);
 
-        TracyCZoneN(_ctx, "delay_slot", true);
+        TracyCZoneN(_ctx, "delay_slot", mach->profilingCycles);
         _mq_cpu_execute(mach, cpu, ins2);
         TracyCZoneEnd(_ctx);
         cpu->inDelaySlot = false;
@@ -345,7 +345,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
 
 void mq_cpu_cycle(mqMachine *mach, mqCpu *cpu)
 {
-    TracyCZoneN(_ctx, "cpu", true);
+    TracyCZoneN(_ctx, "cpu", mach->profilingCycles);
     mq_cpu_cycle_aux(mach, cpu);
     TracyCZoneEnd(_ctx);
 }

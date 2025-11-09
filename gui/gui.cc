@@ -14,8 +14,9 @@ void GUIWindow::render(mqMachine *omach)
     ImGui::End();
 }
 
-void GUI::Render(mqMachine *omach)
+void GUI::Render(mqController *controller)
 {
+    mqMachine *omach = controller->omach;
     bool paused = omach->cyclesPending == 0;
     bool stuck = omach->stuck;
     bool canRunMachine = omach->initialized && !stuck;
@@ -108,6 +109,15 @@ void GUI::Render(mqMachine *omach)
     Windows.HexViewer->render(omach);
     Windows.Record->render(omach);
 
+    if(ImGui::Begin("Performance")) {
+        bool b = omach->profilingCycles;
+        if(ImGui::Checkbox2("Profile individual cycles", &b))
+            gui.actions.machineToggleProfilingCycles = true;
+
+        ImGui::Text("TODO");
+    }
+    ImGui::End();
+
     static bool first_frame = true;
     if(first_frame)
         gui.DockWindowsStyle1(gui.Windows, dock);
@@ -135,6 +145,7 @@ void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
     DB(*Windows.Display, dock);
     DB(*Windows.Keyboard, dock_right_bottom);
     DB(*Windows.Control, dock_left_top);
+    ImGui::DockBuilderDockWindow("Performance", dock_left_top);
     DB(*Windows.Record, dock_left_top);
     DB(*Windows.Messages, dock_left_top_right);
     DB(*Windows.CPU, dock_left_top_right);

@@ -89,14 +89,12 @@ void mq_machine_destroy(mqMachine *mach)
 
 void mq_machine_lock(mqMachine *mach)
 {
-    TracyCZoneN(ctx, "lock machine", true)
     // printf("[%d] Acquiring lock_waiting\n", gettid());
     pthread_mutex_lock(&mach->lock_waiting);
     // printf("[%d] Got lock_waiting, acquiring lock_access\n", gettid());
     pthread_mutex_lock(&mach->lock_access);
     // printf("[%d] Got lock_access, unlocking lock_waiting\n", gettid());
     pthread_mutex_unlock(&mach->lock_waiting);
-    TracyCZoneEnd(ctx)
 }
 
 void mq_machine_unlock(mqMachine *mach)
@@ -403,7 +401,7 @@ endRun:
 
 void mq_machine_runProcesses(mqMachine *mach, int cyclesElapsed)
 {
-    TracyCZoneN(_ctx, "processes", true);
+    TracyCZoneN(_ctx, "processes", mach->profilingCycles);
 
     for(int i = 0; i < mq_process_count(); i++) {
         mq_process_t *proc = mach->processes[i];

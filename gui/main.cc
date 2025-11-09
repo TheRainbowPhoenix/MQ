@@ -103,6 +103,7 @@ static void render(void)
          TODO: Put a separate lock on the display ***/
     mqMachine *mach = emu0->mach;
     if(mach) {
+        ZoneScopedN("render lock");
         // printf("[Main] Locking machine for render\n");
         mq_machine_lock(mach);
         // printf("[Main] Locked machine for render\n");
@@ -150,8 +151,10 @@ static void render(void)
         }
     }
 
-    if(!render_needed)
+    if(!render_needed) {
+        FrameMark;
         return;
+    }
     render_needed--;
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -161,7 +164,7 @@ static void render(void)
     ImGui::SetNextWindowPos(ImVec2(0, 0));
     ImGui::SetNextWindowSize(ImVec2(width, height));
 
-    gui.Render(emu0->omach);
+    gui.Render(emu0);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -328,6 +331,11 @@ void update_machine(mqMachine *mach, bool startRunning)
     }
     if(gui.actions.machineMMUUnbind && mach) {
         mq_mmu_unbind(mach);
+        render_needed = std::max(render_needed, 1);
+    }
+
+    if(gui.actions.machineToggleProfilingCycles && mach) {
+        mach->profilingCycles = !mach->profilingCycles;
         render_needed = std::max(render_needed, 1);
     }
 

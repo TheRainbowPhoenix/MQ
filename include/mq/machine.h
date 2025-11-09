@@ -42,6 +42,11 @@ struct mqMachine
        work. This wakes the emulating up from sleep. Linked to lock_access. */
     pthread_cond_t cond_work_arrived;
 
+    /* Whether instruction-level profiling is enabled. This results in *large*
+       amounts of profiling allocations (like 1 GB/s) until Tracy's capture
+       tool is started. */
+    bool profilingCycles;
+
     /* Machine is initialized to a reasonable state. */
     bool initialized;
     /* Machine is stuck and cannot execute any further. */

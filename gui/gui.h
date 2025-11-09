@@ -43,6 +43,8 @@ struct GUIActions
     bool machineMMUUnbind = false;
     /* Initialize the OS heap */
     bool machineSystemHeapInitialize = false;
+    /* Toggle the cycle-profiling option. */
+    bool machineToggleProfilingCycles = false;
 
     /* Set the hex editor to visualize a given region.
        TODO: Why does this use a direct pointer into emulated structures? */
@@ -131,7 +133,7 @@ struct GUI
     // std::map<int, GUIWindowSet> WindowSets;
     GUIWindowSet Windows;
 
-    void Render(mqMachine *omach);
+    void Render(mqController *controller);
     void DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock);
 
     //=== Miscellaneous ======================================================//
