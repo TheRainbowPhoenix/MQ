@@ -49,9 +49,9 @@ void GUI::Render(mqController *controller)
             ImGui::Separator();
 
             if(ImGui::MenuItem("Reset to blank FX add-in"))
-                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
+                actions.machineInitialize = MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX;
             if(ImGui::MenuItem("Reset to blank CG add-in"))
-                actions.machineInitialize = MQ_MACHINE_INITIALIZE_ADDIN;
+                actions.machineInitialize = MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG;
             actions.machineGenerateMonoFrame |=
                 ImGui::MenuItem("Generate B&W frame");
             actions.machineGenerateRGBFrame |=

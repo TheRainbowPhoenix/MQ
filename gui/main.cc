@@ -277,7 +277,8 @@ void update_machine(mqMachine *mach, bool startRunning)
 
     if(auto i = gui.actions.machineInitialize) {
         gui.Windows.resetState();
-        mq_machine_initialize(mach, *i);
+        mq_machine_setupHardware(emu0->mach, *i);
+        mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         render_needed = std::max(render_needed, 1);
     }
 
