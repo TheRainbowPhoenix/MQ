@@ -199,25 +199,3 @@ if(AZUR_PLATFORM STREQUAL emscripten)
 
   azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html" "mq.js")
 endif()
-
-#=== Headless executable ======================================================#
-
-if(NOT AZUR_PLATFORM STREQUAL emscripten)
-  set(HEADLESS_SOURCES
-    headless/main.c
-    ${LIB_SOURCES})
-
-  if(MQ_PROFILING_TRACY)
-    list(APPEND HEADLESS_SOURCES
-      3rdparty/tracy/public/TracyClient.cpp)
-  endif()
-
-  add_executable(mq-headless ${HEADLESS_SOURCES})
-  target_compile_options(mq-headless PRIVATE
-    ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith)
-  target_include_directories(mq-headless PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${CMAKE_CURRENT_BINARY_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
-  target_link_options(mq-headless PRIVATE ${MQ_OPT_LD})
-endif()
