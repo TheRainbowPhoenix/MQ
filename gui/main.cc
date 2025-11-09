@@ -67,14 +67,6 @@ static void handle_log(enum mq_log_priority priority, char *str)
     gui.ConsoleText.unlock();
 }
 
-static void resetWindowStates(void)
-{
-    gui.Windows.resetState();
-    gui.HV.Cursor = 0;
-    gui.HV.MinAddress = 0;
-    gui.HV.MaxAddress = (u32)-1;
-}
-
 static void render(void)
 {
     ZoneScopedN("render");
@@ -181,14 +173,14 @@ static void render(void)
 static void open_addin(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
-        resetWindowStates();
+        gui.Windows.resetState();
         watch_quit(&gui.watch_info);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
-        resetWindowStates();
+        gui.Windows.resetState();
         watch_quit(&gui.watch_info);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
@@ -280,7 +272,7 @@ void update_machine(mqMachine *mach, bool startRunning)
     bool may_enable_watch = false;
 
     if(auto i = gui.actions.machineInitialize) {
-        resetWindowStates();
+        gui.Windows.resetState();
         mq_machine_initialize(mach, *i);
         render_needed = std::max(render_needed, 1);
     }
@@ -465,13 +457,7 @@ int main(int argc, char **argv)
     setlocale(LC_ALL, "C.UTF-8");
     printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,AZUR_VERSION_MINOR);
 
-    gui.HV.AddressBits = 32;
-    gui.HV.MinAddress = 0;
-    gui.HV.MaxAddress = 0xffffffff;
-    gui.HV.InputType = ImGui::HexViewer::InputFunction;
-    gui.HV.LineSpacing = 2;
-    gui.HV.AlignXCenter = false;
-    gui.HV.Cursor = 0;
+    // azur::log::setMinimumLevelFilter(azur::log::level::DEBUG);
 
     gui.ConsoleText.alloc(65536, 256);
 
@@ -487,8 +473,7 @@ int main(int argc, char **argv)
         std::make_unique<MemoryBuffersWindow>("Memory buffers");
     gui.Windows.MMU = std::make_unique<MMUWindow>("MMU");
     gui.Windows.Heap = std::make_unique<HeapWindow>("Heap");
-    gui.Windows.HexViewer =
-        std::make_unique<HexViewerWindow>("Hex Viewer", gui.HV);
+    gui.Windows.HexViewer = std::make_unique<HexViewerWindow>("Hex Viewer");
     gui.Windows.Display = std::make_unique<DisplayWindow>("Display", gui.DGW);
     gui.Windows.Keyboard = std::make_unique<KeyboardWindow>("Keyboard");
     gui.Windows.Record = std::make_unique<RecordWindow>("Record");

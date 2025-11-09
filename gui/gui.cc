@@ -956,6 +956,17 @@ void InterruptsWindow::renderContents(mqMachine *omach)
     }
 }
 
+HexViewerWindow::HexViewerWindow(char const *title): GUIWindow(-1, title)
+{
+    m_HexViewer.AddressBits = 32;
+    m_HexViewer.MinAddress = 0;
+    m_HexViewer.MaxAddress = 0xffffffff;
+    m_HexViewer.InputType = ImGui::HexViewer::InputFunction;
+    m_HexViewer.LineSpacing = 2;
+    m_HexViewer.AlignXCenter = false;
+    m_HexViewer.Cursor = 0;
+}
+
 bool HexViewerWindow::ReadByte(u64 addr, u8 *result, void *userdata)
 {
     mqMachine const *omach = (mqMachine const *)userdata;
@@ -973,6 +984,9 @@ void HexViewerWindow::resetState()
     m_currentBufferName = "";
     m_currentBufferOffset = 0;
     m_currentBufferSize = 0;
+    m_HexViewer.Cursor = 0;
+    m_HexViewer.MinAddress = 0;
+    m_HexViewer.MaxAddress = (u32)-1;
 }
 
 void HexViewerWindow::renderContents(mqMachine *omach)

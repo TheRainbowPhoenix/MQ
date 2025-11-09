@@ -224,8 +224,7 @@ public:
 class HexViewerWindow: public GUIWindow
 {
 public:
-    HexViewerWindow(char const *title, ImGui::HexViewer &HV):
-        GUIWindow(-1, title), m_HexViewer {HV} {}
+    HexViewerWindow(char const *title);
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
@@ -236,7 +235,7 @@ public:
 
 private:
     static bool ReadByte(u64 addr, u8 *result, void *userdata);
-    ImGui::HexViewer &m_HexViewer;
+    ImGui::HexViewer m_HexViewer;
 
     /* If empty, we're viewing the entire memory. Otherwise we're viewing just
        that particular buffer. */

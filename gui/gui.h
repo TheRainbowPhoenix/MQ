@@ -121,8 +121,6 @@ struct GUI
     /* OpenGL texture for the mono or RGB display */
     azur::gl::Texture2D *displayTexture;
 
-    /* Hexadecimal viewer widget */
-    ImGui::HexViewer HV;
     /* Message console data where logs are collected */
     RichText::Text ConsoleText;
     /* Message console view showing the data above */
