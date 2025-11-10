@@ -147,11 +147,14 @@ static void render(void)
         }
     }
 
-    if(!render_needed) {
+    static int frames_skipped = 0;
+    if(!render_needed && frames_skipped < 30) {
+        frames_skipped++;
         FrameMark;
         return;
     }
-    render_needed--;
+    render_needed -= (render_needed > 0);
+    frames_skipped = 0;
 
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
