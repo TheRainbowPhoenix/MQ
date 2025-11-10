@@ -3,8 +3,9 @@
 #include <glm/glm.hpp>
 #include <mq/defs.h>
 #include <mq/interfaces/display.h>
+#include <azur/defs.h>
 #include <filesystem>
-#include <string>
+#include <functional>
 
 /* Import GLSL-like types */
 using glm::vec2, glm::vec3, glm::vec4;
@@ -39,3 +40,67 @@ std::string memorySizeString(uint size, bool shortSuffix=false);
 /* Generate random frames on the given display. */
 bool generateMonoFrame(mqDisplay *display);
 bool generateRGBFrame(mqDisplay *display);
+
+/* Replace all occurrences of a substring with another substring. */
+std::string replaceSubstring(
+   std::string const &text, std::string const &pat, std::string const &repl);
+
+/* Return strftime string from current time. */
+std::string strftimeCurrentTime(char const *fmt);
+
+/* Utility class to name an output file with a substitution pattern, determine
+   if it already exists and, if requested, automatically make it unique with a
+   numerical suffix. With lazy stat() calls and lazy substitutions (because
+   %DATE% will be a field and calling it all the time is). */
+class OutputPathPattern
+{
+public:
+   /* Each substitution maps a pattern to a pair (value, description). */
+   using SubstitutionMap = map<string, std::pair<string, string>>;
+   /* Function generating the substitution on-demand. */
+   using Substitution = std::function<SubstitutionMap()>;
+
+   /* Get or set the pattern. */
+   std::string pattern() const { return m_pattern; }
+   void setPattern(std::string const &pattern);
+
+   /* Set whether we can overwrite an existing file or if we rename the output
+      file with a -N suffix to make it unique. */
+   bool overwrite() const { return m_overwrite; }
+   void setOverwrite(bool overwrite);
+
+   /* Set the substitution (as a lazy function), or reset it. Note: this only
+      sets dirty when changing the function that generates the SubstitutionMap,
+      and doesn't automatically re-resolve the path whenever the map changes.
+      To force resolution, call resolve(true). */
+   void setSubstitution(Substitution const &s) { m_subst = s; m_dirty = true; }
+   void resetSubstitution() { setSubstitution(noSubstitution); }
+   /* Get latest substitution map. */
+   SubstitutionMap const &getSubstitutionMap() { return m_substMap; }
+
+   /* Resolve the path. This is idempotent and runs automatically when changing
+      the pattern, overwrite setting, or substitution function. This can be
+      called with force=true to force re-evaluating the substitution. */
+   void resolve(bool force=false) const;
+
+   /* Resolved path: substituted pattern plus its potential unique suffix. */
+   std::string const &resolvedPath() const { resolve(); return m_resolvedPath; }
+   /* Whether the resolved path already exists (possible when overwriting). */
+   bool resolvedPathExists() const { resolve(); return m_resolvedPathExists; }
+
+private:
+   static bool fileExists(std::string path);
+   static std::string makePathWithSuffix(std::string path, int uniqueID);
+   static SubstitutionMap noSubstitution() { return {}; }
+
+   /* Input settings: pattern, substitution, and overwrite */
+   std::string m_pattern = "";
+   Substitution m_subst = noSubstitution;
+   bool m_overwrite = false;
+   /* Input has changed and we haven't resolved it yet */
+   mutable bool m_dirty = true;
+   /* Current substitution, resolved path and whether it exists */
+   mutable SubstitutionMap m_substMap;
+   mutable std::string m_resolvedPath;
+   mutable bool m_resolvedPathExists;
+};

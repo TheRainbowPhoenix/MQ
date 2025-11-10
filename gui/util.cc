@@ -187,3 +187,114 @@ bool generateRGBFrame(mqDisplay *display)
     mq_display_setDirty(display, true);
     return true;
 }
+
+std::string replaceSubstring(
+   std::string const &text, std::string const &pat, std::string const &repl)
+{
+    std::string buf;
+    size_t pos = 0;
+    size_t prevPos;
+
+    buf.reserve(text.size());
+    while(true) {
+        prevPos = pos;
+        pos = text.find(pat, pos);
+        if(pos == std::string::npos)
+            break;
+        buf.append(text, prevPos, pos - prevPos);
+        buf += repl;
+        pos += pat.size();
+    }
+    buf.append(text, prevPos, text.size() - prevPos);
+    return buf;
+}
+
+std::string strftimeCurrentTime(char const *fmt)
+{
+    auto t = std::time(nullptr);
+    auto tm = std::localtime(&t);
+    std::ostringstream oss;
+    oss << std::put_time(tm, fmt);
+    return oss.str();
+}
+
+/* Set the dirty flag only if needed to avoid resolving paths repeatedly. */
+void OutputPathPattern::setPattern(std::string const &pattern)
+{
+    if(m_pattern != pattern) {
+        m_pattern = pattern;
+        m_dirty = true;
+    }
+}
+void OutputPathPattern::setOverwrite(bool overwrite)
+{
+    m_dirty = (overwrite != m_overwrite);
+    m_overwrite = overwrite;
+}
+
+bool OutputPathPattern::fileExists(std::string path)
+{
+#if AZUR_PLATFORM_EMSCRIPTEN
+    /* The browser handles naming downloaded files. */
+    (void)path;
+    return false;
+#else
+    struct stat buffer;
+    // TODO[OutputPathPattern]: Might need a better existence check.
+    return stat(path.c_str(), &buffer) == 0;
+#endif
+}
+
+std::string OutputPathPattern::makePathWithSuffix(
+    std::string path, int uniqueID)
+{
+    /* Use <filesystem> to decompose the path */
+    fs::path p = path;
+    std::string newFilename =
+        p.stem().string() + std::to_string(-uniqueID) + p.extension().string();
+    p.replace_filename(newFilename);
+    printf("%s, %d -> %s\n", path.c_str(), uniqueID, p.c_str());
+    return p;
+}
+
+void OutputPathPattern::resolve(bool force) const
+{
+    if(!m_dirty && !force)
+        return;
+    if(m_pattern == "") {
+        m_resolvedPath = "";
+        m_resolvedPathExists = false;
+        return;
+    }
+
+    m_substMap = m_subst();
+
+    std::string substitutedPath = m_pattern;
+    for(auto const &[key, value_desc]: m_substMap) {
+        auto const &[value, desc] = value_desc;
+        substitutedPath = replaceSubstring(substitutedPath, key, value);
+    }
+
+    bool exists = fileExists(substitutedPath);
+
+    if(m_overwrite || !exists) {
+        m_resolvedPath = substitutedPath;
+        m_resolvedPathExists = exists;
+    }
+    else {
+        int uniqueID = 0;
+        std::string uniquePath = "";
+
+        /* Give up after 999 tries to not lag out, just in case... */
+        while(uniqueID <= 999 && exists) {
+            uniqueID++;
+            uniquePath = makePathWithSuffix(substitutedPath, uniqueID);
+            exists = fileExists(uniquePath);
+        }
+
+        m_resolvedPath = uniquePath;
+        m_resolvedPathExists = exists;
+    }
+
+    m_dirty = false;
+}

@@ -407,13 +407,17 @@ enum {
 class RecordWindow: public GUIWindow
 {
 public:
-    RecordWindow(char const *title): GUIWindow(-1, title) {}
+    RecordWindow(char const *title);
     void renderContents(mqMachine *omach) override;
     void resetState() override;
 
 private:
+    static OutputPathPattern::SubstitutionMap makeSubstitutions();
+
+    OutputPathPattern m_imageOutputPath;
+
 #if MQ_VIDEO_FFMPEG
-    char m_filename_format[128] = "mq_%ADDIN%";
+    OutputPathPattern m_videoOutputPath;
     int m_scale = 0;
     int m_encoder = 0;
     int m_start_opt = 0;

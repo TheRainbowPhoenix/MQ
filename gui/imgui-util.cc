@@ -1,6 +1,8 @@
 #include "imgui-util.h"
 #include <imgui_internal.h>
 #include <algorithm>
+#include <optional>
+#include <type_traits>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -137,6 +139,83 @@ void ComboAnon(
     }
 
     ImGui::EndDisabled();
+}
+
+void OutputPathPatternEditor(OutputPathPattern &output, bool disabled)
+{
+    /* Use the address of the output path structure as the unique ID */
+    ImGui::PushID(&output);
+
+    float availX = ImGui::GetContentRegionAvail().x;
+    bool alreadyExists = output.resolvedPathExists();
+
+    ImGui::BeginDisabled(disabled);
+
+    ImGui::SetNextItemWidth(availX - 104);
+    ImGui::PushFont(fontMono);
+    if(alreadyExists)
+        ImGui::PushStyleColor(ImGuiCol_Text, 0xff00bfff);
+    std::string pattern = output.pattern();
+    if(ImGui::InputText("##pattern", &pattern))
+        output.setPattern(pattern);
+    if(alreadyExists)
+        ImGui::PopStyleColor();
+    ImGui::PopFont();
+    ImGui::SameLine(0, 8);
+
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text("Unique");
+    ImGui::SameLine(0, 4);
+
+    /* Align Checkbox2, which has smaller padding, middle with text input */
+    ImVec2 SP = ImGui::GetCursorScreenPos();
+    SP.y += ImGui::GetStyle().FramePadding.y - 1;
+    ImGui::SetCursorScreenPos(SP);
+
+    bool unique = !output.overwrite();
+    if(ImGui::Checkbox2("##unique", &unique))
+        output.setOverwrite(!unique);
+
+    ImGui::SetItemTooltip("Make file name unique if it already exists");
+    ImGui::EndDisabled();
+
+    std::string helpString = "Special placeholders will be substituted:\n";
+    for(auto const &[key, value_desc]: output.getSubstitutionMap()) {
+        auto const &[value, desc] = value_desc;
+        helpString += "- " + key + ": " + desc + " (" + value + ")\n";
+    }
+    ImGui::HelpMarker("(?)", helpString.c_str());
+
+    /* Update parameters in real-time as this tooltip shows their values */
+    if(ImGui::IsItemHovered())
+        output.resolve(true);
+
+    ImGui::PopID();
+}
+
+static int ResizeCallback(ImGuiInputTextCallbackData *data)
+{
+    std::string *str = (std::string *)data->UserData;
+    if(data->EventFlag != ImGuiInputTextFlags_CallbackResize)
+        return 0;
+
+    IM_ASSERT(data->Buf == str->c_str());
+    str->resize(data->BufTextLen);
+    data->Buf = (char*)str->c_str();
+    return 0;
+}
+
+bool InputText(char const *label, std::string *str, ImGuiInputTextFlags flags)
+{
+    return InputText(label, (char *)str->c_str(), str->capacity() + 1,
+        flags | ImGuiInputTextFlags_CallbackResize, ResizeCallback, str);
+}
+
+bool InputTextMultiline(char const *label, std::string *str,
+    ImVec2 const &size, ImGuiInputTextFlags flags)
+{
+    return InputTextMultiline(label, (char* )str->c_str(), str->capacity() + 1,
+        size, flags | ImGuiInputTextFlags_CallbackResize, ResizeCallback, str);
 }
 
 } /* namespace ImGui */

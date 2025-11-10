@@ -31,16 +31,13 @@ public:
     std::vector<std::string> const &encoderTable();
     std::string encoder(unsigned int encoder_idx) const;
 
-    std::string filename(char const *ext);
-    void filenameUpdate(char const *format);
-    bool filenameExist(char const *ext);
-
     /* take a screenshot of the */
-    bool screenshot(mqDisplay *display, int scale_idx);
+    bool screenshot(mqDisplay *display, int scale_idx, std::string const &path);
     std::string screenshot_lasterror();
 
     /* video primitives */
-    bool start(mqDisplay *display, int encoder_idx, int scale_idx);
+    bool start(mqDisplay *display, int encoder_idx, int scale_idx,
+        std::string const &path);
     bool frame_add(mqDisplay *display);
     bool unpause();
     bool pause();
@@ -61,8 +58,6 @@ private:
     // cache information
     struct {
         int scale_type;
-        std::string filename;
-        bool filename_dirty;
         int screenshot_lasterror;
         int record_lasterror;
         mqRecordStats record_stats;

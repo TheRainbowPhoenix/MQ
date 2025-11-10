@@ -132,7 +132,7 @@ void GUI::DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock)
     auto dock_left_bottom = ImGui::DockBuilderSplitNode(dock_left_top,
         ImGuiDir_Down, 0.5f, nullptr, &dock_left_top);
     auto dock_left_top_right = ImGui::DockBuilderSplitNode(dock_left_top,
-        ImGuiDir_Right, 0.65f, nullptr, &dock_left_top);
+        ImGuiDir_Right, 0.60f, nullptr, &dock_left_top);
     auto dock_left_bottom_right = ImGui::DockBuilderSplitNode(
         dock_left_bottom,
         ImGuiDir_Right, 0.48f, nullptr, &dock_left_bottom);
@@ -1197,7 +1197,33 @@ void KeyboardWindow::renderContents(mqMachine *omach)
 
 //=== Record =================================================================//
 
-#if MQ_RECORD_FFMPEG
+#if MQ_VIDEO_FFMPEG
+
+RecordWindow::RecordWindow(char const *title): GUIWindow(-1, title)
+{
+    m_imageOutputPath.setSubstitution(makeSubstitutions);
+    m_imageOutputPath.setPattern("%ADDIN%_%DATE%.png");
+    m_imageOutputPath.setOverwrite(false);
+
+    m_videoOutputPath.setSubstitution(makeSubstitutions);
+    m_videoOutputPath.setPattern("%ADDIN%_%DATE%.mp4");
+    m_videoOutputPath.setOverwrite(false);
+}
+
+OutputPathPattern::SubstitutionMap RecordWindow::makeSubstitutions()
+{
+    OutputPathPattern::SubstitutionMap sub;
+
+    std::string ADDIN = "unknown";
+    if(gui.current_program_path != "")
+        ADDIN = gui.current_program_path.stem();
+    sub["%ADDIN%"] = std::make_pair(ADDIN, "Current program's name");
+
+    sub["%DATE%"] = std::make_pair(strftimeCurrentTime("%Y%m%d-%H%M%S"),
+        "Current date and time");
+
+    return sub;
+}
 
 void RecordWindow::renderContents(mqMachine *omach)
 {
@@ -1222,9 +1248,9 @@ void RecordWindow::renderContents(mqMachine *omach)
         );
         ImGui::Spacing();
         ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(29);
+        ImGui::SetCursorPosX(37);
         ImGui::Text("Scale");
-        ImGui::SameLine(64);
+        ImGui::SameLine(72);
         ImGui::ComboAnon(0,
             &m_scale,
             backend.scaleTable(uninit ? NULL : display),
@@ -1234,23 +1260,6 @@ void RecordWindow::renderContents(mqMachine *omach)
             "(?)",
             "The Scaling\n"
             "todo"
-        );
-        ImGui::AlignTextToFramePadding();
-        ImGui::Text("Filename");
-        ImGui::SameLine(64);
-        if(disabled)
-            ImGui::BeginDisabled();
-        if(ImGui::InputText("##recordinput", m_filename_format, 128))
-            backend.filenameUpdate(m_filename_format);
-        if(disabled)
-            ImGui::EndDisabled();
-        ImGui::HelpMarker(
-            "(?)",
-            "You can use special placeholder to indicate "
-            "to MQ to inject dynamic information. Currently "
-            "supported variable are:\n"
-            "- %ADDIN% which add the selected addin name\n"
-            "- %DATE% which add the current date information\n"
         );
         ImGui::Spacing();
         if(uninit) {
@@ -1265,19 +1274,25 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SeparatorTextD("Screenshot");
         ImGui::TextWrapped(
             "Outputs a PNG. Uses the scaling setting above.");
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::SetCursorPosX(16);
+        ImGui::Text("Filename");
+        ImGui::SameLine(72);
+        ImGui::OutputPathPatternEditor(m_imageOutputPath, disabled);
+
         ImGui::Spacing();
-        if(ImGui::ButtonWSized("Take Screenshot", -1, uninit))
-            backend.screenshot(display, m_scale);
+        if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
+            m_imageOutputPath.resolve(true);
+            printf("-> '%s'\n", m_imageOutputPath.resolvedPath().c_str());
+            backend.screenshot(
+                display, m_scale, m_imageOutputPath.resolvedPath());
+            /* Resolve again to update the warning */
+            m_imageOutputPath.resolve(true);
+        }
         std::string err = backend.screenshot_lasterror();
         if(!err.empty())
             ImGui::TextCenteredColor(err.c_str(), 0xff0000);
-        if(backend.filenameExist(".png")) {
-            ImGui::TextCenteredColor(
-                ("\"" + backend.filename(".png") + "\" already exists").c_str(),
-                0xffbf00
-            );
-            ImGui::TextCenteredColor("(will be overwritten)", 0xffbf00);
-        }
     }
 
     ImGui::Spacing();
@@ -1302,10 +1317,11 @@ void RecordWindow::renderContents(mqMachine *omach)
             // "all available encoder. This can take some time and will "
             // "freeze the application a short amont of time."
         ImGui::Spacing();
+
         ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(32);
+        ImGui::SetCursorPosX(40);
         ImGui::Text("Start");
-        ImGui::SameLine(64);
+        ImGui::SameLine(72);
         ImGui::ComboAnon(
             1, &m_start_opt, record_start_selector, disabled);
         ImGui::HelpMarker(
@@ -1314,10 +1330,11 @@ void RecordWindow::renderContents(mqMachine *omach)
             "button below. By default, we automatically start the "
             "emulation when the user request the recording...todo"
         );
+
         ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(28);
+        ImGui::SetCursorPosX(36);
         ImGui::Text("Reset");
-        ImGui::SameLine(64);
+        ImGui::SameLine(72);
         ImGui::ComboAnon(
             2, &m_reset_opt, record_reset_selector, uninit);
         ImGui::HelpMarker(
@@ -1332,16 +1349,23 @@ void RecordWindow::renderContents(mqMachine *omach)
             "- STOP AND START which stop and start a new emulation\n"
             "- CONTINUE which do not stop the recording"
         );
+
         ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(14);
+        ImGui::SetCursorPosX(22);
         ImGui::Text("Encoder");
-        ImGui::SameLine(64);
+        ImGui::SameLine(72);
         ImGui::ComboAnon(3, &m_encoder, backend.encoderTable(), disabled);
         ImGui::HelpMarker(
             "(?)",
             "Hardware encoder\n"
             "todo"
         );
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::SetCursorPosX(16);
+        ImGui::Text("Filename");
+        ImGui::SameLine(72);
+        ImGui::OutputPathPatternEditor(m_videoOutputPath, disabled);
         ImGui::Spacing();
 
         /* no addin selected */
@@ -1356,7 +1380,9 @@ void RecordWindow::renderContents(mqMachine *omach)
 
         /* delayed initialisation */
         if(m_record_status == MQ_RECORD_STATUS_START) {
-            if(!backend.start(display, m_encoder, m_scale)) {
+            m_videoOutputPath.resolve(true);
+            if(!backend.start(display, m_encoder, m_scale,
+                    m_videoOutputPath.resolvedPath())) {
                 mq_log(MQ_LOG_ERROR, "backend.start() - fails");
                 m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
             } else {
@@ -1368,7 +1394,9 @@ void RecordWindow::renderContents(mqMachine *omach)
         }
         if (m_record_status == MQ_RECORD_STATUS_START_WAIT_EMU) {
             if (omach->cyclesPending != 0) {
-                if(!backend.start(display, m_encoder, m_scale)) {
+                m_videoOutputPath.resolve(true);
+                if(!backend.start(display, m_encoder, m_scale,
+                    m_videoOutputPath.resolvedPath())) {
                     mq_log(MQ_LOG_ERROR, "backend.start() - fails");
                     m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
                 } else {
@@ -1494,7 +1522,6 @@ void RecordWindow::resetState()
             mq_log(MQ_LOG_ERROR, "mqRecord::stop() - fail");
         m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
     }
-    backend.filenameUpdate(m_filename_format);
     backend.scaleTable(NULL);
     if(m_reset_opt == 1) {
         mq_log(MQ_LOG_WARNING, "Record: restart recording");
@@ -1506,6 +1533,10 @@ void RecordWindow::resetState()
 }
 
 #else /* MQ_VIDEO_FFMPEG */
+
+RecordWindow::RecordWindow(char const *title): GUIWindow(-1, title)
+{
+}
 
 void RecordWindow::renderContents(mqMachine *)
 {

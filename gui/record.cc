@@ -53,19 +53,17 @@ static int screenshot_aux(char const *pathname, mqDisplay *display, int scale)
     }
     mq_log(MQ_LOG_DEBUG, "screenshot: exported at \"%s\"", pathname);
     int err = stbi_write_png(pathname, r_width, r_height, comp, vram_data, 0);
+    // TODO: Check for errors here? Writing to /sth.png is reported to work
     mq_log(MQ_LOG_DEBUG, "try to create a screenshot...SUCCESS");
     free(vram_data);
     mq_log(MQ_LOG_DEBUG, "stbi_write_png(): %d", err);
     return (err == 0) ? -3 : 0;
 }
 
-bool mqRecord::screenshot(mqDisplay *display, int scale_idx)
+bool mqRecord::screenshot(
+    mqDisplay *display, int scale_idx, std::string const &path)
 {
-    int err = screenshot_aux(
-        filename(".png").c_str(),
-        display,
-        scale(scale_idx)
-    );
+    int err = screenshot_aux(path.c_str(), display, scale(scale_idx));
     m_cache.screenshot_lasterror = err;
     return (err >= 0);
 }
@@ -88,17 +86,18 @@ std::string mqRecord::screenshot_lasterror()
 
 //=== record =================================================================//
 
-bool mqRecord::start(mqDisplay *display, int encoder_idx, int scale_idx)
+bool mqRecord::start(mqDisplay *display, int encoder_idx, int scale_idx,
+    std::string const &filename)
 {
     int err;
 
     mq_log(MQ_LOG_DEBUG, "mqRecord::start() : try to start recording");
-    mq_log(MQ_LOG_DEBUG, "|-- filename: %s", filename(".mp4").c_str());
+    mq_log(MQ_LOG_DEBUG, "|-- filename: %s", filename.c_str());
     mq_log(MQ_LOG_DEBUG, "|-- encoder: %s", encoder(encoder_idx).c_str());
     mq_log(MQ_LOG_DEBUG, "`-- scale: %d", scale(scale_idx));
     err = m_ffmpeg.start(
         display,
-        filename(".mp4").c_str(),
+        filename.c_str(),
         encoder(encoder_idx).c_str(),
         scale(scale_idx)
     );
@@ -140,8 +139,6 @@ bool mqRecord::debug()
 {
     mq_log(MQ_LOG_DEBUG, "mqRecord:");
     mq_log(MQ_LOG_DEBUG, "|-- scale_type: %d", m_cache.scale_type);
-    mq_log(MQ_LOG_DEBUG, "|-- filename: %s", m_cache.filename.c_str());
-    mq_log(MQ_LOG_DEBUG, "|-- filename_dirty: %d", m_cache.filename_dirty);
     mq_log(MQ_LOG_DEBUG, "`-- record_err: %d", m_cache.record_lasterror);
     m_ffmpeg.debug();
     return true;
@@ -205,72 +202,6 @@ std::vector<std::string> const &mqRecord::scaleTable(mqDisplay *display)
     }
     m_cache.scale_type = (display != NULL);
     return m_scale_info;
-}
-
-//=== filename ===============================================================//
-
-void mqRecord::filenameCacheRefresh()
-{
-    if(!m_cache.filename_dirty)
-        return;
-    mq_log(MQ_LOG_DEBUG, "mqRecord::filenameCacheRefresh() - regenerate");
-    auto replace_all = [](
-        std::string &text,
-        std::string const &toReplace,
-        std::string const &replaceWith
-    ) {
-        std::string buf;
-        std::size_t pos = 0;
-        std::size_t prevPos;
-
-        buf.reserve(text.size());
-        while (true) {
-            prevPos = pos;
-            pos = text.find(toReplace, pos);
-            if (pos == std::string::npos)
-                break;
-            buf.append(text, prevPos, pos - prevPos);
-            buf += replaceWith;
-            pos += toReplace.size();
-        }
-        buf.append(text, prevPos, text.size() - prevPos);
-        text.swap(buf);
-    };
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-    std::ostringstream oss;
-    oss << std::put_time(&tm, "%Y%d%m%H%M%S");
-    std::string program_name = "unknown";
-    if (gui.current_program_path != "") {
-        program_name = gui.current_program_path.stem();
-    } else {
-        mq_log(MQ_LOG_ERROR, "mqRecord::cache() - broken program name");
-    }
-
-    mq_log(MQ_LOG_DEBUG, "mqRecord::cache() - filename->%s", m_cache.filename.c_str());
-    replace_all(m_cache.filename, "%ADDIN%", program_name);
-    replace_all(m_cache.filename, "%DATE%", oss.str());
-
-    mq_log(MQ_LOG_DEBUG, "mqRecord::cache() - filename->%s", m_cache.filename.c_str());
-    m_cache.filename_dirty = false;
-}
-
-std::string mqRecord::filename(char const *ext)
-{
-    filenameCacheRefresh();
-    return m_cache.filename + ext;
-}
-
-bool mqRecord::filenameExist(char const *ext)
-{
-    struct stat buffer;
-    return stat(filename(ext).c_str(), &buffer) == 0;
-}
-
-void mqRecord::filenameUpdate(char const *format)
-{
-    m_cache.filename = format;
-    m_cache.filename_dirty = true;
 }
 
 //=== encoder ================================================================//

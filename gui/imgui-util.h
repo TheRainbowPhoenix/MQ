@@ -9,7 +9,9 @@
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
+#include <functional>
 #include <pthread.h>
+#include "util.h"
 
 /* Number of frames we expect Dear ImGui to need to settle its layout after
    starting for the first time, resizing windows, etc. */
@@ -74,6 +76,14 @@ void ComboAnon(int id,
     std::vector<std::string> const &selector,
     bool disabled
 );
+
+void OutputPathPatternEditor(OutputPathPattern &output, bool disabled=false);
+
+/* Text edition wrappers with std::string but no callbacks */
+IMGUI_API bool InputText(
+   char const *label, std::string *str, ImGuiInputTextFlags flags=0);
+IMGUI_API bool InputTextMultiline(char const *label, std::string *str,
+   ImVec2 const &size=ImVec2(0, 0), ImGuiInputTextFlags flags=0);
 
 } /* namespace ImGui */
 
