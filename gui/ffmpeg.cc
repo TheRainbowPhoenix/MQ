@@ -691,14 +691,13 @@ int mqFFmpeg::unpause()
     return 0;
 }
 
-int mqFFmpeg::stats(struct mqFFmpegStats *stats)
+void mqFFmpeg::stats(struct mqFFmpegStats *stats)
 {
     stats->iframe   = m_core.iframe;
     stats->total_ms = stats->iframe * (1000 / m_config.fps);
     stats->time_ms  = stats->total_ms % 1000;
     stats->time_sec = ((stats->total_ms / 1000) % 60);
     stats->time_min = ((stats->total_ms / 1000) / 60) % 60;
-    return 0;
 }
 
 int mqFFmpeg::stop()

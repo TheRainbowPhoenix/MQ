@@ -86,19 +86,20 @@ std::string mqRecord::screenshot_lasterror()
 
 //=== record =================================================================//
 
-bool mqRecord::start(mqDisplay *display, int encoder_idx, int scale_idx,
-    std::string const &filename)
+bool mqRecord::start(mqDisplay *display, std::string const &filename)
 {
     int err;
+    int encoder_idx = encoder();
+    int scale_idx = scaleSetting();
 
     mq_log(MQ_LOG_DEBUG, "mqRecord::start() : try to start recording");
     mq_log(MQ_LOG_DEBUG, "|-- filename: %s", filename.c_str());
-    mq_log(MQ_LOG_DEBUG, "|-- encoder: %s", encoder(encoder_idx).c_str());
+    mq_log(MQ_LOG_DEBUG, "|-- encoder: %s", encoderName(encoder_idx).c_str());
     mq_log(MQ_LOG_DEBUG, "`-- scale: %d", scale(scale_idx));
     err = m_ffmpeg.start(
         display,
         filename.c_str(),
-        encoder(encoder_idx).c_str(),
+        encoderName(encoder_idx).c_str(),
         scale(scale_idx)
     );
     if(err != 0)
@@ -119,19 +120,34 @@ bool mqRecord::frame_add(mqDisplay *display)
 bool mqRecord::pause()
 {
     m_cache.record_lasterror = m_ffmpeg.pause();
-    return (m_cache.record_lasterror == 0);
+    if(m_cache.record_lasterror != 0)
+        return false;
+
+    m_status = MQ_RECORD_STATUS_PAUSED;
+    return true;
 }
 
 bool mqRecord::unpause()
 {
     m_cache.record_lasterror = m_ffmpeg.unpause();
-    return (m_cache.record_lasterror == 0);
+    if(m_cache.record_lasterror != 0)
+        return false;
+
+    m_status = MQ_RECORD_STATUS_RECORDING;
+    return true;
 }
 
 bool mqRecord::stop()
 {
     mq_log(MQ_LOG_DEBUG, "stopping recording");
-    m_cache.record_lasterror = m_ffmpeg.stop();
+    m_cache.record_lasterror = 0;
+
+    if(m_status == MQ_RECORD_STATUS_RECORDING ||
+       m_status == MQ_RECORD_STATUS_PAUSED) {
+        m_cache.record_lasterror = m_ffmpeg.stop();
+    }
+
+    m_status = MQ_RECORD_STATUS_NOTSTARTED;
     return (m_cache.record_lasterror == 0);
 }
 
@@ -153,14 +169,11 @@ std::string mqRecord::lasterror()
 
 //=== misc ===================================================================//
 
-mqRecordStats const*mqRecord::stats()
+mqRecordStats const *mqRecord::stats()
 {
     struct mqFFmpegStats stats;
-    int err;
 
-    err = m_ffmpeg.stats(&stats);
-    if(err != 0)
-        return NULL;
+    m_ffmpeg.stats(&stats);
     m_cache.record_stats.time_min = stats.time_min;
     m_cache.record_stats.time_sec = stats.time_sec;
     m_cache.record_stats.time_ms  = stats.time_ms;
@@ -211,7 +224,7 @@ std::vector<std::string> const&mqRecord::encoderTable()
     return m_ffmpeg.encoderTable();
 }
 
-std::string mqRecord::encoder(unsigned int encoder_idx) const
+std::string mqRecord::encoderName(unsigned int encoder_idx) const
 {
     return m_ffmpeg.encoder(encoder_idx);
 }

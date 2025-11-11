@@ -118,12 +118,13 @@ void HelpMarker(char const *title, char const *desc)
     }
 }
 
-void ComboAnon(
+bool ComboAnon(
     int id,
     int *index,
     std::vector<std::string> const &selector,
     bool disabled
 ) {
+    bool b = false;
     ImGui::BeginDisabled(disabled);
 
     std::string idstr = "##combo" + std::to_string(id);
@@ -136,9 +137,11 @@ void ComboAnon(
                 *index = i;
         }
         ImGui::EndCombo();
+        b = true;
     }
 
     ImGui::EndDisabled();
+    return b;
 }
 
 void OutputPathPatternEditor(OutputPathPattern &output, bool disabled)

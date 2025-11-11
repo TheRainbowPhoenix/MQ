@@ -39,7 +39,7 @@ void SeparatorTextD(char const *str);
 bool IconButton(int iconID, char const *tooltip, bool disabled=false);
 
 /* button with custom width and enabled/disabled status */
-bool ButtonWSized(char const *name, float width, bool disabled);
+bool ButtonWSized(char const *name, float width, bool disabled=false);
 
 /* Move cursor by a given amount. */
 static inline void MoveCursorScreenPos(ImVec2 diff) {
@@ -71,7 +71,7 @@ bool Checkbox2(Args... args) {
 void HelpMarker(const char *title, const char* desc);
 
 /* anonym combo */
-void ComboAnon(int id,
+bool ComboAnon(int id,
     int *index,
     std::vector<std::string> const &selector,
     bool disabled

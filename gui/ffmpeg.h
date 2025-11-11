@@ -34,7 +34,7 @@ public:
     mqFFmpeg();
     std::vector<std::string> const&encoderTable();
     std::string encoder(unsigned int encoder_idx) const;
-    int stats(mqFFmpegStats *stats);
+    void stats(mqFFmpegStats *stats);
 
     int start(
         mqDisplay *display,

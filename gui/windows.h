@@ -391,19 +391,6 @@ public:
 
 //=== Record =================================================================//
 
-// TODO: Figure out why this is here and not in mqRecord
-enum {
-    MQ_RECORD_STATUS_NOTSTARTED,
-    MQ_RECORD_STATUS_START,
-    MQ_RECORD_STATUS_START_WAIT_EMU,
-    MQ_RECORD_STATUS_RECORDING,
-    MQ_RECORD_STATUS_PAUSED,
-};
-enum {
-    MQ_RECORD_STARTOPT_START_EMULATION,
-    MQ_RECORD_STARTOPT_WAIT_EMULATION,
-};
-
 class RecordWindow: public GUIWindow
 {
 public:
@@ -415,14 +402,10 @@ private:
     static OutputPathPattern::SubstitutionMap makeSubstitutions();
 
     OutputPathPattern m_imageOutputPath;
+    int m_scale = 0;
 
 #if MQ_VIDEO_FFMPEG
     OutputPathPattern m_videoOutputPath;
-    int m_scale = 0;
-    int m_encoder = 0;
-    int m_start_opt = 0;
-    int m_reset_opt = 0;
-    int m_record_status = MQ_RECORD_STATUS_NOTSTARTED;
 #endif /* MQ_VIDEO_FFMPEG */
 };
 
