@@ -46,13 +46,11 @@ enum {
 class mqRecord
 {
 public:
-    std::vector<std::string> const &scaleTable(mqDisplay *display);
-    int scale(uint scale_idx) const;
     std::vector<std::string> const &encoderTable();
     std::string encoderName(unsigned int encoder_idx) const;
 
     /* take a screenshot of the */
-    bool screenshot(mqDisplay *display, int scale_idx, std::string const &path);
+    bool screenshot(mqDisplay *display, int scale, std::string const &path);
     std::string screenshot_lasterror();
 
     /* Current status of the state machine; see enumeration for meaning */
@@ -60,8 +58,8 @@ public:
     void setStatus(int s) { m_status = s; }
 
     /* Scaling factor for the input frame */
-    int scaleSetting() const { return m_scaleSetting; }
-    void setScaleSetting(int s) { m_scaleSetting = s; }
+    int scale() const { return m_scale; }
+    void setScale(int s) { m_scale = s; }
 
     /* Selected encoder */
     int encoder() const { return m_encoder; }
@@ -88,13 +86,12 @@ public:
 
 private:
     mqFFmpeg m_ffmpeg = mqFFmpeg();
-    std::vector<std::string> m_scale_info;
 
     /* State machine */
     int m_status = MQ_RECORD_STATUS_NOTSTARTED;
 
     /* ID of the selected scaled multiplier in the scale table. */
-    int m_scaleSetting = 0;
+    int m_scale = 1;
     /* ID of the selected encoder in the encoder table. */
     int m_encoder = 0;
     /* Continue recording to a new file after program resets */
@@ -102,7 +99,6 @@ private:
 
     // cache information
     struct {
-        int scale_type;
         int screenshot_lasterror;
         int record_lasterror;
         mqRecordStats record_stats;

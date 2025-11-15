@@ -89,6 +89,7 @@ struct GUIWindowSet
    this structure, windows have internal state too. */
 struct GUI
 {
+    GUI();
     struct GUIActions actions;
 
     //=== Controlling files ==================================================//
@@ -110,8 +111,18 @@ struct GUI
        whether the frame is new for the recorder. */
     mqDisplay lastDisplayFrame;
 
+    /* Function to generate the substitutions in output file names: %ADDIN%,
+       %DATE%, etc. */
+    static OutputPathPattern::SubstitutionMap makeSubstitutions();
+
+    /* Screenshot output path and scale ID */
+    OutputPathPattern imageOutputPath;
+    int imageScale = 1;
+
 #if MQ_VIDEO_FFMPEG
-    mqRecord record_info;
+    /* Recording output path and recorder state */
+    OutputPathPattern videoOutputPath;
+    mqRecord recorder;
 #endif
 
     //=== Widgets and co. ====================================================//
@@ -133,6 +144,7 @@ struct GUI
 
     void Render(mqController *controller);
     void DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock);
+    void ResetState();
 
     //=== Miscellaneous ======================================================//
 

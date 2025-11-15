@@ -74,8 +74,13 @@ void HelpMarker(const char *title, const char* desc);
 bool ComboAnon(int id,
     int *index,
     std::vector<std::string> const &selector,
-    bool disabled
-);
+    bool disabled);
+
+/* Combo box for selecting a value from an array of options while representing
+   the value and not the index. Note: if the value is invalid, defaults to
+   the first element in the array. */
+bool ComboValue(int *value,
+   std::vector<std::pair<int, std::string>> const &options, bool disabled);
 
 void OutputPathPatternEditor(OutputPathPattern &output, bool disabled=false);
 

@@ -180,14 +180,14 @@ static void render(void)
 static void open_addin(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
-        gui.Windows.resetState();
+        gui.ResetState();
         watch_quit(&gui.watch_info);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
-        gui.Windows.resetState();
+        gui.ResetState();
         watch_quit(&gui.watch_info);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
@@ -279,7 +279,7 @@ void update_machine(mqMachine *mach, bool startRunning)
     bool may_enable_watch = false;
 
     if(auto i = gui.actions.machineInitialize) {
-        gui.Windows.resetState();
+        gui.ResetState();
         mq_machine_setupHardware(emu0->mach, *i);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         render_needed = std::max(render_needed, 1);
@@ -535,7 +535,7 @@ int main(int argc, char **argv)
     gui.DGW.cleanup();
 
 #if MQ_VIDEO_FFMPEG
-    gui.record_info.stop();
+    gui.recorder.stop();
 #endif
     watch_quit(&gui.watch_info);
 

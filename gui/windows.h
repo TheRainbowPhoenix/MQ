@@ -394,19 +394,10 @@ public:
 class RecordWindow: public GUIWindow
 {
 public:
-    RecordWindow(char const *title);
+    RecordWindow(char const *title): GUIWindow(-1, title) {}
     void renderContents(mqMachine *omach) override;
-    void resetState() override;
 
-private:
-    static OutputPathPattern::SubstitutionMap makeSubstitutions();
-
-    OutputPathPattern m_imageOutputPath;
-    int m_scale = 0;
-
-#if MQ_VIDEO_FFMPEG
-    OutputPathPattern m_videoOutputPath;
-#endif /* MQ_VIDEO_FFMPEG */
+    static constexpr auto scaleFactors = {1, 2, 3, 4, 8};
 };
 
 #endif /* MQ_UI_WINDOWS_H */

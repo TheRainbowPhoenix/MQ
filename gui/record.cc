@@ -61,9 +61,9 @@ static int screenshot_aux(char const *pathname, mqDisplay *display, int scale)
 }
 
 bool mqRecord::screenshot(
-    mqDisplay *display, int scale_idx, std::string const &path)
+    mqDisplay *display, int scale, std::string const &path)
 {
-    int err = screenshot_aux(path.c_str(), display, scale(scale_idx));
+    int err = screenshot_aux(path.c_str(), display, scale);
     m_cache.screenshot_lasterror = err;
     return (err >= 0);
 }
@@ -90,17 +90,16 @@ bool mqRecord::start(mqDisplay *display, std::string const &filename)
 {
     int err;
     int encoder_idx = encoder();
-    int scale_idx = scaleSetting();
 
     mq_log(MQ_LOG_DEBUG, "mqRecord::start() : try to start recording");
     mq_log(MQ_LOG_DEBUG, "|-- filename: %s", filename.c_str());
     mq_log(MQ_LOG_DEBUG, "|-- encoder: %s", encoderName(encoder_idx).c_str());
-    mq_log(MQ_LOG_DEBUG, "`-- scale: %d", scale(scale_idx));
+    mq_log(MQ_LOG_DEBUG, "`-- scale: %d", scale());
     err = m_ffmpeg.start(
         display,
         filename.c_str(),
         encoderName(encoder_idx).c_str(),
-        scale(scale_idx)
+        scale()
     );
     if(err != 0)
         mq_log(MQ_LOG_ERROR, "mqRecord::start() - unable to start recording");
@@ -154,7 +153,6 @@ bool mqRecord::stop()
 bool mqRecord::debug()
 {
     mq_log(MQ_LOG_DEBUG, "mqRecord:");
-    mq_log(MQ_LOG_DEBUG, "|-- scale_type: %d", m_cache.scale_type);
     mq_log(MQ_LOG_DEBUG, "`-- record_err: %d", m_cache.record_lasterror);
     m_ffmpeg.debug();
     return true;
@@ -178,43 +176,6 @@ mqRecordStats const *mqRecord::stats()
     m_cache.record_stats.time_sec = stats.time_sec;
     m_cache.record_stats.time_ms  = stats.time_ms;
     return &m_cache.record_stats;
-}
-
-//=== scaling ================================================================//
-
-int mqRecord::scale(uint scale_idx) const
-{
-    static int scales[5] = { 1, 2, 3, 4, 8 };
-    return (scale_idx < 5) ? scales[scale_idx] : -1;
-}
-
-std::vector<std::string> const &mqRecord::scaleTable(mqDisplay *display)
-{
-    char buffer[512];
-
-    if(m_cache.scale_type == 0 && display == NULL)
-        return m_scale_info;
-    if(m_cache.scale_type == 1 && display != NULL)
-        return m_scale_info;
-
-    mq_log(MQ_LOG_DEBUG, "mqRecord::getScale() - regenerate");
-    m_scale_info.clear();
-
-    if(display != NULL) {
-        for(int i = 0; true; i++) {
-            int s = scale(i);
-            if(s < 0)
-                break;
-            snprintf(
-                buffer, 512, "x%d (%dx%d)", s,
-                display->width * s,
-                display->height * s
-            );
-            m_scale_info.push_back(buffer);
-        }
-    }
-    m_cache.scale_type = (display != NULL);
-    return m_scale_info;
 }
 
 //=== encoder ================================================================//

@@ -144,6 +144,40 @@ bool ComboAnon(
     return b;
 }
 
+bool ComboValue(int *value,
+   std::vector<std::pair<int, std::string>> const &options, bool disabled)
+{
+    ImGui::PushID(value);
+    ImGui::BeginDisabled(disabled);
+
+    char const *preview = "";
+    bool b = false;
+
+    size_t currentIndex = 0;
+    for(size_t i = 0; i < options.size(); i++) {
+        if(*value == options[i].first)
+            currentIndex = i;
+    }
+
+    if(currentIndex > options.size())
+        currentIndex = -1;
+    else
+        preview = options[currentIndex].second.c_str();
+
+    if(ImGui::BeginCombo("", preview)) {
+        for(auto const &[v, descr]: options) {
+            if(ImGui::Selectable(descr.c_str(), *value == v))
+                *value = v;
+        }
+        ImGui::EndCombo();
+        b = true;
+    }
+
+    ImGui::EndDisabled();
+    ImGui::PopID();
+    return b;
+}
+
 void OutputPathPatternEditor(OutputPathPattern &output, bool disabled)
 {
     /* Use the address of the output path structure as the unique ID */
