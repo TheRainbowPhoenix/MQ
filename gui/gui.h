@@ -115,9 +115,11 @@ struct GUI
        %DATE%, etc. */
     static OutputPathPattern::SubstitutionMap makeSubstitutions();
 
-    /* Screenshot output path and scale ID */
+    /* Screenshot output path, its scaling factor, and error code from the last
+       attempt generate a screenshot */
     OutputPathPattern imageOutputPath;
     int imageScale = 1;
+    int imageError = 0;
 
 #if MQ_VIDEO_FFMPEG
     /* Recording output path and recorder state */

@@ -48,6 +48,11 @@ std::string replaceSubstring(
 /* Return strftime string from current time. */
 std::string strftimeCurrentTime(char const *fmt);
 
+/* Generate a PNG of the given display after applying a scale factor. Returns
+   an error code; description is obtained with screenshotPNG_strerror. */
+int screenshotPNG(mqDisplay *display, int scale, std::string const &path);
+std::string screenshotPNG_strerror(int err);
+
 /* Utility class to name an output file with a substitution pattern, determine
    if it already exists and, if requested, automatically make it unique with a
    numerical suffix. With lazy stat() calls and lazy substitutions (because

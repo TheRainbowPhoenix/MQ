@@ -1295,14 +1295,14 @@ void RecordWindow::renderContents(mqMachine *omach)
         if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
             gui.imageOutputPath.resolve(true);
             printf("-> '%s'\n", gui.imageOutputPath.resolvedPath().c_str());
-            backend.screenshot(display, gui.imageScale,
+            gui.imageError = screenshotPNG(display, gui.imageScale,
                 gui.imageOutputPath.resolvedPath());
             /* Resolve again to update the warning */
             gui.imageOutputPath.resolve(true);
         }
-        std::string err = backend.screenshot_lasterror();
-        if(!err.empty())
-            ImGui::TextCenteredColor(err.c_str(), 0xff0000);
+        if(gui.imageError)
+            ImGui::TextCenteredColor(
+                screenshotPNG_strerror(gui.imageError).c_str(), 0xff0000);
     }
 
     ImGui::Spacing();
