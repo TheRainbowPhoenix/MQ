@@ -505,6 +505,18 @@ int mqFFmpeg::ffmpeg_scale_conv(
 
 mqFFmpeg::mqFFmpeg()
 {
+    /* For now only count some software encoders. We'll extend the table with
+       hardware encoders once we detect them later. */
+    m_encoders.push_back("libx264");
+    m_encoders.push_back("libvpx-vp9");
+    m_software_encoder_count = m_encoders.size();
+}
+
+void mqFFmpeg::detectHardwareEncoders()
+{
+    if(m_hardware_encoders_detected)
+        return;
+
     const AVCodec *codec;
     enum AVHWDeviceType hwdevice;
     std::vector<std::string> hwdevices;
@@ -513,7 +525,7 @@ mqFFmpeg::mqFFmpeg()
     void *i = 0;
     bool found;
 
-    mq_log(MQ_LOG_DEBUG, "ffmpeg: try to detect encoder...");
+    mq_log(MQ_LOG_DEBUG, "ffmpeg: detecting hardware encoders...");
     av_log_set_level(AV_LOG_QUIET);
 
     // detect all hardware device available. Note that the CUDA hardware
@@ -529,10 +541,6 @@ mqFFmpeg::mqFFmpeg()
         hwdevices.push_back(hwdevice_name);
     }
 
-    // detect all hardware accelerated encoder, but manually add default
-    // `libx264` and `libvpx-vp9` software encoder.
-    m_encoders.push_back("libx264");
-    m_encoders.push_back("libvpx-vp9");
     while ((codec = av_codec_iterate(&i))) {
         if (!av_codec_is_encoder(codec))
             continue;
@@ -552,12 +560,13 @@ mqFFmpeg::mqFFmpeg()
         }
         if(!found)
             continue;
-        // mq_log(MQ_LOG_DEBUG, "ffmpeg::init() - try codec %s", codec->name);
         if(ffmpeg_codec_exist(codec->name) != 0)
             continue;
-        mq_log(MQ_LOG_DEBUG, "ffmpeg: found encoder '%s'", codec->name);
+        mq_log(MQ_LOG_DEBUG, "ffmpeg: successfully used '%s'", codec->name);
         m_encoders.push_back(codec_name);
     }
+
+    m_hardware_encoders_detected = true;
 }
 
 //=== error handling =========================================================//
@@ -586,11 +595,6 @@ std::string mqFFmpeg::err2str(int err)
 }
 
 //=== encoders ===============================================================//
-
-std::vector<std::string> const&mqFFmpeg::encoderTable()
-{
-    return m_encoders;
-}
 
 std::string mqFFmpeg::encoder(unsigned int encoder_idx) const
 {

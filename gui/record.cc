@@ -104,16 +104,4 @@ mqRecordStats const *mqRecord::stats()
     return &m_cache.record_stats;
 }
 
-//=== encoder ================================================================//
-
-std::vector<std::string> const&mqRecord::encoderTable()
-{
-    return m_ffmpeg.encoderTable();
-}
-
-std::string mqRecord::encoderName(unsigned int encoder_idx) const
-{
-    return m_ffmpeg.encoder(encoder_idx);
-}
-
 #endif /* MQ_VIDEO_FFMPEG */

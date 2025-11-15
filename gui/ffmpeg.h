@@ -32,8 +32,16 @@ class mqFFmpeg
 {
 public:
     mqFFmpeg();
-    std::vector<std::string> const&encoderTable();
-    std::string encoder(unsigned int encoder_idx) const;
+
+    /* List of encoders. Software encoders come first, then hardware encoders
+       (once detected by `detectHardwareEncoders()`. The number of software
+       encoders at the start is given by `softwareEncoderCount()`. */
+    std::vector<std::string> const&encoderTable() { return m_encoders; }
+    void detectHardwareEncoders();
+    int softwareEncoderCount() { return m_software_encoder_count; }
+    /* Name of encoder #idx in the `encoderTable`. */
+    std::string encoder(uint idx) const;
+
     void stats(mqFFmpegStats *stats);
 
     int start(
@@ -93,10 +101,13 @@ private:
     } m_config;
 
     std::vector<std::string> m_encoders;
-    int m_error_errno;
+    bool m_hardware_encoders_detected = false;
+    int m_software_encoder_count = 0;
+
+    int m_error_errno = 0;
     std::string m_error_info;
-    u64 m_time_ms_ref;
-    bool m_paused;
+    u64 m_time_ms_ref = 0;
+    bool m_paused = false;
 };
 
 #endif /* MQ_VIDEO_FFMPEG */

@@ -46,8 +46,14 @@ enum {
 class mqRecord
 {
 public:
-    std::vector<std::string> const &encoderTable();
-    std::string encoderName(unsigned int encoder_idx) const;
+    std::vector<std::string> const &encoderTable() {
+        return m_ffmpeg.encoderTable();
+    }
+    std::string encoderName(unsigned int encoder_idx) const {
+        return m_ffmpeg.encoder(encoder_idx);
+    }
+    void detectEncoders() { m_ffmpeg.detectHardwareEncoders(); }
+    int softwareEncoderCount() { return m_ffmpeg.softwareEncoderCount(); }
 
     /* take a screenshot of the */
     bool screenshot(mqDisplay *display, int scale, std::string const &path);

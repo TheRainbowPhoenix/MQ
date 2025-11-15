@@ -1338,15 +1338,31 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SetCursorPosX(22);
         ImGui::Text("Encoder");
         ImGui::SameLine(72);
-        int encoder = backend.encoder();
-        if(ImGui::ComboAnon(3, &encoder, backend.encoderTable(), disabled))
-            backend.setEncoder(encoder);
-        ImGui::HelpMarker(
-            "(?)",
-            "Hardware encoder\n"
-            "todo"
-        );
 
+        uint encoder = backend.encoder();
+        auto const &encoderTable = backend.encoderTable();
+        std::string preview =
+            encoder < encoderTable.size() ? encoderTable[encoder] : "";
+        ImGui::BeginDisabled(disabled);
+        if(ImGui::BeginCombo("##encoders", preview.c_str())) {
+            for(uint i = 0; i < encoderTable.size(); i++) {
+                if(i == 0)
+                    ImGui::SeparatorTextD("Software encoders");
+                else if(i == (uint)backend.softwareEncoderCount())
+                    ImGui::SeparatorTextD("Hardware encoders");
+
+                if(ImGui::Selectable(encoderTable[i].c_str(), encoder == i))
+                    backend.setEncoder(i);
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::EndDisabled();
+
+        ImGui::SameLine();
+        if(ImGui::Button("Detect"))
+            backend.detectEncoders();
+        ImGui::SetItemTooltip(
+            "Detect hardware encoders available on this machine");
         ImGui::AlignTextToFramePadding();
         ImGui::SetCursorPosX(16);
         ImGui::Text("Filename");
