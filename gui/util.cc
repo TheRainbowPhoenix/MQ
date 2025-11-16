@@ -4,6 +4,7 @@
 #include <string.h>
 #include "util.h"
 #include <azur/stb_image_write.h>
+#include <sstream>
 
 void *openAndReadFile(char const *path, long *size_ptr)
 {

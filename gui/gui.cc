@@ -13,9 +13,11 @@ GUI::GUI()
     imageOutputPath.setPattern("%ADDIN%_%DATE%.png");
     imageOutputPath.setOverwrite(false);
 
+#if MQ_VIDEO_FFMPEG
     videoOutputPath.setSubstitution(makeSubstitutions);
     videoOutputPath.setPattern("%ADDIN%_%DATE%.mp4");
     videoOutputPath.setOverwrite(false);
+#endif
 }
 
 void GUIWindow::render(mqMachine *omach)
@@ -1246,8 +1248,6 @@ void KeyboardWindow::renderContents(mqMachine *omach)
 
 //=== Record =================================================================//
 
-#if MQ_VIDEO_FFMPEG
-
 void RecordWindow::renderContents(mqMachine *omach)
 {
     const ImGuiStyle& style = ImGui::GetStyle();
@@ -1258,7 +1258,6 @@ void RecordWindow::renderContents(mqMachine *omach)
     // bool record_started = gui.recorder.status != MQ_RECORD_STATUS_UNINIT;
     bool disabled = uninit;// || record_started;
 
-    mqRecord &backend = gui.recorder;
     mqDisplay *display = &gui.lastDisplayFrame;
 
     if(uninit)
@@ -1273,217 +1272,202 @@ void RecordWindow::renderContents(mqMachine *omach)
     }
 
     /* screenshot section */
-    {
-        ImGui::SeparatorTextD("Screenshot");
-        ImGui::TextWrapped(
-            "Outputs a PNG. Uses the scaling setting above.");
+    ImGui::SeparatorTextD("Screenshot");
+    ImGui::TextWrapped(
+        "Outputs a PNG. Uses the scaling setting above.");
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(37);
-        ImGui::Text("Scale");
-        ImGui::SameLine(72);
+    ImGui::AlignTextToFramePadding();
+    ImGui::SetCursorPosX(37);
+    ImGui::Text("Scale");
+    ImGui::SameLine(72);
 
-        ImGui::ComboValue(&gui.imageScale, scaleOptions, disabled);
+    ImGui::ComboValue(&gui.imageScale, scaleOptions, disabled);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(16);
-        ImGui::Text("Filename");
-        ImGui::SameLine(72);
-        ImGui::OutputPathPatternEditor(gui.imageOutputPath, disabled);
+    ImGui::AlignTextToFramePadding();
+    ImGui::SetCursorPosX(16);
+    ImGui::Text("Filename");
+    ImGui::SameLine(72);
+    ImGui::OutputPathPatternEditor(gui.imageOutputPath, disabled);
 
-        ImGui::Spacing();
-        if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
-            gui.imageOutputPath.resolve(true);
-            printf("-> '%s'\n", gui.imageOutputPath.resolvedPath().c_str());
-            gui.imageError = screenshotPNG(display, gui.imageScale,
-                gui.imageOutputPath.resolvedPath());
-            /* Resolve again to update the warning */
-            gui.imageOutputPath.resolve(true);
-        }
-        if(gui.imageError)
-            ImGui::TextCenteredColor(
-                screenshotPNG_strerror(gui.imageError).c_str(), 0xff0000);
+    ImGui::Spacing();
+    if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
+        gui.imageOutputPath.resolve(true);
+        printf("-> '%s'\n", gui.imageOutputPath.resolvedPath().c_str());
+        gui.imageError = screenshotPNG(display, gui.imageScale,
+            gui.imageOutputPath.resolvedPath());
+        /* Resolve again to update the warning */
+        gui.imageOutputPath.resolve(true);
     }
+    if(gui.imageError)
+        ImGui::TextCenteredColor(
+            screenshotPNG_strerror(gui.imageError).c_str(), 0xff0000);
 
     ImGui::Spacing();
     ImGui::Spacing();
+
+    ImGui::SeparatorTextD("Video recorder");
+#if MQ_VIDEO_FFMPEG
+    mqRecord &backend = gui.recorder;
 
     /* video section */
-    {
-        ImGui::SeparatorTextD("Video recorder");
-        ImGui::TextWrapped(
-            "Outputs an MP4. For quality, use a software encoder. For speed, "
-            "use a hardware encoder.");
-            // "Small note concerning hardware encoder. When you enable this "
-            // "option for the first time, MQ will try to automatically find "
-            // "all available encoder. This can take some time and will "
-            // "freeze the application a short amont of time."
-        ImGui::Spacing();
+    ImGui::TextWrapped(
+        "Outputs an MP4. For quality, use a software encoder. For speed, "
+        "use a hardware encoder.");
+        // "Small note concerning hardware encoder. When you enable this "
+        // "option for the first time, MQ will try to automatically find "
+        // "all available encoder. This can take some time and will "
+        // "freeze the application a short amont of time."
+    ImGui::Spacing();
 
-        bool continuousRecord = backend.continuousRecord();
-        if(ImGui::Checkbox2(
-            "Keep recording on a new file if a new program starts",
-            &continuousRecord))
-            backend.setContinuousRecord(continuousRecord);
+    bool continuousRecord = backend.continuousRecord();
+    if(ImGui::Checkbox2(
+        "Keep recording on a new file if a new program starts",
+        &continuousRecord))
+        backend.setContinuousRecord(continuousRecord);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(37);
-        ImGui::Text("Scale");
-        ImGui::SameLine(72);
-        static int scale = backend.scale();
-        if(ImGui::ComboValue(&scale, scaleOptions, disabled))
-            backend.setScale(scale);
+    ImGui::AlignTextToFramePadding();
+    ImGui::SetCursorPosX(37);
+    ImGui::Text("Scale");
+    ImGui::SameLine(72);
+    static int scale = backend.scale();
+    if(ImGui::ComboValue(&scale, scaleOptions, disabled))
+        backend.setScale(scale);
 
-        ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(22);
-        ImGui::Text("Encoder");
-        ImGui::SameLine(72);
+    ImGui::AlignTextToFramePadding();
+    ImGui::SetCursorPosX(22);
+    ImGui::Text("Encoder");
+    ImGui::SameLine(72);
 
-        uint encoder = backend.encoder();
-        auto const &encoderTable = backend.encoderTable();
-        std::string preview =
-            encoder < encoderTable.size() ? encoderTable[encoder] : "";
-        ImGui::BeginDisabled(disabled);
-        if(ImGui::BeginCombo("##encoders", preview.c_str())) {
-            for(uint i = 0; i < encoderTable.size(); i++) {
-                if(i == 0)
-                    ImGui::SeparatorTextD("Software encoders");
-                else if(i == (uint)backend.softwareEncoderCount())
-                    ImGui::SeparatorTextD("Hardware encoders");
+    uint encoder = backend.encoder();
+    auto const &encoderTable = backend.encoderTable();
+    std::string preview =
+        encoder < encoderTable.size() ? encoderTable[encoder] : "";
+    ImGui::BeginDisabled(disabled);
+    if(ImGui::BeginCombo("##encoders", preview.c_str())) {
+        for(uint i = 0; i < encoderTable.size(); i++) {
+            if(i == 0)
+                ImGui::SeparatorTextD("Software encoders");
+            else if(i == (uint)backend.softwareEncoderCount())
+                ImGui::SeparatorTextD("Hardware encoders");
 
-                if(ImGui::Selectable(encoderTable[i].c_str(), encoder == i))
-                    backend.setEncoder(i);
-            }
-            ImGui::EndCombo();
+            if(ImGui::Selectable(encoderTable[i].c_str(), encoder == i))
+                backend.setEncoder(i);
         }
-        ImGui::EndDisabled();
+        ImGui::EndCombo();
+    }
+    ImGui::EndDisabled();
 
-        ImGui::SameLine();
-        if(ImGui::Button("Detect"))
-            backend.detectEncoders();
-        ImGui::SetItemTooltip(
-            "Detect hardware encoders available on this machine");
-        ImGui::AlignTextToFramePadding();
-        ImGui::SetCursorPosX(16);
-        ImGui::Text("Filename");
-        ImGui::SameLine(72);
-        ImGui::OutputPathPatternEditor(gui.videoOutputPath, disabled);
-        ImGui::Spacing();
+    ImGui::SameLine();
+    if(ImGui::Button("Detect"))
+        backend.detectEncoders();
+    ImGui::SetItemTooltip(
+        "Detect hardware encoders available on this machine");
+    ImGui::AlignTextToFramePadding();
+    ImGui::SetCursorPosX(16);
+    ImGui::Text("Filename");
+    ImGui::SameLine(72);
+    ImGui::OutputPathPatternEditor(gui.videoOutputPath, disabled);
+    ImGui::Spacing();
 
-        /* no addin selected */
-        if(!omach->initialized) {
-            ImGui::ButtonWSized("Start", w_button, true);
-            ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            ImGui::ButtonWSized("Pause", w_button, true);
-            ImGui::SameLine(0, style.ItemInnerSpacing.x);
-            ImGui::ButtonWSized("Stop", w_button, true);
-            return;
-        }
-
-        /* delayed initialisation */
-        // TODO: Move to update
-        if (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU) {
-            if (omach->cyclesPending != 0) {
-                gui.videoOutputPath.resolve(true);
-                if(!backend.start(display, gui.videoOutputPath.resolvedPath())) {
-                    mq_log(MQ_LOG_ERROR, "backend.start() - fails");
-                    backend.setStatus(MQ_RECORD_STATUS_NOTSTARTED);
-                } else {
-                    backend.debug();
-                    backend.setStatus(MQ_RECORD_STATUS_RECORDING);
-                }
-            }
-        }
-        /* start/pause/stop button */
-        // TODO: Move to update
-        if(omach->cyclesPending == 0) {
-            if(gui.actions.machineSetPendingCycles == 0) {
-                if(!backend.pause())
-                    mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
-            }
-        }
-
-        // TODO: Move to update
-        if(backend.status() != MQ_RECORD_STATUS_PAUSED &&
-           backend.status() != MQ_RECORD_STATUS_NOTSTARTED) {
-            if(gui.lastDisplayFrame.dirty) {
-                if(!backend.frame_add(&gui.lastDisplayFrame))
-                    mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
-                gui.lastDisplayFrame.dirty = false;
-            }
-        }
-
-        //---
-
-        bool notstarted = (backend.status() == MQ_RECORD_STATUS_NOTSTARTED);
-        bool waitemu = (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU);
-        bool recording = (backend.status() == MQ_RECORD_STATUS_RECORDING);
-        bool paused = (backend.status() == MQ_RECORD_STATUS_PAUSED);
-
-        if(ImGui::ButtonWSized("Start", w_button, !notstarted))
-            backend.setStatus(MQ_RECORD_STATUS_START_WAIT_EMU);
+    /* no addin selected */
+    if(!omach->initialized) {
+        ImGui::ButtonWSized("Start", w_button, true);
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        ImGui::ButtonWSized("Pause", w_button, true);
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        ImGui::ButtonWSized("Stop", w_button, true);
+        return;
+    }
 
-        if(recording && ImGui::ButtonWSized("Pause", w_button)) {
-            if(!backend.pause())
-                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
+    /* delayed initialisation */
+    // TODO: Move to update
+    if (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU) {
+        if (omach->cyclesPending != 0) {
+            gui.videoOutputPath.resolve(true);
+            if(!backend.start(display, gui.videoOutputPath.resolvedPath())) {
+                mq_log(MQ_LOG_ERROR, "backend.start() - fails");
+                backend.setStatus(MQ_RECORD_STATUS_NOTSTARTED);
+            } else {
+                backend.debug();
+                backend.setStatus(MQ_RECORD_STATUS_RECORDING);
+            }
         }
-        else if(paused && ImGui::ButtonWSized("Continue", w_button)) {
-            if(!backend.unpause())
+    }
+    /* start/pause/stop button */
+    // TODO: Move to update
+    if(omach->cyclesPending == 0) {
+        if(gui.actions.machineSetPendingCycles == 0) {
+            if(!backend.pause())
                 mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
         }
-        else if(!recording && !paused)
-            ImGui::ButtonWSized("Pause", w_button, true);
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+    }
 
-        if(ImGui::ButtonWSized("Stop", w_button, notstarted)) {
-            if(!backend.stop())
+    // TODO: Move to update
+    if(backend.status() != MQ_RECORD_STATUS_PAUSED &&
+       backend.status() != MQ_RECORD_STATUS_NOTSTARTED) {
+        if(gui.lastDisplayFrame.dirty) {
+            if(!backend.frame_add(&gui.lastDisplayFrame))
                 mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
+            gui.lastDisplayFrame.dirty = false;
         }
-        ImGui::Spacing();
+    }
 
-        //---
+    //---
 
-        if(waitemu) {
-            ImGui::BeginDisabled();
-            ImGui::TextCenteredColor("Waiting emulation start...", 0xffffff);
-            ImGui::EndDisabled();
-        }
-        else if(recording || paused) {
-            /* recording information */
-            char buffer[128];
-            mqRecordStats const *stats = backend.stats();
-            snprintf(
-                buffer, 128,
-                "%s (%02d:%02d:%02d)",
-                (paused) ? "Paused" : "Recording...",
-                stats->time_min,
-                stats->time_sec,
-                stats->time_ms
-            );
-            ImGui::TextCenteredColor(buffer, 0xffffff);
-        }
+    bool notstarted = (backend.status() == MQ_RECORD_STATUS_NOTSTARTED);
+    bool waitemu = (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU);
+    bool recording = (backend.status() == MQ_RECORD_STATUS_RECORDING);
+    bool paused = (backend.status() == MQ_RECORD_STATUS_PAUSED);
 
-        /* display error log if available */
-        if(!backend.lasterror().empty())
-            ImGui::TextCenteredColor(backend.lasterror().c_str(), 0xff0000);
-    };
-}
+    if(ImGui::ButtonWSized("Start", w_button, !notstarted))
+        backend.setStatus(MQ_RECORD_STATUS_START_WAIT_EMU);
+    ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
-#else /* MQ_VIDEO_FFMPEG */
+    if(recording && ImGui::ButtonWSized("Pause", w_button)) {
+        if(!backend.pause())
+            mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
+    }
+    else if(paused && ImGui::ButtonWSized("Continue", w_button)) {
+        if(!backend.unpause())
+            mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
+    }
+    else if(!recording && !paused)
+        ImGui::ButtonWSized("Pause", w_button, true);
+    ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
-RecordWindow::RecordWindow(char const *title): GUIWindow(-1, title)
-{
-}
+    if(ImGui::ButtonWSized("Stop", w_button, notstarted)) {
+        if(!backend.stop())
+            mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
+    }
+    ImGui::Spacing();
 
-void RecordWindow::renderContents(mqMachine *)
-{
+    //---
+
+    if(waitemu) {
+        ImGui::BeginDisabled();
+        ImGui::TextCenteredColor("Waiting emulation start...", 0xffffff);
+        ImGui::EndDisabled();
+    }
+    else if(recording || paused) {
+        /* recording information */
+        char buffer[128];
+        mqRecordStats const *stats = backend.stats();
+        snprintf(
+            buffer, 128,
+            "%s (%02d:%02d:%02d)",
+            (paused) ? "Paused" : "Recording...",
+            stats->time_min,
+            stats->time_sec,
+            stats->time_ms
+        );
+        ImGui::TextCenteredColor(buffer, 0xffffff);
+    }
+
+    /* display error log if available */
+    if(!backend.lasterror().empty())
+        ImGui::TextCenteredColor(backend.lasterror().c_str(), 0xff0000);
+#else
     ImGui::TextWrapped(
         "Video recording with ffmpeg was not enabled in this build.");
-}
-
-void RecordWindow::resetState()
-{
-}
-
 #endif /* MQ_VIDEO_FFMPEG */
+}
