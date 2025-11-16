@@ -535,7 +535,7 @@ int main(int argc, char **argv)
     gui.DGW.cleanup();
 
 #if MQ_VIDEO_FFMPEG
-    gui.recorder.stop();
+    gui.recorder.stop(&gui.lastDisplayFrame);
 #endif
     watch_quit(&gui.watch_info);
 

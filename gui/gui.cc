@@ -190,7 +190,7 @@ void GUI::ResetState()
         recorder.status() == MQ_RECORD_STATUS_PAUSED
     ) {
         mq_log(MQ_LOG_WARNING, "Record: stopping current recording");
-        if(!recorder.stop())
+        if(!recorder.stop(&gui.lastDisplayFrame))
             mq_log(MQ_LOG_ERROR, "mqRecord::stop() - fail");
     }
     if(recorder.continuousRecord()) {
@@ -1398,7 +1398,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         // TODO: Move to update
         if(omach->cyclesPending == 0) {
             if(gui.actions.machineSetPendingCycles == 0) {
-                if(!backend.pause())
+                if(!backend.pause(&gui.lastDisplayFrame))
                     mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
             }
         }
@@ -1425,11 +1425,11 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
         if(recording && ImGui::ButtonWSized("Pause", w_button)) {
-            if(!backend.pause())
+            if(!backend.pause(&gui.lastDisplayFrame))
                 mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
         }
         else if(paused && ImGui::ButtonWSized("Continue", w_button)) {
-            if(!backend.unpause())
+            if(!backend.unpause(&gui.lastDisplayFrame))
                 mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
         }
         else if(!recording && !paused)
@@ -1437,7 +1437,7 @@ void RecordWindow::renderContents(mqMachine *omach)
         ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
         if(ImGui::ButtonWSized("Stop", w_button, notstarted)) {
-            if(!backend.stop())
+            if(!backend.stop(&gui.lastDisplayFrame))
                 mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
         }
         ImGui::Spacing();
