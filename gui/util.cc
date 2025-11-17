@@ -72,6 +72,32 @@ void openFileDialog(OpenFileBuffer *ofb)
     emscripten_browser_file::upload(".g1a,.g3a", handle_upload_file, ofb);
 }
 
+/* Reimplement download to bypass this bug:
+   https://github.com/Armchair-Software/emscripten-browser-file/issues/1 */
+namespace emscripten_browser_file {
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-variable-declarations"
+EM_JS_INLINE(void, download2,
+    (char const *filename, char const *mime_type, void const *buffer,
+     size_t buffer_size), {
+  var a = document.createElement('a');
+  a.download = UTF8ToString(filename);
+  var bufferCopy = new ArrayBuffer(buffer_size);
+  var uint8Array = new Uint8Array(bufferCopy);
+  uint8Array.set(new Uint8Array(Module["HEAPU8"].buffer, buffer, buffer_size));
+  a.href = URL.createObjectURL(new Blob([uint8Array], {type: UTF8ToString(mime_type)}));
+  a.click();
+});
+#pragma GCC diagnostic pop
+
+inline void download2(std::string const &filename,
+    std::string const &mime_type, std::string_view buffer) {
+  download2(filename.c_str(), mime_type.c_str(), buffer.data(), buffer.size());
+}
+
+} /* namespace emscripten_browser_file */
+
 #else /* Not emscripten */
 
 #include "../3rdparty/portable-file-dialogs/portable-file-dialogs.h"
@@ -260,12 +286,25 @@ static int screenshot_aux(char const *pathname, mqDisplay *display, int scale)
         }
     }
 
+#if AZUR_PLATFORM_EMSCRIPTEN
+    std::string output;
+    auto write_func = [](void *context, void *data, int size) {
+        std::string *output = (std::string *)context;
+        output->append((char *)data, size);
+    };
+    mq_log(MQ_LOG_DEBUG, "screenshot: exporting as \"%s\"", pathname);
+    int stbi_rc = stbi_write_png_to_func(
+        write_func, &output, r_width, r_height, comp, vram_data, 0);
+    mq_log(MQ_LOG_DEBUG, "screenshot: stbi_write_png_to_func(): %d", stbi_rc);
+    emscripten_browser_file::download2(pathname, "image/png", output);
+#else
     mq_log(MQ_LOG_DEBUG, "screenshot: exported at \"%s\"", pathname);
     int stbi_rc =
         stbi_write_png(pathname, r_width, r_height, comp, vram_data, 0);
     // TODO: Check for errors here? Writing to /sth.png is reported to work
     free(vram_data);
     mq_log(MQ_LOG_DEBUG, "screenshot: stbi_write_png(): %d", stbi_rc);
+#endif
     return stbi_rc ? 0 : -3;
 }
 
