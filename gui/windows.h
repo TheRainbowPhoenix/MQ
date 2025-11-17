@@ -120,6 +120,7 @@ class ShaderTexture: public azur::gl::Program
     struct VA {
         glm::vec2 vertex;   // Vertex location in world view space
         glm::vec2 uv;       // Location within texture (normalized)
+        float grayscale;    // Grayscale if > 0.5
     };
 
 public:
@@ -131,7 +132,8 @@ public:
 
     /* Add a full texture of the specified size
        TODO: This always uses texture #0 */
-    void addTexture(rect<float> screenRect, rect<float> texRect);
+    void addTexture(
+        rect<float> screenRect, rect<float> texRect, bool grayscale=false);
 
 private:
     GLuint m_vao = 0;

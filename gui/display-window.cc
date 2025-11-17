@@ -153,7 +153,8 @@ void DisplayGlWindow::render(ImDrawList const *, ImDrawCmd const *)
         float th = h / sh;
         shader_texture.addTexture(
             {-w/2, -h/2, w, h},
-            {u0, v0, tw, th});
+            {u0, v0, tw, th},
+            m_texture.format() == GL_R8);
 
         shader_texture.useProgram();
         m_texture.bind();
@@ -227,6 +228,7 @@ bool ShaderTexture::init()
     m_vbo.bind();
     bindVertexAttribute(&VA::vertex, 0);
     bindVertexAttribute(&VA::uv, 1);
+    bindVertexAttribute(&VA::grayscale, 2);
     return true;
 }
 
@@ -245,16 +247,17 @@ void ShaderTexture::draw()
     glDrawArrays(GL_TRIANGLES, 0, m_vbo.size());
 }
 
-void ShaderTexture::addTexture(rect<float> dst, rect<float> tex)
+void ShaderTexture::addTexture(rect<float> dst, rect<float> tex, bool grayscale)
 {
     if(tex.width() == 0 && tex.height() == 0)
         tex = rect<float>(0.f, 0.f, 1.f, 1.f);
+    float gr = (float)(int)grayscale;
 
     VA attr[4] = {
-        { {dst.left(),  dst.top()},    {tex.left(),  tex.top()},   },
-        { {dst.right(), dst.top()},    {tex.right(), tex.top()},   },
-        { {dst.left(),  dst.bottom()}, {tex.left(),  tex.bottom()} },
-        { {dst.right(), dst.bottom()}, {tex.right(), tex.bottom()} },
+        { {dst.left(),  dst.top()},    {tex.left(),  tex.top()},    gr },
+        { {dst.right(), dst.top()},    {tex.right(), tex.top()},    gr },
+        { {dst.left(),  dst.bottom()}, {tex.left(),  tex.bottom()}, gr },
+        { {dst.right(), dst.bottom()}, {tex.right(), tex.bottom()}, gr },
     };
     m_vbo.addUnfoldedQuad(attr);
 }

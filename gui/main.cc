@@ -127,15 +127,11 @@ static void render(void)
             gui.displayTexture->bind();
             if(d->format == MQ_DISPLAY_FORMAT_L8) {
                 gui.displayTexture->setFormat(GL_R8, d->width, d->height);
-                gui.displayTexture->setSwizzleMask(
-                    GL_RED, GL_RED, GL_RED, GL_ONE);
                 gui.displayTexture->loadData(
                     d->data, GL_RED, GL_UNSIGNED_BYTE, d->width, 0);
             }
             else if(d->format == MQ_DISPLAY_FORMAT_RGB565) {
                 gui.displayTexture->setFormat(GL_RGB565, d->width, d->height);
-                gui.displayTexture->setSwizzleMask(
-                    GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA);
                 gui.displayTexture->loadData(
                     d->data, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, d->width, 0);
             }
