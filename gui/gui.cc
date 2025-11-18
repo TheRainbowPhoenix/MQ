@@ -1292,14 +1292,8 @@ void RecordWindow::renderContents(mqMachine *omach)
     ImGui::OutputPathPatternEditor(gui.imageOutputPath, disabled);
 
     ImGui::Spacing();
-    if(ImGui::ButtonWSized("Take Screenshot", -1, uninit)) {
-        gui.imageOutputPath.resolve(true);
-        printf("-> '%s'\n", gui.imageOutputPath.resolvedPath().c_str());
-        gui.imageError = screenshotPNG(display, gui.imageScale,
-            gui.imageOutputPath.resolvedPath());
-        /* Resolve again to update the warning */
-        gui.imageOutputPath.resolve(true);
-    }
+    gui.actions.recordScreenshot =
+        ImGui::ButtonWSized("Take Screenshot", -1, uninit);
     if(gui.imageError)
         ImGui::TextCenteredColor(
             screenshotPNG_strerror(gui.imageError).c_str(), 0xff0000);
@@ -1406,6 +1400,7 @@ void RecordWindow::renderContents(mqMachine *omach)
 
     // TODO: Move to update
     if(backend.status() != MQ_RECORD_STATUS_PAUSED &&
+       backend.status() != MQ_RECORD_STATUS_START_WAIT_EMU &&
        backend.status() != MQ_RECORD_STATUS_NOTSTARTED) {
         if(gui.lastDisplayFrame.dirty) {
             if(!backend.frame_add(&gui.lastDisplayFrame))
@@ -1422,25 +1417,20 @@ void RecordWindow::renderContents(mqMachine *omach)
     bool paused = (backend.status() == MQ_RECORD_STATUS_PAUSED);
 
     if(ImGui::ButtonWSized("Start", w_button, !notstarted))
-        backend.setStatus(MQ_RECORD_STATUS_START_WAIT_EMU);
+        gui.actions.recordStart = true;
     ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
-    if(recording && ImGui::ButtonWSized("Pause", w_button)) {
-        if(!backend.pause())
-            mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
-    }
-    else if(paused && ImGui::ButtonWSized("Continue", w_button)) {
-        if(!backend.unpause())
-            mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
-    }
+    if(recording && ImGui::ButtonWSized("Pause", w_button))
+        gui.actions.recordPause = true;
+    else if(paused && ImGui::ButtonWSized("Continue", w_button))
+        gui.actions.recordUnpause = true;
+
     else if(!recording && !paused)
         ImGui::ButtonWSized("Pause", w_button, true);
     ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
-    if(ImGui::ButtonWSized("Stop", w_button, notstarted)) {
-        if(!backend.stop())
-            mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
-    }
+    if(ImGui::ButtonWSized("Stop", w_button, notstarted))
+        gui.actions.recordStop = true;
     ImGui::Spacing();
 
     //---

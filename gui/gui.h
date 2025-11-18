@@ -59,6 +59,14 @@ struct GUIActions
     std::map<uint, bool> physicalKeysAssigned;
     /* Keys whose status should be reassigned, identified by logical keycode */
     std::map<mqKeyboardKeycode, bool> logicalKeysAssigned;
+
+    /* Take a screenshot */
+    bool recordScreenshot = false;
+    /* Start, pause, unpause, and stop video */
+    bool recordStart = false;
+    bool recordPause = false;
+    bool recordUnpause = false;
+    bool recordStop = false;
 };
 
 /* Set of windows. Each window type can instanced on multiple machines. */
@@ -110,6 +118,8 @@ struct GUI
     /* Copy of the last frame obtained from the machine. `dirty` indicates
        whether the frame is new for the recorder. */
     mqDisplay lastDisplayFrame;
+    /* Whether listDisplayFrame is new for the render function. */
+    bool lastDisplayFrameNew = false;
 
     /* Function to generate the substitutions in output file names: %ADDIN%,
        %DATE%, etc. */

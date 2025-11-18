@@ -100,29 +100,13 @@ static void render(void)
         mq_machine_lock(mach);
         // printf("[Main] Locked machine for render\n");
         emu0->omach = mq_machine_createObserver(mach);
-
-        /* Make a copy of the current frame */
-        bool frameUpdate = false;
-        if(mach->display && mach->display->dirty) {
-            mqDisplay *d = mach->display;
-            gui.lastDisplayFrame.format = d->format;
-            gui.lastDisplayFrame.width  = d->width;
-            gui.lastDisplayFrame.height = d->height;
-            gui.lastDisplayFrame.data = memdup(
-                d->data, mq_display_framebufferSize(d));
-            gui.lastDisplayFrame.dirty = true;
-
-            frameUpdate = true;
-            mq_display_setDirty(d, false);
-        }
-
         // printf("[Main] Unlocking machine after render\n");
         mq_machine_unlock(mach);
         // printf("[Main] Unlocked machine after render\n");
 
         /* Now that we have a local copy of the framebuffer, upload it to the
            GPU (while the machine can keep working) */
-        if(frameUpdate) {
+        if(gui.lastDisplayFrameNew) {
             mqDisplay const *d = &gui.lastDisplayFrame;
             gui.displayTexture->bind();
             if(d->format == MQ_DISPLAY_FORMAT_L8) {
@@ -139,6 +123,7 @@ static void render(void)
                 printf("warning: display not updated: unknown format!\n");
 
             gui.DGW.setInherentScale(d->width <= 128 ? 3 : 1);
+            gui.lastDisplayFrameNew = false;
             render_needed = std::max(render_needed, 1);
         }
     }
@@ -265,6 +250,34 @@ static int update(void)
     mq_machine_unlock(emu0->mach);
     // printf("[Main] Unlocked machine after update\n");
 
+    if(gui.actions.recordScreenshot) {
+        gui.imageOutputPath.resolve(true);
+        printf("-> '%s'\n", gui.imageOutputPath.resolvedPath().c_str());
+        gui.imageError = screenshotPNG(&gui.lastDisplayFrame, gui.imageScale,
+            gui.imageOutputPath.resolvedPath());
+        /* Resolve again to update the warning */
+        gui.imageOutputPath.resolve(true);
+    }
+
+#if MQ_VIDEO_FFMPEG
+    if(gui.actions.recordStart) {
+        // TODO: Change to .start()
+        gui.recorder.setStatus(MQ_RECORD_STATUS_START_WAIT_EMU);
+    }
+    if(gui.actions.recordPause) {
+        if(!gui.recorder.pause())
+            mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
+    }
+    if(gui.actions.recordUnpause) {
+        if(!gui.recorder.unpause())
+            mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
+    }
+    if(gui.actions.recordStop) {
+        if(!gui.recorder.stop())
+            mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
+    }
+#endif
+
     gui.actions = GUIActions();
     return 0;
 }
@@ -273,6 +286,22 @@ static int update(void)
 void update_machine(mqMachine *mach, bool startRunning)
 {
     bool may_enable_watch = false;
+
+    /* Make a copy of the current frame */
+    if(mach->display && mach->display->dirty) {
+        mqDisplay *d = mach->display;
+        gui.lastDisplayFrame.format = d->format;
+        gui.lastDisplayFrame.width  = d->width;
+        gui.lastDisplayFrame.height = d->height;
+        gui.lastDisplayFrame.data =
+            memdup(d->data, mq_display_framebufferSize(d));
+        /* The frame is new for the recorder */
+        gui.lastDisplayFrame.dirty = true;
+        /* The frame is new for the GUI */
+        gui.lastDisplayFrameNew = true;
+
+        mq_display_setDirty(d, false);
+    }
 
     if(auto i = gui.actions.machineInitialize) {
         gui.ResetState();
