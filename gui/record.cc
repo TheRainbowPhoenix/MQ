@@ -36,15 +36,21 @@ bool mqRecord::start(mqDisplay *display, std::string const &filename)
 bool mqRecord::frame_add(mqDisplay *display)
 {
     // mq_log(MQ_LOG_DEBUG, "mqRecord::frame_add() - try to add frame");
-    m_cache.record_lasterror = m_ffmpeg.frame_add(display);
-    if(m_cache.record_lasterror != 0)
+    m_cache.record_lasterror = m_ffmpeg.frame_add(display, false);
+    if(m_cache.record_lasterror < 0) {
         mq_log(MQ_LOG_ERROR, "mqRecord::frame_add() - fails");
+    } else{
+        // workaround to avoid the special "positive" value returned by
+        // `frame_add()` which indicate that the frame has not been written
+        // due to a "too short amount of time between two frames"
+        m_cache.record_lasterror = 0;
+    }
     return (m_cache.record_lasterror == 0);
 }
 
-bool mqRecord::pause()
+bool mqRecord::pause(mqDisplay *display)
 {
-    m_cache.record_lasterror = m_ffmpeg.pause();
+    m_cache.record_lasterror = m_ffmpeg.pause(display);
     if(m_cache.record_lasterror != 0)
         return false;
 
@@ -52,9 +58,9 @@ bool mqRecord::pause()
     return true;
 }
 
-bool mqRecord::unpause()
+bool mqRecord::unpause(mqDisplay *display)
 {
-    m_cache.record_lasterror = m_ffmpeg.unpause();
+    m_cache.record_lasterror = m_ffmpeg.unpause(display);
     if(m_cache.record_lasterror != 0)
         return false;
 
@@ -62,14 +68,14 @@ bool mqRecord::unpause()
     return true;
 }
 
-bool mqRecord::stop()
+bool mqRecord::stop(mqDisplay *display)
 {
     mq_log(MQ_LOG_DEBUG, "stopping recording");
     m_cache.record_lasterror = 0;
 
     if(m_status == MQ_RECORD_STATUS_RECORDING ||
        m_status == MQ_RECORD_STATUS_PAUSED) {
-        m_cache.record_lasterror = m_ffmpeg.stop();
+        m_cache.record_lasterror = m_ffmpeg.stop(display);
     }
 
     m_status = MQ_RECORD_STATUS_NOTSTARTED;

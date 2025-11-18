@@ -80,11 +80,11 @@ public:
     /* video primitives */
     bool start(mqDisplay *display, std::string const &path);
     bool frame_add(mqDisplay *display);
-    bool unpause();
-    bool pause();
-    bool debug();
-    bool stop();
+    bool unpause(mqDisplay *display);
+    bool pause(mqDisplay *display);
+    bool stop(mqDisplay *display);
     std::string lasterror();
+    bool debug();
 
     /* Get recording statistics. Always returns a non-NULL pointer unless the
        current state is NOTSTARTED. Not all fields might be available. */

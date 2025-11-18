@@ -50,10 +50,10 @@ public:
         char const *encoder,
         int scale
     );
-    int frame_add(mqDisplay const*display);
-    int unpause();
-    int pause();
-    int stop();
+    int frame_add(mqDisplay const*display, bool force);
+    int unpause(mqDisplay *display);
+    int pause(mqDisplay *display);
+    int stop(mqDisplay *display);
     int debug();
 
     std::string err2str(int err);
@@ -69,7 +69,8 @@ private:
     int ffmpeg_output_config(char const *filename);
     int ffmpeg_output_frame_write(AVFrame *frame);
     int ffmpeg_scale_config();
-    int ffmpeg_scale_conv(AVFrame **frame_out, mqDisplay const *display);
+    int ffmpeg_scale_conv(mqDisplay const *display);
+    int ffmpeg_scale_get_frame(AVFrame **frame_out, bool force);
     int ffmpeg_error(int averror, char const *format, ...);
 
     // core information
@@ -86,6 +87,7 @@ private:
         AVFrame *frame_in;
         enum AVPixelFormat pix_fmt_in;
         enum AVPixelFormat pix_fmt_out;
+        u64 time_ms_ref;
         int iframe;
     } m_core;
 

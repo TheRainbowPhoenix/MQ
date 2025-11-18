@@ -245,7 +245,7 @@ void GUI::ResetState()
         recorder.status() == MQ_RECORD_STATUS_PAUSED
     ) {
         mq_log(MQ_LOG_WARNING, "Record: stopping current recording");
-        if(!recorder.stop())
+        if(!recorder.stop(&gui.lastDisplayFrame))
             mq_log(MQ_LOG_ERROR, "mqRecord::stop() - fail");
     }
     if(recorder.continuousRecord()) {
@@ -1436,7 +1436,7 @@ void RecordWindow::renderContents(mqMachine *omach)
     // TODO: Move to update
     if(omach->cyclesPending == 0) {
         if(gui.actions.machineSetPendingCycles == 0) {
-            if(!backend.pause())
+            if(!backend.pause(&gui.lastDisplayFrame))
                 mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
         }
     }

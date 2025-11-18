@@ -403,20 +403,13 @@ scale_config_error:
     return err;
 }
 
-int mqFFmpeg::ffmpeg_scale_conv(
-    AVFrame **frame_out,
-    mqDisplay const *display
-) {
+int mqFFmpeg::ffmpeg_scale_conv(mqDisplay const *display)
+{
     u8 *vram8;
     int idx_out;
     int idx_in;
-    u64 time_ms_ref_curr;
-    int iframe;
     int err;
 
-    if(frame_out == NULL)
-        return ffmpeg_error(EINVAL, "missing frame_out (internal error)");
-    *frame_out = NULL;
     if(display == NULL || display->data == NULL)
         return ffmpeg_error(EINVAL, "not display data available");
     if(display->width != m_config.width_in)
@@ -468,8 +461,33 @@ int mqFFmpeg::ffmpeg_scale_conv(
     );
     if (err < 0)
         return ffmpeg_error(err, "unable to convert VRAM to OUT frame");
+    return 0;
+}
 
-    // get the final OUT frame
+int mqFFmpeg::ffmpeg_scale_get_frame(AVFrame **frame_out, bool force)
+{
+    u64 time_ms_ref_curr;
+    int iframe;
+    int err;
+
+    if(frame_out == NULL)
+        return ffmpeg_error(EINVAL, "missing frame_out (internal error)");
+
+    // update frame time (PTS) information
+    time_ms_ref_curr = mq_utils_get_time_ms();
+    if(m_core.time_ms_ref == 0 || force) {
+        m_core.iframe++;
+    } else {
+        iframe  = (time_ms_ref_curr - m_core.time_ms_ref);
+        iframe /= (1000 / m_config.fps);
+        if(iframe == 0)
+            return 1;
+        m_core.iframe += iframe;
+    }
+    m_core.time_ms_ref = time_ms_ref_curr;
+    m_core.frame_out->pts = m_core.iframe;
+
+    // get the final OUT frame and force PTS update
     *frame_out = m_core.frame_out;
     if(m_core.hwdevice_ctx) {
         err = av_hwframe_transfer_data(
@@ -481,23 +499,7 @@ int mqFFmpeg::ffmpeg_scale_conv(
             return ffmpeg_error(err, "unable to transfert OUT to OUT_HW");
         *frame_out = m_core.frame_out_hw;
     }
-
-    // The PTS of the frame are just in a reference unit,
-    // unrelated to the format we are using. We set them,
-    // for instance, as the corresponding frame number.
-    time_ms_ref_curr = mq_utils_get_time_ms();
-    if(m_time_ms_ref == 0) {
-        (*frame_out)->pts = m_core.iframe++;
-    } else {
-        iframe = (time_ms_ref_curr - m_time_ms_ref) / (1000 / m_config.fps);
-        if(iframe == 0) {
-            // mq_log(MQ_LOG_ERROR, "ffmpeg::frame_add() - too short delta");
-            return 1; //ffmpeg_error(EINVAL, "too short timing");
-        }
-        m_core.iframe += iframe;
-        (*frame_out)->pts = m_core.iframe;
-    }
-    m_time_ms_ref = time_ms_ref_curr;
+    (*frame_out)->pts = m_core.iframe;
     return 0;
 }
 
@@ -589,6 +591,8 @@ int mqFFmpeg::ffmpeg_error(int averror, char const *format, ...)
 
 std::string mqFFmpeg::err2str(int err)
 {
+    if (err > 0)
+        return "err2str: error";
     //fixme: properly handle error
     (void)err;
     return m_error_info;
@@ -635,6 +639,7 @@ int mqFFmpeg::start(
     m_core.frame_out_hw = NULL;
     m_core.frame_out = NULL;
     m_core.frame_in = NULL;
+    m_core.time_ms_ref = 0;
     m_core.iframe = 0;
 
     // codec configuration
@@ -657,22 +662,34 @@ int mqFFmpeg::start(
         mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - scale fails %d", ret);
         return ret;
     }
-    return 0;
+
+    // force write the first frame
+    ret = frame_add(display, true);
+    if(ret < 0)
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - first frame fail");
+    return ret;
 }
 
-int mqFFmpeg::frame_add(mqDisplay const *display)
+int mqFFmpeg::frame_add(mqDisplay const *display, bool force)
 {
     AVFrame *frame_out;
     int err;
 
-    err = ffmpeg_scale_conv(&frame_out, display);
+    if(m_paused)
+        return 0;
+    err = ffmpeg_scale_conv(display);
+    if(err < 0) {
+        mq_log(MQ_LOG_ERROR, "unable to convert/scale display");
+        return err;
+    }
+    err = ffmpeg_scale_get_frame(&frame_out, force);
     if(err < 0) {
         mq_log(MQ_LOG_ERROR, "unable to convert/scale display");
         return err;
     }
     if(err > 0) {
         // mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
-        return 0;
+        return 1;
     }
     err = ffmpeg_output_frame_write(frame_out);
     if(err != 0) {
@@ -682,16 +699,19 @@ int mqFFmpeg::frame_add(mqDisplay const *display)
     return 0;
 }
 
-int mqFFmpeg::pause()
+int mqFFmpeg::pause(mqDisplay *display)
 {
+    if(frame_add(display, false) < 0)
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::pause() - unable to write frame");
     m_paused = true;
     return 0;
 }
 
-int mqFFmpeg::unpause()
+int mqFFmpeg::unpause(mqDisplay *display)
 {
-    m_time_ms_ref = 0;
     m_paused = false;
+    if(frame_add(display, true) < 0)
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::unpause() - unable to write frame");
     return 0;
 }
 
@@ -704,12 +724,20 @@ void mqFFmpeg::stats(struct mqFFmpegStats *stats)
     stats->time_min = ((stats->total_ms / 1000) / 60) % 60;
 }
 
-int mqFFmpeg::stop()
+int mqFFmpeg::stop(mqDisplay *display)
 {
     int err;
 
     if(!m_core.format_ctx)
         return 0;
+
+    // force the last frame. This is important because some addin like
+    // gintctl refresh the screen only when it's needed. But if you start the
+    // recording and don't touch to anything, except the first frame, no
+    // new frame is generated which "break" the video and skip the last
+    // time
+    if(frame_add(display, true) != 0)
+        mq_log(MQ_LOG_ERROR, "unable to add the last frame");
 
     // force-flush pending frame
     while (true) {

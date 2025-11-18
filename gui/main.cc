@@ -265,15 +265,15 @@ static int update(void)
         gui.recorder.setStatus(MQ_RECORD_STATUS_START_WAIT_EMU);
     }
     if(gui.actions.recordPause) {
-        if(!gui.recorder.pause())
+        if(!gui.recorder.pause(&gui.lastDisplayFrame))
             mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
     if(gui.actions.recordUnpause) {
-        if(!gui.recorder.unpause())
+        if(!gui.recorder.unpause(&gui.lastDisplayFrame))
             mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
     if(gui.actions.recordStop) {
-        if(!gui.recorder.stop())
+        if(!gui.recorder.stop(&gui.lastDisplayFrame))
             mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
 #endif
@@ -560,7 +560,7 @@ int main(int argc, char **argv)
     gui.DGW.cleanup();
 
 #if MQ_VIDEO_FFMPEG
-    gui.recorder.stop();
+    gui.recorder.stop(&gui.lastDisplayFrame);
 #endif
     watch_quit(&gui.watch_info);
 
