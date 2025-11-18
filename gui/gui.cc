@@ -110,6 +110,7 @@ void GUI::Render(mqController *controller)
             bool notstarted = (status == MQ_RECORD_STATUS_NOTSTARTED);
             bool recording = (status == MQ_RECORD_STATUS_RECORDING);
             bool paused = (status == MQ_RECORD_STATUS_PAUSED);
+            bool waitemu = (status == MQ_RECORD_STATUS_START_WAIT_EMU);
 
             if(initialized && notstarted) {
                 if(ImGui::IconButton(7, "Start recording"))
@@ -145,6 +146,12 @@ void GUI::Render(mqController *controller)
                 ImGui::TextUnformatted(buffer);
                 if(paused)
                     ImGui::PopStyleColor();
+            }
+            else if(waitemu) {
+                ImGui::BeginDisabled();
+                ImGui::MoveCursorScreenPos({0, 3});
+                ImGui::TextUnformatted("Waiting emulation start...");
+                ImGui::EndDisabled();
             }
 #endif
         }
@@ -1418,41 +1425,7 @@ void RecordWindow::renderContents(mqMachine *omach)
     ImGui::OutputPathPatternEditor(gui.videoOutputPath, disabled);
     ImGui::Spacing();
 
-    /* delayed initialisation */
-    // TODO: Move to update
-    if (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU) {
-        if (omach->cyclesPending != 0) {
-            gui.videoOutputPath.resolve(true);
-            if(!backend.start(display, gui.videoOutputPath.resolvedPath())) {
-                mq_log(MQ_LOG_ERROR, "backend.start() - fails");
-                backend.setStatus(MQ_RECORD_STATUS_NOTSTARTED);
-            } else {
-                backend.debug();
-                backend.setStatus(MQ_RECORD_STATUS_RECORDING);
-            }
-        }
-    }
-    /* start/pause/stop button */
-    // TODO: Move to update
-    if(omach->cyclesPending == 0) {
-        if(gui.actions.machineSetPendingCycles == 0) {
-            if(!backend.pause(&gui.lastDisplayFrame))
-                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror());
-        }
-    }
-
-    // TODO: Move to update
-    if(backend.status() != MQ_RECORD_STATUS_PAUSED &&
-       backend.status() != MQ_RECORD_STATUS_START_WAIT_EMU &&
-       backend.status() != MQ_RECORD_STATUS_NOTSTARTED) {
-        if(gui.lastDisplayFrame.dirty) {
-            if(!backend.frame_add(&gui.lastDisplayFrame))
-                mq_log(MQ_LOG_ERROR, "%s", backend.lasterror().c_str());
-            gui.lastDisplayFrame.dirty = false;
-        }
-    }
-
-    //---
+    //--
 
     bool notstarted = (backend.status() == MQ_RECORD_STATUS_NOTSTARTED);
     bool waitemu = (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU);
