@@ -32,6 +32,7 @@ void GUI::Render(mqController *controller)
     mqMachine *omach = controller->omach;
     bool paused = omach->cyclesPending == 0;
     bool stuck = omach->stuck;
+    bool initialized = omach->initialized;
     bool canRunMachine = omach->initialized && !stuck;
 
     bool open = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal);
@@ -76,6 +77,7 @@ void GUI::Render(mqController *controller)
             ImGui::CustomMenuSeparator();
             ImGui::SameLine(0, 6);
 
+            auto cursor = ImGui::GetCursorScreenPos();
             ImGui::BeginDisabled(!canRunMachine);
             pauseUnpause |= paused
                 ? ImGui::IconButton(0, "Run (Ctrl+Space)")
@@ -94,6 +96,57 @@ void GUI::Render(mqController *controller)
                 ImGui::TextColored({1,.3,.3,1}, "Stuck!");
             else
                 ImGui::Text(paused ? "Paused" : "Running...");
+
+            ImGui::SetCursorScreenPos({cursor.x + 140, cursor.y});
+            ImGui::CustomMenuSeparator();
+            ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(5, "Screenshot", !initialized))
+                gui.actions.recordScreenshot = true;
+            ImGui::SameLine(0, 6);
+
+#if MQ_VIDEO_FFMPEG
+            int status = gui.recorder.status();
+            bool notstarted = (status == MQ_RECORD_STATUS_NOTSTARTED);
+            bool recording = (status == MQ_RECORD_STATUS_RECORDING);
+            bool paused = (status == MQ_RECORD_STATUS_PAUSED);
+
+            if(initialized && notstarted) {
+                if(ImGui::IconButton(7, "Start recording"))
+                    gui.actions.recordStart = true;
+            }
+            else if(initialized && paused) {
+                if(ImGui::IconButton(7, "Resume recording"))
+                    gui.actions.recordUnpause = true;
+            }
+            else ImGui::IconButton(7, "Start recording", true);
+            ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(8, "Pause recording", !recording))
+                gui.actions.recordPause = true;
+            ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(9, "Stop recording", notstarted))
+                gui.actions.recordStop = true;
+            ImGui::SameLine(0, 6);
+
+            if(recording || paused) {
+                char buffer[128];
+                mqRecordStats const *stats = gui.recorder.stats();
+                snprintf(buffer, sizeof buffer, "%02d:%02d:%02d",
+                    stats->time_min, stats->time_sec, stats->time_ms);
+
+                auto color =
+                    ImGui::GetStyle().Colors[ImGuiCol_PlotLinesHovered];
+                if(paused)
+                    ImGui::PushStyleColor(ImGuiCol_Text, color);
+
+                ImGui::MoveCursorScreenPos({0, 3});
+                ImGui::TextUnformatted(buffer);
+                if(paused)
+                    ImGui::PopStyleColor();
+            }
+#endif
         }
         ImGui::EndCustomMenuChild();
     }
@@ -1292,8 +1345,8 @@ void RecordWindow::renderContents(mqMachine *omach)
     ImGui::OutputPathPatternEditor(gui.imageOutputPath, disabled);
 
     ImGui::Spacing();
-    gui.actions.recordScreenshot =
-        ImGui::ButtonWSized("Take Screenshot", -1, uninit);
+    if(ImGui::ButtonWSized("Take Screenshot", -1, uninit))
+        gui.actions.recordScreenshot = true;
     if(gui.imageError)
         ImGui::TextCenteredColor(
             screenshotPNG_strerror(gui.imageError).c_str(), 0xff0000);
@@ -1365,16 +1418,6 @@ void RecordWindow::renderContents(mqMachine *omach)
     ImGui::OutputPathPatternEditor(gui.videoOutputPath, disabled);
     ImGui::Spacing();
 
-    /* no addin selected */
-    if(!omach->initialized) {
-        ImGui::ButtonWSized("Start", w_button, true);
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        ImGui::ButtonWSized("Pause", w_button, true);
-        ImGui::SameLine(0, style.ItemInnerSpacing.x);
-        ImGui::ButtonWSized("Stop", w_button, true);
-        return;
-    }
-
     /* delayed initialisation */
     // TODO: Move to update
     if (backend.status() == MQ_RECORD_STATUS_START_WAIT_EMU) {
@@ -1416,17 +1459,29 @@ void RecordWindow::renderContents(mqMachine *omach)
     bool recording = (backend.status() == MQ_RECORD_STATUS_RECORDING);
     bool paused = (backend.status() == MQ_RECORD_STATUS_PAUSED);
 
-    if(ImGui::ButtonWSized("Start", w_button, !notstarted))
-        gui.actions.recordStart = true;
+    /* no addin selected */
+    if(!omach->initialized) {
+        ImGui::ButtonWSized("Start", w_button, true);
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        ImGui::ButtonWSized("Pause", w_button, true);
+        ImGui::SameLine(0, style.ItemInnerSpacing.x);
+        ImGui::ButtonWSized("Stop", w_button, true);
+        return;
+    }
+
+    if(notstarted) {
+        if(ImGui::ButtonWSized("Start", w_button))
+            gui.actions.recordStart = true;
+    }
+    else if(paused) {
+        if(ImGui::ButtonWSized("Resume", w_button))
+            gui.actions.recordUnpause = true;
+    }
+    else ImGui::ButtonWSized("Start", w_button, true);
     ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
-    if(recording && ImGui::ButtonWSized("Pause", w_button))
+    if(ImGui::ButtonWSized("Pause", w_button, !recording))
         gui.actions.recordPause = true;
-    else if(paused && ImGui::ButtonWSized("Continue", w_button))
-        gui.actions.recordUnpause = true;
-
-    else if(!recording && !paused)
-        ImGui::ButtonWSized("Pause", w_button, true);
     ImGui::SameLine(0, style.ItemInnerSpacing.x);
 
     if(ImGui::ButtonWSized("Stop", w_button, notstarted))
