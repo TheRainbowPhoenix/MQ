@@ -1205,6 +1205,8 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         {ImGuiKey_RightArrow,   MQ_KEY_RIGHT},
         {ImGuiKey_LeftShift,    MQ_KEY_SHIFT},
         {ImGuiKey_RightShift,   MQ_KEY_SHIFT},
+        {ImGuiKey_LeftAlt,      MQ_KEY_ALPHA},
+        {ImGuiKey_RightAlt,     MQ_KEY_ALPHA},
         {ImGuiKey_Enter,        MQ_KEY_EXE},
         {ImGuiKey_KeypadEnter,  MQ_KEY_EXE},
         {ImGuiKey_Escape,       MQ_KEY_EXIT},
