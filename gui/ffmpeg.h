@@ -87,6 +87,8 @@ private:
         AVFrame *frame_in;
         enum AVPixelFormat pix_fmt_in;
         enum AVPixelFormat pix_fmt_out;
+        AVRational framerate;
+        AVRational time_base;
         u64 time_ms_ref;
         int iframe;
     } m_core;

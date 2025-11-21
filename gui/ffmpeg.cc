@@ -89,6 +89,10 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     m_core.codec_opt = NULL;
     m_core.hwdevice_ctx = NULL;
 
+    // generate PTS unit information
+    m_core.time_base = (AVRational){ 1, m_config.fps };
+    m_core.framerate = (AVRational){ m_config.fps, 1 };
+
     // try to find the provided codec
     avcodec = avcodec_find_encoder_by_name(encoder_name);
     if (avcodec == NULL)
@@ -100,7 +104,9 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
         return ffmpeg_error(ENOMEM, "avcodec avcodec_ctx alloc fail");
     avcodec_ctx->width     = m_config.width_out;
     avcodec_ctx->height    = m_config.height_out;
-    avcodec_ctx->time_base = (AVRational){1,m_config.fps};
+    avcodec_ctx->time_base = m_core.time_base;
+    avcodec_ctx->framerate = m_core.framerate;
+    avcodec_ctx->bit_rate  = 400000;
 
     // per-encoder codec context configuration
     avcodec_opt = NULL;
@@ -210,7 +216,7 @@ int mqFFmpeg::ffmpeg_output_config(char const *pathname)
         err = ffmpeg_error(ENOMEM, "Could not allocate stream memory");
         goto file_config_error;
     }
-    stream->time_base = (AVRational){ 1, m_config.fps };
+    stream->time_base = m_core.time_base;
     err = avcodec_parameters_from_context(stream->codecpar, m_core.codec_ctx);
     if (err < 0) {
         ffmpeg_error(err, "Could not initialize stream parameters");
@@ -286,19 +292,15 @@ int mqFFmpeg::ffmpeg_output_frame_write(AVFrame *frame)
         // uses (third argument).
         av_packet_rescale_ts(
             m_core.packet,
-            (AVRational){ 1, m_config.fps },
+            m_core.time_base,
             m_core.stream_video->time_base
         );
         m_core.packet->stream_index = m_core.stream_video->index;
-        // mq_log(
-        //     MQ_LOG_DEBUG,
-        //     "Writing frame %d (size = %d)",
-        //     m_core.iframe,
-        //     m_core.packet->size
-        // );
 
         // Write the encoded frame to the mp4 file.
-        av_interleaved_write_frame(m_core.format_ctx, m_core.packet);
+        err = av_interleaved_write_frame(m_core.format_ctx, m_core.packet);
+        if (err != 0)
+            ffmpeg_error(err, "interleaved_write_frame error");
         av_packet_unref(m_core.packet);
     }
     return err;
@@ -472,16 +474,20 @@ int mqFFmpeg::ffmpeg_scale_get_frame(AVFrame **frame_out, bool force)
 
     if(frame_out == NULL)
         return ffmpeg_error(EINVAL, "missing frame_out (internal error)");
+    *frame_out = NULL;
 
     // update frame time (PTS) information
     time_ms_ref_curr = mq_utils_get_time_ms();
-    if(m_core.time_ms_ref == 0 || force) {
-        m_core.iframe++;
+    if(m_core.time_ms_ref == 0) {
+        m_core.iframe = 0;
     } else {
         iframe  = (time_ms_ref_curr - m_core.time_ms_ref);
         iframe /= (1000 / m_config.fps);
-        if(iframe == 0)
-            return 1;
+        if(iframe == 0) {
+            if(!force)
+                return 1;
+            iframe = 1;
+        }
         m_core.iframe += iframe;
     }
     m_core.time_ms_ref = time_ms_ref_curr;
@@ -664,6 +670,7 @@ int mqFFmpeg::start(
     }
 
     // force write the first frame
+    m_core.time_ms_ref = 0;
     ret = frame_add(display, true);
     if(ret < 0)
         mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - first frame fail");
