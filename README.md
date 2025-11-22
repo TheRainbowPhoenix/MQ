@@ -20,7 +20,8 @@ Clone this repository recursively. Also install [Azur](https://git.planet-casio.
     -DCMAKE_BUILD_TYPE=[Debug|Release] \
     [-DMQ_DISABLE_OPTIMIZATIONS=1] \
     [-DMQ_PROFILING_GPROF=1] \
-    [-DMQ_PROFILING_TRACY=1]
+    [-DMQ_PROFILING_TRACY=1] \
+    [-DMQ_VIDEO_FFMPEG=0]
 % make -C build-linux
 ```
 
@@ -29,6 +30,8 @@ Optimizations are enabled in all modes by default, as the emulator is almost unu
 Debug modes can enable profiling.
 - Select `-DMQ_PROFILING_GPROF` to profile with gprof; running the executable will produce `gmon.out` in the current folder.
 - Select `-DMQ_PROFILING_TRACY` to enable [tracy](https://github.com/wolfpld/tracy), which must be cloned in `3rdparty/tracy`.
+
+Linux builds enable video capture with [ffmpeg](https://ffmpeg.org/) libraries by default. This requires `libswscale`, `libavutil`, `libavformat` and `libavcodec`. If you don't have these libraries you can disable the feature with `-DMQ_VIDEO_FFMPEG=0`.
 
 ## Building for emscripten
 

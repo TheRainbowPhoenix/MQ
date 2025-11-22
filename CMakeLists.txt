@@ -161,7 +161,14 @@ if(MQ_PROFILING_TRACY)
 endif()
 
 if(MQ_VIDEO_FFMPEG)
-  target_link_libraries(mq PRIVATE -lswscale -lavutil -lavformat -lavcodec)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(libswscale REQUIRED libswscale IMPORTED_TARGET)
+  pkg_check_modules(libavutil REQUIRED libavutil IMPORTED_TARGET)
+  pkg_check_modules(libavformat REQUIRED libavformat IMPORTED_TARGET)
+  pkg_check_modules(libavcodec REQUIRED libavcodec IMPORTED_TARGET)
+  target_link_libraries(mq PRIVATE
+    PkgConfig::libswscale PkgConfig::libavutil PkgConfig::libavformat
+    PkgConfig::libavcodec)
 endif()
 
 if(AZUR_PLATFORM STREQUAL linux)
