@@ -78,13 +78,19 @@ public:
     // TODO: Option: [x] Pause recording when program is paused
 
     /* video primitives */
-    bool start(mqDisplay *display, std::string const &path);
+    bool start(
+        mqDisplay *display,
+        std::string const &path,
+        int fps,
+        bool dyn_pts
+    );
     bool frame_add(mqDisplay *display);
     bool unpause(mqDisplay *display);
     bool pause(mqDisplay *display);
     bool stop(mqDisplay *display);
-    std::string lasterror();
-    bool debug();
+
+    bool debug() { return m_ffmpeg.debug(); }
+    std::string lasterror() { return m_ffmpeg.lasterror(); }
 
     /* Get recording statistics. Always returns a non-NULL pointer unless the
        current state is NOTSTARTED. Not all fields might be available. */
@@ -102,13 +108,11 @@ private:
     int m_encoder = 0;
     /* Continue recording to a new file after program resets */
     bool m_continuousRecord = false;
+    /* Use dynamic PTS encoding */
+    bool m_dyn_pts;
+    /* record_stats */
+    mqRecordStats m_record_stats;
 
-    // cache information
-    struct {
-        int screenshot_lasterror;
-        int record_lasterror;
-        mqRecordStats record_stats;
-    } m_cache;
 };
 
 #endif /* MQ_VIDEO_FFMPEG */

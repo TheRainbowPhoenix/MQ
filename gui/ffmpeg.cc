@@ -59,12 +59,12 @@ int mqFFmpeg::ffmpeg_hwdevice_config(
     hw_frames_ctx->initial_pool_size = 20;
     err = av_hwframe_ctx_init(hw_frames_ref);
     if(err < 0) {
-        ffmpeg_error(err, "Failed to initialize hwframe");
+        ffmpeg_error(ENOMEM, "Failed to initialize hwframe");
         goto hwdevice_config_error;
     }
     codec_ctx->hw_frames_ctx = av_buffer_ref(hw_frames_ref);
     if (!codec_ctx->hw_frames_ctx) {
-        ffmpeg_error(ENOMEM, "Failed allocate hwframes");
+        ffmpeg_error(err, "Failed allocate hwframes");
         goto hwdevice_config_error;
     }
     av_buffer_unref(&hw_frames_ref);
@@ -77,7 +77,7 @@ hwdevice_config_error:
 
 //=== ffmpeg codec ===========================================================//
 
-int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
+bool mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
 {
     AVDictionary *avcodec_opt   = NULL;
     AVCodecContext *avcodec_ctx = NULL;
@@ -89,10 +89,14 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     m_core.codec_opt = NULL;
     m_core.hwdevice_ctx = NULL;
 
+    // generate PTS unit information
+    m_core.time_base = (AVRational){ 1, m_config.fps };
+    m_core.framerate = (AVRational){ m_config.fps, 1 };
+
     // try to find the provided codec
     avcodec = avcodec_find_encoder_by_name(encoder_name);
     if (avcodec == NULL)
-        return ffmpeg_error(EINVAL, "Could not find the provided codec");
+        return ffmpeg_error(ENOMEM, "Could not find the provided codec");
 
     // allocate and default init codec context
     avcodec_ctx = avcodec_alloc_context3(avcodec);
@@ -100,7 +104,8 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
         return ffmpeg_error(ENOMEM, "avcodec avcodec_ctx alloc fail");
     avcodec_ctx->width     = m_config.width_out;
     avcodec_ctx->height    = m_config.height_out;
-    avcodec_ctx->time_base = (AVRational){1,m_config.fps};
+    avcodec_ctx->time_base = m_core.time_base;
+    avcodec_ctx->framerate = m_core.framerate;
 
     // per-encoder codec context configuration
     avcodec_opt = NULL;
@@ -117,10 +122,8 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
             &hwdevice_ctx,
             AV_HWDEVICE_TYPE_VULKAN
         );
-        if(err < 0) {
-            ffmpeg_error(err, "Failed to setup Vulkan hwdevice");
+        if(err < 0)
             goto codec_config_error;
-        }
     }
     else if(strstr(avcodec->name, "_vaapi")) {
         m_core.pix_fmt_out = AV_PIX_FMT_NV12;
@@ -130,10 +133,8 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
             &hwdevice_ctx,
             AV_HWDEVICE_TYPE_VAAPI
         );
-        if(err < 0) {
-            ffmpeg_error(err, "Failed to setup VAAPI hwdevice");
+        if(err < 0)
             goto codec_config_error;
-        }
     }
     else if(
         strstr(avcodec->name, "libvpx-vp9") ||
@@ -144,8 +145,7 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
         avcodec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
     }
     else {
-        err = ffmpeg_error(
-                EINVAL, "unsupported encoder \"%s\"", avcodec->name);
+        ffmpeg_error(EINVAL, "unsupported encoder \"%s\"", avcodec->name);
         goto codec_config_error;
     }
 
@@ -153,7 +153,6 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     err = avcodec_open2(avcodec_ctx, avcodec, &avcodec_opt);
     if(err < 0) {
         ffmpeg_error(err, "unable to open the codec");
-        // mq_log(MQ_LOG_DEBUG, "ffmpeg_codec_config() : error %d %s", err, av_err2str(err));
         goto codec_config_error;
     }
 
@@ -161,32 +160,30 @@ int mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     m_core.codec_ctx = avcodec_ctx;
     m_core.codec_opt = avcodec_opt;
     m_core.hwdevice_ctx = hwdevice_ctx;
-    return 0;
+    return true;
 
 codec_config_error:
     av_dict_free(&avcodec_opt);
-    return err;
+    return false;
 }
 
 /* be careful when calling this method. No check are performed on the
  * current backend state */
-int mqFFmpeg::ffmpeg_codec_exist(const char *codec_name)
+bool mqFFmpeg::ffmpeg_codec_exist(const char *codec_name)
 {
-    int err;
-
     m_config.fps = 60;
     m_config.width_out = 640;
     m_config.height_out = 360;
-    err = ffmpeg_codec_config(codec_name);
+    bool err = ffmpeg_codec_config(codec_name);
     avcodec_free_context(&m_core.codec_ctx);
     av_dict_free(&m_core.codec_opt);
     av_buffer_unref(&m_core.hwdevice_ctx);
     return err;
 }
 
-//=== output =================================================================//
+//=== file ===================================================================//
 
-int mqFFmpeg::ffmpeg_output_config(char const *pathname)
+bool mqFFmpeg::ffmpeg_file_config(char const *pathname)
 {
     AVFormatContext *format_ctx;
     AVStream *stream;
@@ -199,18 +196,16 @@ int mqFFmpeg::ffmpeg_output_config(char const *pathname)
 
     // guess the output file format information based on the final file name
     err = avformat_alloc_output_context2(&format_ctx, NULL, NULL, pathname);
-    if (err < 0) {
-        ffmpeg_error(err, "Could not allocate format context");
-        return err;
-    }
+    if (err < 0)
+        return ffmpeg_error(err, "Could not allocate format context");
 
     // create the video stream based on the selected codec
     stream = avformat_new_stream(format_ctx, NULL);
     if (stream == NULL) {
-        err = ffmpeg_error(ENOMEM, "Could not allocate stream memory");
+        ffmpeg_error(ENOMEM, "Could not allocate stream memory");
         goto file_config_error;
     }
-    stream->time_base = (AVRational){ 1, m_config.fps };
+    stream->time_base = m_core.time_base;
     err = avcodec_parameters_from_context(stream->codecpar, m_core.codec_ctx);
     if (err < 0) {
         ffmpeg_error(err, "Could not initialize stream parameters");
@@ -234,7 +229,7 @@ int mqFFmpeg::ffmpeg_output_config(char const *pathname)
     // allocate packet used to send frame to the file
     packet = av_packet_alloc();
     if (packet == NULL) {
-        err = ffmpeg_error(err, "Unable to init packet!!");
+        ffmpeg_error(err, "Unable to init packet!!");
         goto file_config_error;
     }
     packet->data = NULL;
@@ -245,7 +240,7 @@ int mqFFmpeg::ffmpeg_output_config(char const *pathname)
     m_core.stream_video = stream;
     m_core.packet = packet;
     m_core.iframe = 0;
-    return 0;
+    return true;
 
     // free all allocated memory
     // note that `stream` is freed during `format_ctx` cleanup
@@ -253,18 +248,14 @@ file_config_error:
     avio_close(format_ctx->pb);
     avformat_free_context(format_ctx);
     av_packet_free(&packet);
-    return err;
+    return false;
 }
 
-int mqFFmpeg::ffmpeg_output_frame_write(AVFrame *frame)
+int mqFFmpeg::ffmpeg_file_write_frame(AVFrame *frame)
 {
     int err;
 
     // send the frame and check error
-    // @notes
-    // - when we want to force flush pending frames, the EOF error occur
-    //      add a special handle to help `_ffmpeg_quit()` to know that
-    //      the flush is finished
     err = avcodec_send_frame(m_core.codec_ctx, frame);
     if (err < 0)
         return ffmpeg_error(err, "Error sending frame to codec");
@@ -286,19 +277,15 @@ int mqFFmpeg::ffmpeg_output_frame_write(AVFrame *frame)
         // uses (third argument).
         av_packet_rescale_ts(
             m_core.packet,
-            (AVRational){ 1, m_config.fps },
+            m_core.time_base,
             m_core.stream_video->time_base
         );
         m_core.packet->stream_index = m_core.stream_video->index;
-        // mq_log(
-        //     MQ_LOG_DEBUG,
-        //     "Writing frame %d (size = %d)",
-        //     m_core.iframe,
-        //     m_core.packet->size
-        // );
 
         // Write the encoded frame to the mp4 file.
-        av_interleaved_write_frame(m_core.format_ctx, m_core.packet);
+        err = av_interleaved_write_frame(m_core.format_ctx, m_core.packet);
+        if (err != 0)
+            ffmpeg_error(err, "av_interleaved_write_frame(): error");
         av_packet_unref(m_core.packet);
     }
     return err;
@@ -306,7 +293,7 @@ int mqFFmpeg::ffmpeg_output_frame_write(AVFrame *frame)
 
 //=== scale ==================================================================//
 
-int mqFFmpeg::ffmpeg_scale_config()
+bool mqFFmpeg::ffmpeg_scale_config()
 {
     struct SwsContext *scale_ctx;
     AVFrame *frame_out_hw;
@@ -336,14 +323,14 @@ int mqFFmpeg::ffmpeg_scale_config()
         NULL
     );
     if(scale_ctx == NULL) {
-        err = ffmpeg_error(ENOMEM, "Could not allocate scale/conv context");
+        ffmpeg_error(ENOMEM, "Could not allocate scale/conv context");
         goto scale_config_error;
     }
 
     // input frame allocation
     frame_in = av_frame_alloc();
     if (frame_in == NULL) {
-        err = ffmpeg_error(ENOMEM, "could not allocate RGB frame");
+        ffmpeg_error(ENOMEM, "could not allocate RGB frame");
         goto scale_config_error;
     }
     frame_in->format = m_core.pix_fmt_in;
@@ -358,7 +345,7 @@ int mqFFmpeg::ffmpeg_scale_config()
     // output frame allocation
     frame_out = av_frame_alloc();
     if (frame_out == NULL) {
-        err = ffmpeg_error(ENOMEM, "could not allocate OUT frame");
+        ffmpeg_error(ENOMEM, "could not allocate OUT frame");
         goto scale_config_error;
     }
     frame_out->format = m_core.pix_fmt_out;
@@ -374,7 +361,7 @@ int mqFFmpeg::ffmpeg_scale_config()
     if(m_core.hwdevice_ctx) {
         frame_out_hw = av_frame_alloc();
         if (frame_out_hw == NULL) {
-            err = ffmpeg_error(ENOMEM, "could not allocate OUT frame");
+            ffmpeg_error(ENOMEM, "could not allocate OUT frame");
             goto scale_config_error;
         }
         err = av_hwframe_get_buffer(
@@ -393,17 +380,17 @@ int mqFFmpeg::ffmpeg_scale_config()
     m_core.frame_out = frame_out;
     m_core.frame_out_hw = frame_out_hw;
     m_core.frame_in  = frame_in;
-    return 0;
+    return true;
 
 scale_config_error:
     sws_freeContext(scale_ctx);
     av_frame_free(&frame_out_hw);
     av_frame_free(&frame_out);
     av_frame_free(&frame_in);
-    return err;
+    return false;
 }
 
-int mqFFmpeg::ffmpeg_scale_conv(mqDisplay const *display)
+bool mqFFmpeg::ffmpeg_scale_conv(mqDisplay const *display)
 {
     u8 *vram8;
     int idx_out;
@@ -461,35 +448,46 @@ int mqFFmpeg::ffmpeg_scale_conv(mqDisplay const *display)
     );
     if (err < 0)
         return ffmpeg_error(err, "unable to convert VRAM to OUT frame");
-    return 0;
+    return true;
 }
 
-int mqFFmpeg::ffmpeg_scale_get_frame(AVFrame **frame_out, bool force)
-{
+bool mqFFmpeg::ffmpeg_scale_get_frame(
+    AVFrame **frame_out,
+    bool dyn_pts,
+    bool force
+) {
     u64 time_ms_ref_curr;
     int iframe;
     int err;
 
     if(frame_out == NULL)
         return ffmpeg_error(EINVAL, "missing frame_out (internal error)");
+    *frame_out = NULL;
 
     // update frame time (PTS) information
-    time_ms_ref_curr = mq_utils_get_time_ms();
-    if(m_core.time_ms_ref == 0 || force) {
-        m_core.iframe++;
+    if(dyn_pts) {
+        time_ms_ref_curr = mq_utils_get_time_ms();
+        if(m_core.time_ms_ref == 0) {
+            m_core.iframe = 0;
+        } else {
+            iframe  = (time_ms_ref_curr - m_core.time_ms_ref);
+            iframe /= (1000 / m_config.fps);
+            if(iframe == 0) {
+                if(!force)
+                    return true;
+                iframe = 1;
+            }
+            m_core.iframe += iframe;
+        }
+        m_core.time_ms_ref = time_ms_ref_curr;
     } else {
-        iframe  = (time_ms_ref_curr - m_core.time_ms_ref);
-        iframe /= (1000 / m_config.fps);
-        if(iframe == 0)
-            return 1;
-        m_core.iframe += iframe;
+        m_core.iframe++;
     }
-    m_core.time_ms_ref = time_ms_ref_curr;
-    m_core.frame_out->pts = m_core.iframe;
 
     // get the final OUT frame and force PTS update
     *frame_out = m_core.frame_out;
     if(m_core.hwdevice_ctx) {
+        m_core.frame_out->pts = m_core.iframe;
         err = av_hwframe_transfer_data(
             m_core.frame_out_hw,
             m_core.frame_out,
@@ -500,7 +498,7 @@ int mqFFmpeg::ffmpeg_scale_get_frame(AVFrame **frame_out, bool force)
         *frame_out = m_core.frame_out_hw;
     }
     (*frame_out)->pts = m_core.iframe;
-    return 0;
+    return true;
 }
 
 //=== mqFFmpeg RAII ==========================================================//
@@ -562,7 +560,7 @@ void mqFFmpeg::detectHardwareEncoders()
         }
         if(!found)
             continue;
-        if(ffmpeg_codec_exist(codec->name) != 0)
+        if(!ffmpeg_codec_exist(codec->name))
             continue;
         mq_log(MQ_LOG_DEBUG, "ffmpeg: successfully used '%s'", codec->name);
         m_encoders.push_back(codec_name);
@@ -573,29 +571,20 @@ void mqFFmpeg::detectHardwareEncoders()
 
 //=== error handling =========================================================//
 
-int mqFFmpeg::ffmpeg_error(int averror, char const *format, ...)
+bool mqFFmpeg::ffmpeg_error(int averror, char const *format, ...)
 {
-    char buffer[512];
+    char buffer1[512];
+    char buffer2[512];
     va_list ap;
 
     if(averror == EINVAL || averror == ENOMEM)
         averror = AVERROR(averror);
     va_start(ap, format);
-    vsnprintf(buffer, 512, format, ap);
+    snprintf(buffer1, 512, "%s (%s)", format, av_err2str(averror));
+    vsnprintf(buffer2, 512, buffer1, ap);
     va_end(ap);
-
-    m_error_errno = averror;
-    m_error_info = buffer;
-    return averror;
-}
-
-std::string mqFFmpeg::err2str(int err)
-{
-    if (err > 0)
-        return "err2str: error";
-    //fixme: properly handle error
-    (void)err;
-    return m_error_info;
+    m_error_info = buffer2;
+    return false;
 }
 
 //=== encoders ===============================================================//
@@ -609,19 +598,18 @@ std::string mqFFmpeg::encoder(unsigned int encoder_idx) const
 
 //=== recording ==============================================================//
 
-int mqFFmpeg::start(
-    mqDisplay *display,
+bool mqFFmpeg::start(
+    mqDisplay const *display,
     char const *pathname,
     char const *encoder_name,
-    int scale
+    int scale,
+    int fps
 ) {
-    int ret;
-
-    if(display == NULL || encoder_name == NULL)
+    if(pathname == NULL || encoder_name == NULL)
         return ffmpeg_error(EINVAL, "ffmpeg::start(): broken argument");
 
     // input configuration
-    m_config.fps = 60;
+    m_config.fps = fps;
     m_config.width_in = display->width;
     m_config.height_in = display->height;
     m_config.width_out = display->width * scale;
@@ -642,77 +630,57 @@ int mqFFmpeg::start(
     m_core.time_ms_ref = 0;
     m_core.iframe = 0;
 
-    // codec configuration
-    ret = ffmpeg_codec_config(encoder_name);
-    if(ret < 0) {
-        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - codec fails %d", ret);
-        return ret;
+    // encoding configuration
+    if(!ffmpeg_codec_config(encoder_name)) {
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start(): codec config error");
+        return false;
     }
-
-    // format configuration (output file format)
-    ret = ffmpeg_output_config(pathname);
-    if(ret < 0) {
-        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - output fails %d", ret);
-        return ret;
+    if(!ffmpeg_file_config(pathname)) {
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start(): file config error");
+        return false;
     }
-
-    // scaling configuration (from raw format to codec frame)
-    ret = ffmpeg_scale_config();
-    if(ret < 0) {
-        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - scale fails %d", ret);
-        return ret;
+    if(!ffmpeg_scale_config()) {
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start(): scale config error");
+        return false;
     }
-
-    // force write the first frame
-    ret = frame_add(display, true);
-    if(ret < 0)
-        mq_log(MQ_LOG_ERROR, "mqFFmpeg::start() - first frame fail");
-    return ret;
+    return true;
 }
 
-int mqFFmpeg::frame_add(mqDisplay const *display, bool force)
+bool mqFFmpeg::frame_add(mqDisplay const *display, bool dyn_pts, bool force)
 {
     AVFrame *frame_out;
-    int err;
 
     if(m_paused)
-        return 0;
-    err = ffmpeg_scale_conv(display);
-    if(err < 0) {
-        mq_log(MQ_LOG_ERROR, "unable to convert/scale display");
-        return err;
+        return true;
+    if(!ffmpeg_scale_conv(display)) {
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::frame_add(): scale_conv() error");
+        return false;
     }
-    err = ffmpeg_scale_get_frame(&frame_out, force);
-    if(err < 0) {
-        mq_log(MQ_LOG_ERROR, "unable to convert/scale display");
-        return err;
+    if(!ffmpeg_scale_get_frame(&frame_out, dyn_pts, force)) {
+        mq_log(MQ_LOG_ERROR, "mqFFmpeg::frame_add(): scale_get() error");
+        return false;
     }
-    if(err > 0) {
-        // mq_log(MQ_LOG_DEBUG, "too short period of time, abord");
-        return 1;
+    if(frame_out == NULL) {
+        mq_log(MQ_LOG_DEBUG, "mqFFmpeg::frame_add(): frame skipped");
+        return true;
     }
-    err = ffmpeg_output_frame_write(frame_out);
-    if(err != 0) {
-        mq_log(MQ_LOG_DEBUG, "unable to send the frame");
-        return err;
+    if(ffmpeg_file_write_frame(frame_out) != 0) {
+        mq_log(MQ_LOG_DEBUG, "mqFFmpeg::frame_add(): write frame error");
+        return false;
     }
-    return 0;
+    return true;
 }
 
-int mqFFmpeg::pause(mqDisplay *display)
+bool mqFFmpeg::pause()
 {
-    if(frame_add(display, false) < 0)
-        mq_log(MQ_LOG_ERROR, "mqFFmpeg::pause() - unable to write frame");
     m_paused = true;
-    return 0;
+    return true;
 }
 
-int mqFFmpeg::unpause(mqDisplay *display)
+bool mqFFmpeg::unpause()
 {
     m_paused = false;
-    if(frame_add(display, true) < 0)
-        mq_log(MQ_LOG_ERROR, "mqFFmpeg::unpause() - unable to write frame");
-    return 0;
+    return true;
 }
 
 void mqFFmpeg::stats(struct mqFFmpegStats *stats)
@@ -724,38 +692,25 @@ void mqFFmpeg::stats(struct mqFFmpegStats *stats)
     stats->time_min = ((stats->total_ms / 1000) / 60) % 60;
 }
 
-int mqFFmpeg::stop(mqDisplay *display)
+bool mqFFmpeg::stop()
 {
-    int err;
-
-    if(!m_core.format_ctx)
-        return 0;
-
-    // force the last frame. This is important because some addin like
-    // gintctl refresh the screen only when it's needed. But if you start the
-    // recording and don't touch to anything, except the first frame, no
-    // new frame is generated which "break" the video and skip the last
-    // time
-    if(frame_add(display, true) != 0)
-        mq_log(MQ_LOG_ERROR, "unable to add the last frame");
-
-    // force-flush pending frame
-    while (true) {
-        err = ffmpeg_output_frame_write(NULL);
-        if(err > 0)
-            break;
-        if(err < 0) {
-            mq_log(MQ_LOG_ERROR, "mqFFmpeg::stop() - flush fails");
-            break;
+    if(m_core.format_ctx) {
+        // force-flush pending frame
+        while (true) {
+            int err = ffmpeg_file_write_frame(NULL);
+            if(err > 0)
+                break;
+            if(err < 0) {
+                mq_log(MQ_LOG_ERROR, "mqFFmpeg::stop() - flush fails");
+                break;
+            }
         }
+        // Writing the end of the file.
+        av_write_trailer(m_core.format_ctx);
+        // Closing the file.
+        avio_flush(m_core.format_ctx->pb);
+        avio_close(m_core.format_ctx->pb);
     }
-
-    // Writing the end of the file.
-    av_write_trailer(m_core.format_ctx);
-
-    // Closing the file.
-    avio_flush(m_core.format_ctx->pb);
-    avio_close(m_core.format_ctx->pb);
 
     // Freeing all the allocated memory:
     av_packet_free(&m_core.packet);
@@ -778,10 +733,10 @@ int mqFFmpeg::stop(mqDisplay *display)
     m_core.frame_out = NULL;
     m_core.frame_in = NULL;
     m_core.iframe = 0;
-    return 0;
+    return true;
 }
 
-int mqFFmpeg::debug()
+bool mqFFmpeg::debug()
 {
     mq_log(MQ_LOG_DEBUG, "ffmpeg:");
     mq_log(MQ_LOG_DEBUG, "|-- core:");
@@ -805,7 +760,7 @@ int mqFFmpeg::debug()
     mq_log(MQ_LOG_DEBUG, "    |-- height_out: %d", m_config.height_out);
     mq_log(MQ_LOG_DEBUG, "    |-- width_out: %d", m_config.width_out);
     mq_log(MQ_LOG_DEBUG, "    `-- scale: %d", m_config.scale);
-    return 0;
+    return true;
 }
 
 #endif /* MQ_VIDEO_FFMPEG */
