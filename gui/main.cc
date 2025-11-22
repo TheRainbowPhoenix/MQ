@@ -281,13 +281,15 @@ static int update(void)
             mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
 
+
     /* check to see if we need to start the recording */
     if (gui.recorder.status() == MQ_RECORD_STATUS_START_WAIT_EMU) {
         if (emu0->mach->cyclesPending != 0) {
             gui.videoOutputPath.resolve(true);
             if(!gui.recorder.start(
-                        &gui.lastDisplayFrame,
-                        gui.videoOutputPath.resolvedPath())) {
+                    &gui.lastDisplayFrame,
+                    gui.videoOutputPath.resolvedPath(),
+                    60, false)) {
                 mq_log(MQ_LOG_ERROR, "backend.start() - fails");
                 gui.recorder.setStatus(MQ_RECORD_STATUS_NOTSTARTED);
             } else {
@@ -299,11 +301,8 @@ static int update(void)
 
     /* add frame to the video if needed */
     if (gui.recorder.status() == MQ_RECORD_STATUS_RECORDING) {
-        if(gui.lastDisplayFrame.dirty) {
-            if(!gui.recorder.frame_add(&gui.lastDisplayFrame))
-                mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
-            gui.lastDisplayFrame.dirty = false;
-        }
+        if(!gui.recorder.frame_add(&gui.lastDisplayFrame))
+            mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
 #endif
 

@@ -44,19 +44,21 @@ public:
 
     void stats(mqFFmpegStats *stats);
 
-    int start(
-        mqDisplay *display,
+    /* encoding interface */
+    bool start(
+        mqDisplay const *display,
         char const *pathname,
         char const *encoder,
-        int scale
+        int scale,
+        int fps
     );
-    int frame_add(mqDisplay const*display, bool force);
-    int unpause(mqDisplay *display);
-    int pause(mqDisplay *display);
-    int stop(mqDisplay *display);
-    int debug();
+    bool frame_add(mqDisplay const *display, bool dyn_pts, bool force);
+    bool unpause();
+    bool pause();
+    bool stop();
+    bool debug();
 
-    std::string err2str(int err);
+    std::string lasterror() { return m_error_info; }
 
 private:
     int ffmpeg_hwdevice_config(
@@ -64,14 +66,14 @@ private:
         AVBufferRef **hw_device_ctx,
         enum AVHWDeviceType hw_device_type
     );
-    int ffmpeg_codec_exist(char const *codec);
-    int ffmpeg_codec_config(char const *encoder_name);
-    int ffmpeg_output_config(char const *filename);
-    int ffmpeg_output_frame_write(AVFrame *frame);
-    int ffmpeg_scale_config();
-    int ffmpeg_scale_conv(mqDisplay const *display);
-    int ffmpeg_scale_get_frame(AVFrame **frame_out, bool force);
-    int ffmpeg_error(int averror, char const *format, ...);
+    bool ffmpeg_codec_exist(char const *codec);
+    bool ffmpeg_codec_config(char const *encoder_name);
+    bool ffmpeg_file_config(char const *filename);
+    int ffmpeg_file_write_frame(AVFrame *frame);
+    bool ffmpeg_scale_config();
+    bool ffmpeg_scale_conv(mqDisplay const *display);
+    bool ffmpeg_scale_get_frame(AVFrame **frame_out, bool dyn_pts, bool force);
+    bool ffmpeg_error(int err, char const *format, ...);
 
     // core information
     struct {
@@ -108,7 +110,6 @@ private:
     bool m_hardware_encoders_detected = false;
     int m_software_encoder_count = 0;
 
-    int m_error_errno = 0;
     std::string m_error_info;
     u64 m_time_ms_ref = 0;
     bool m_paused = false;
