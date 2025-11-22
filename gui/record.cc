@@ -29,9 +29,12 @@ bool mqRecord::start(
     );
     if(!err) {
         mq_log(MQ_LOG_ERROR, "mqRecord::start() - unable to start recording");
+        m_status = MQ_RECORD_STATUS_NOTSTARTED;
+        debug();
         return false;
     }
     m_dyn_pts = dyn_pts;
+    m_status = MQ_RECORD_STATUS_RECORDING;
     return true;
 }
 

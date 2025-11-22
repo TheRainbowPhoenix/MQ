@@ -134,6 +134,8 @@ struct GUI
 #if MQ_VIDEO_FFMPEG
     /* Recording output path and recorder state */
     OutputPathPattern videoOutputPath;
+    /* Record only while the add-in is running */
+    bool recordOnlyWhenRunning = true;
     mqRecord recorder;
 #endif
 

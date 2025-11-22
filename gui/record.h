@@ -25,22 +25,21 @@ typedef struct mqRecordStats
 
 enum {
     MQ_RECORD_STATUS_NOTSTARTED,
-    MQ_RECORD_STATUS_START_WAIT_EMU,
     MQ_RECORD_STATUS_RECORDING,
     MQ_RECORD_STATUS_PAUSED,
 
-/*               click
-               .-------v
-       NOTSTARTED     START_WAIT_EMU
-        ^      ^-------`      | cyclesPending != 0
-        |    error, stop      | = not paused
-        |                     | -> .start
- error, |                     v
-   stop +--------------- RECORDING
-        |                  ^    |
-        |            click |    | click
-        |                  |    v
-        `----------------- PAUSED */
+/*  .---------> NOTSTARTED
+    | major        ^  | click "Start"
+    | error        |  | or continuous record
+    |        click |  | -> file created
+    |       "Stop" |  |
+    |              |  v v---.  (automatic)
+    |----------- RECORDING   | -> frames added
+    |              ^  | `---'
+    |        click |  |
+    |    "Unpause" |  | click
+    |              |  v "Pause"
+    '------------ PAUSED */
 };
 
 class mqRecord
@@ -61,7 +60,6 @@ public:
 
     /* Current status of the state machine; see enumeration for meaning */
     int status() const { return m_status; }
-    void setStatus(int s) { m_status = s; }
 
     /* Scaling factor for the input frame */
     int scale() const { return m_scale; }

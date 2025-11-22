@@ -260,13 +260,13 @@ static int update(void)
     }
 
 #if MQ_VIDEO_FFMPEG
-    /* automatically request a pause() if needed */
-    if(gui.recorder.status() == MQ_RECORD_STATUS_RECORDING)
-        gui.actions.recordPause |= (emu0->mach->cyclesPending == 0);
-
     /* render status update */
     if(gui.actions.recordStart) {
-        gui.recorder.setStatus(MQ_RECORD_STATUS_START_WAIT_EMU);
+        gui.videoOutputPath.resolve(true);
+        gui.recorder.start(
+            &gui.lastDisplayFrame,
+            gui.videoOutputPath.resolvedPath(),
+            60, false);
     }
     if(gui.actions.recordPause) {
         if(!gui.recorder.pause(&gui.lastDisplayFrame))
@@ -281,26 +281,11 @@ static int update(void)
             mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
 
-    /* check to see if we need to start the recording */
-    if (gui.recorder.status() == MQ_RECORD_STATUS_START_WAIT_EMU) {
-        if (emu0->mach->cyclesPending != 0) {
-            gui.videoOutputPath.resolve(true);
-            if(!gui.recorder.start(
-                    &gui.lastDisplayFrame,
-                    gui.videoOutputPath.resolvedPath(),
-                    60, false)) {
-                mq_log(MQ_LOG_ERROR, "backend.start() - fails");
-                gui.recorder.setStatus(MQ_RECORD_STATUS_NOTSTARTED);
-            } else {
-                gui.recorder.setStatus(MQ_RECORD_STATUS_RECORDING);
-                gui.recorder.debug();
-            }
-        }
-    }
-
     /* add frame to the video if needed */
-    if (gui.recorder.status() == MQ_RECORD_STATUS_RECORDING) {
-        if(!gui.recorder.frame_add(&gui.lastDisplayFrame))
+    if(gui.recorder.status() == MQ_RECORD_STATUS_RECORDING) {
+        bool want_frame =
+            (emu0->mach->cyclesPending != 0) || !gui.recordOnlyWhenRunning;
+        if(want_frame && !gui.recorder.frame_add(&gui.lastDisplayFrame))
             mq_log(MQ_LOG_ERROR, "%s", gui.recorder.lasterror().c_str());
     }
 #endif
@@ -313,22 +298,6 @@ static int update(void)
 void update_machine(mqMachine *mach, bool startRunning)
 {
     bool may_enable_watch = false;
-
-    /* Make a copy of the current frame */
-    if(mach->display && mach->display->dirty) {
-        mqDisplay *d = mach->display;
-        gui.lastDisplayFrame.format = d->format;
-        gui.lastDisplayFrame.width  = d->width;
-        gui.lastDisplayFrame.height = d->height;
-        gui.lastDisplayFrame.data =
-            memdup(d->data, mq_display_framebufferSize(d));
-        /* The frame is new for the recorder */
-        gui.lastDisplayFrame.dirty = true;
-        /* The frame is new for the GUI */
-        gui.lastDisplayFrameNew = true;
-
-        mq_display_setDirty(d, false);
-    }
 
     if(auto i = gui.actions.machineInitialize) {
         gui.ResetState();
@@ -367,6 +336,23 @@ void update_machine(mqMachine *mach, bool startRunning)
     if(gui.watch_enabled && may_enable_watch) {
         if(!watch_init(&gui.watch_info, gui.current_program_path))
             mq_log(MQ_LOG_ERROR, "unable to watch the file o(x_x)o");
+    }
+
+    /* Make a copy of the current frame (after resetting the machine in case of
+       a reset, so we don't grab a frame with the wrong format) */
+    if(mach->display && mach->display->dirty) {
+        mqDisplay *d = mach->display;
+        gui.lastDisplayFrame.format = d->format;
+        gui.lastDisplayFrame.width  = d->width;
+        gui.lastDisplayFrame.height = d->height;
+        gui.lastDisplayFrame.data =
+            memdup(d->data, mq_display_framebufferSize(d));
+        /* The frame is new for the recorder */
+        gui.lastDisplayFrame.dirty = true;
+        /* The frame is new for the GUI */
+        gui.lastDisplayFrameNew = true;
+
+        mq_display_setDirty(d, false);
     }
 
     if(gui.actions.machineGenerateMonoFrame && mach->display) {
