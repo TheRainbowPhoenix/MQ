@@ -1,0 +1,52 @@
+name: Build MQ
+on:
+  push:
+    tags:
+      - v0.*.*
+jobs:
+  linux_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            python3 \
+            shellcheck \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libopengl-dev \
+            libswscale-dev \
+            libavutil-dev \
+            libavformat-dev \
+            libavcodec-dev
+          python -m venv .venv
+          source ./.venv/bin/activate
+          pip install -r ./scripts/requirements.txt
+
+      - name: Setup env
+        run: |
+          tag_name="$(echo ${{ github.ref_name }})"
+          version="$(echo $tag_name | grep -oP '[0-9]+.[0-9]+.[0-9]+$')"
+          echo "version=${version}" >> $GITHUB_ENV
+          echo "date_info=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: Build all
+        run: |
+          source ./.venv/bin/activate
+          ./.ci/check-integrity.sh "${{ env.version }}"
+          ./.ci/gen-changelog.sh "${{ env.version }}"
+          ./.ci/build-linux.sh "${{ env.version }}"
+
+      - name: 'Create the release'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: '${{ env.version }} (${{ env.date_info }})'
+          body_path: './build/changelog.md'
+          files: ./build/mq-*
+          prerelease: true
+          make_latest: true
