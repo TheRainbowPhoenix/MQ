@@ -566,6 +566,7 @@ void mqFFmpeg::detectHardwareEncoders()
         m_encoders.push_back(codec_name);
     }
 
+    m_error_info = "";
     m_hardware_encoders_detected = true;
 }
 
@@ -573,17 +574,19 @@ void mqFFmpeg::detectHardwareEncoders()
 
 bool mqFFmpeg::ffmpeg_error(int averror, char const *format, ...)
 {
-    char buffer1[512];
-    char buffer2[512];
+    char buffer1[128];
+    char buffer2[128];
+    char buffer3[512];
     va_list ap;
 
     if(averror == EINVAL || averror == ENOMEM)
         averror = AVERROR(averror);
     va_start(ap, format);
-    snprintf(buffer1, 512, "%s (%s)", format, av_err2str(averror));
-    vsnprintf(buffer2, 512, buffer1, ap);
+    vsnprintf(buffer1, sizeof(buffer1), format, ap);
+    av_strerror(averror, buffer2, sizeof(buffer2));
+    snprintf(buffer3, sizeof(buffer3), "%s (%s)", buffer1, buffer2);
     va_end(ap);
-    m_error_info = buffer2;
+    m_error_info = buffer3;
     return false;
 }
 
