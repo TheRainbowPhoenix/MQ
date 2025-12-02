@@ -17,9 +17,9 @@
 #include <imgui_impl_sdl2.h>
 #include <azur/azur.h>
 #include <azur/resources.h>
+#include <azur/stb_image.h>
 #include <azur/log.h>
 #include <SDL2/SDL.h>
-#include <stb_image.h>
 
 #include <stdio.h>
 #include <stdlib.h>
