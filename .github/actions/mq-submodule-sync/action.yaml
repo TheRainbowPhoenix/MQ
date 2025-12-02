@@ -1,0 +1,41 @@
+#---
+# mq-submodule-sync - handle submodules checkout
+#
+# This custom action has been created to workaround an error with the
+# classical "actions/checkout" that does not support "submodule: recursive"
+# indication (got a "Server does not allow request for unadvertised object")
+# with the `ffmpeg` 3rdparty in Azur.
+# So, this action will manually add a cache to all 3rdparty and execute the
+# `git submodule update --init --recursive` which works every time.
+#---
+description: Custom submodule sync with cache
+outputs:
+  mq-submodule-cache-key:
+    description: submodules cache key
+    value: ${{ steps.gen-cache-key.outputs.mq-submodule-cache-key }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Generate cache key
+      id: gen-cache-key
+      shell: bash
+      run: |
+        mq_key="$(echo "$(git submodule status)")"
+        mq_key="$(echo "$mq_key" | md5sum | awk '{print $1}')"
+        echo "mq-submodule-cache-key=$mq_key" >> "${GITHUB_OUTPUT}"
+        echo "mq-submodule-cache-key=$mq_key"
+    - name: Setup submodule cache
+      uses: actions/cache@v4
+      id: cache
+      with:
+        path: ./3rdparty
+        key: mq-submodule-cache-${{ env.cache-key }}
+      env:
+        cache-key:
+          ${{ steps.gen-cache-key.outputs.mq-submodule-cache-key }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      name: Recursive submodule clone
+      shell: bash
+      run: |
+        git submodule update --init --recursive

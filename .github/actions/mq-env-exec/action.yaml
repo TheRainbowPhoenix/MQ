@@ -1,0 +1,40 @@
+description: Execute command with the MQ env
+inputs:
+  commands:
+    description: Command to execute
+    required: true
+  dependencies:
+    description: Packages to install
+    required: false
+outputs:
+  mq-version:
+    description: MQ version
+    value: ${{ steps.run-commands.outputs.mq-version }}
+  mq-dateinfo:
+    description: MQ date information
+    value: ${{ steps.run-commands.outputs.mq-dateinfo }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install dependencies
+      if: ${{ inputs.dependencies != '' }}
+      uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: ${{ inputs.dependencies }}
+        version: 1.0
+    - name: Run commands
+      id: run-commands
+      shell: bash
+      run: |
+        tag_name="$(echo ${{ github.ref_name }})"
+        mq_version="$(echo $tag_name | grep -Eo '[0-9]+.[0-9]+.[0-9]+$')"
+        mq_dateinfo="$(echo "$(date +'%Y-%m-%d')")"
+        echo "mq-version=$mq_version" >> $GITHUB_OUTPUT
+        echo "mq-dateinfo=$mq_dateinfo" >> $GITHUB_OUTPUT
+        python -m venv .venv
+        source ./.venv/bin/activate
+        pip install -r ./scripts/requirements.txt
+        cmd="$(echo "${{ inputs.commands }}")"
+        cmd="$(echo "$cmd" | sed "s/{MQ_VER}/$mq_version/")"
+        $cmd

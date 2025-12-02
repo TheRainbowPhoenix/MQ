@@ -3,31 +3,21 @@ on:
   push:
     tags:
       - v0.*.*
+
 jobs:
   integrity_check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Install dependencies
-        uses: awalsh128/cache-apt-pkgs-action@latest
+      - name: Check integrity
+        uses: ./.github/actions/mq-env-exec
         with:
-          packages: |
+          dependencies: |
             python3
             shellcheck
-          version: 1.0
-      # todo: move me
-      - name: Setup env
-        run: |
-          tag_name="$(echo ${{ github.ref_name }})"
-          mq_version="$(echo $tag_name | grep -Eo '[0-9]+.[0-9]+.[0-9]+$')"
-          echo "mq_version=${mq_version}" >> $GITHUB_ENV
-          python -m venv .venv
-          source ./.venv/bin/activate
-          pip install -r ./scripts/requirements.txt
-      - name: Check integrity
-        run: |
-          ./.ci/check-integrity.sh "${{ env.mq_version }}"
+          commands: |
+            ./.ci/check-integrity.sh {MQ_VER}
 
   linux_build:
     runs-on: ubuntu-latest
@@ -35,35 +25,21 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Install dependencies
-        uses: awalsh128/cache-apt-pkgs-action@latest
+      - name: Checkout Submodules
+        uses: ./.github/actions/mq-submodule-sync
+      - name: Build all (linux)
+        uses: ./.github/actions/mq-env-exec
         with:
-          packages: |
+          dependencies: |
             cmake
             python3
             shellcheck
             libsdl2-dev
             libsdl2-image-dev
             libopengl-dev
-            libswscale-dev
-            libavutil-dev
-            libavformat-dev
-            libavcodec-dev
             nasm
-            libx264-dev
-            libx265-dev
-          version: 1.0
-      - name: Setup env
-        run: |
-          tag_name="$(echo ${{ github.ref_name }})"
-          mq_version="$(echo $tag_name | grep -Eo '[0-9]+.[0-9]+.[0-9]+$')"
-          echo "mq_version=${mq_version}" >> $GITHUB_ENV
-          python -m venv .venv
-          source ./.venv/bin/activate
-          pip install -r ./scripts/requirements.txt
-      - name: Build all
-        run: |
-          ./.ci/build-linux.sh "${{ env.mq_version }}"
+          commands: |
+            ./.ci/build-linux.sh {MQ_VER}
       - name: Upload artifact
         uses: actions/upload-artifact@v5
         with:
@@ -72,64 +48,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # macos_build:
-  #   runs-on: macos-14
-  #   env:
-  #     HOMEBREW_NO_AUTO_UPDATE: 1
-  #     HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
-  #     HOMEBREW_NO_ENV_HINTS: 1
-  #     HOMEBREW_NO_INSTALL_CLEANUP: 1
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v6
-  #     - name: Setup dependencies
-  #       run: |
-  #         brew install -f --quiet \
-  #           python \
-  #           shellcheck \
-  #           sdl2 sdl2_image \
-  #           glfw3 glew \
-  #           ffmpeg
-  #         python -m venv .venv
-  #         source ./.venv/bin/activate
-  #         pip install -r ./scripts/requirements.txt
-  #     - name: Setup Env
-  #       run: |
-  #         tag_name="$(echo ${{ github.ref_name }})"
-  #         version="$(echo $tag_name | grep -Eo '[0-9]+.[0-9]+.[0-9]+$')"
-  #         echo "version=${version}" >> $GITHUB_ENV
-  #     - name: Build all
-  #       run: |
-  #         source ./.venv/bin/activate
-  #         ./.ci/check-integrity.sh "${{ env.version }}"
-  #         ./.ci/build-macos.sh "${{ env.version }}"
-
   generate_release:
     runs-on: ubuntu-latest
     needs:
       - linux_build
-      # - macos_build
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Install dependencies
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: python3
-          version: 1.0
-      - name: Setup Env
-        run: |
-          tag_name="$(echo ${{ github.ref_name }})"
-          mq_version="$(echo $tag_name | grep -Eo '[0-9]+.[0-9]+.[0-9]+$')"
-          echo "mq_version=${mq_version}" >> $GITHUB_ENV
-          echo "date_info=$(date +'%Y-%m-%d')" >> $GITHUB_ENV
-          python -m venv .venv
-          source ./.venv/bin/activate
-          pip install -r ./scripts/requirements.txt
-          source ./.venv/bin/activate
       - name: Generate changelog information
-        run: |
-          ./.ci/gen-changelog.sh "${{ env.mq_version }}"
+        uses: ./.github/actions/mq-env-exec
+        id: gen-changelog
+        with:
+          dependencies: python3
+          commands: ./.ci/gen-changelog.sh {MQ_VER}
       - name: Fetch linux artifacts
         uses: actions/download-artifact@v6
         with:
@@ -138,8 +69,10 @@ jobs:
       - name: 'Create the release'
         uses: softprops/action-gh-release@v2
         with:
-          name: '${{ env.mq_version }} (${{ env.date_info }})'
+          name: '${{ env.mq_version }} (${{ env.mq_dateinfo }})'
           body_path: './build/changelog.md'
           files: ./build/mq-*
-          prerelease: true
           make_latest: true
+        env:
+          mq_version: ${{ steps.gen-changelog.outputs.mq-version }}
+          mq_dateinfo: ${{ steps.gen-changelog.outputs.mq-dateinfo }}

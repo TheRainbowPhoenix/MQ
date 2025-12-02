@@ -14,10 +14,8 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 # rudimentary argument check
 [ $# -ne 1 ] && echo 'missing version information' >&2 && exit 1
 
-# ensure dependencies are pulled
-git submodule update --init --recursive
-
 # manually and locally install Azur (temporary hack)
+echo 'Building Azur...'
 mkdir -p build/linux/azur
 cd build/linux/azur || exit 1
 mkdir -p sysroot
@@ -34,6 +32,7 @@ fi
 cd ../../../ || exit 1
 
 # manually build MQ
+echo 'Building MQ...'
 cmake \
     -B build/linux/mq \
     -S . \

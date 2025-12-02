@@ -30,5 +30,6 @@ version=$(echo "$version" | grep -Eo 'project\(MQ VERSION ([0-9]+.){2}[0-9]+')
 version=$(echo "$version" | grep -Eo '([0-9]+.?){3}')
 if [ "$version" != "$1" ] ; then
     echo 'CMakeLists.txt version mismatch, fix and retry' >&2
+    echo "$version != $1" >&2
     exit 1
 fi
