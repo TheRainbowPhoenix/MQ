@@ -7,6 +7,6 @@
 [submodule "3rdparty/tracy"]
 	path = 3rdparty/tracy
 	url = https://github.com/wolfpld/tracy/
-[submodule "3rdparty/ffmpeg"]
-	path = 3rdparty/ffmpeg
-	url = https://git.ffmpeg.org/ffmpeg.git
+[submodule "3rdparty/azur"]
+	path = 3rdparty/azur
+	url = https://git.planet-casio.com/Lephenixnoir/Azur.git
