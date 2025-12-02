@@ -166,14 +166,14 @@ if(MQ_VIDEO_FFMPEG)
     OUTPUT_VARIABLE FFMPEG_LIB_PREFIX
   )
   message(DEBUG "ffmpeg_lib_prefix=${FFMPEG_LIB_PREFIX}")
-  # find_package(PkgConfig REQUIRED)
-  # pkg_check_modules(libswscale REQUIRED libswscale IMPORTED_TARGET)
-  # pkg_check_modules(libavutil REQUIRED libavutil IMPORTED_TARGET)
-  # pkg_check_modules(libavformat REQUIRED libavformat IMPORTED_TARGET)
-  # pkg_check_modules(libavcodec REQUIRED libavcodec IMPORTED_TARGET)
-  # target_link_libraries(mq PRIVATE
-  #   PkgConfig::libswscale PkgConfig::libavutil PkgConfig::libavformat
-  #   PkgConfig::libavcodec)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(libswscale REQUIRED libswscale IMPORTED_TARGET)
+  pkg_check_modules(libavutil REQUIRED libavutil IMPORTED_TARGET)
+  pkg_check_modules(libavformat REQUIRED libavformat IMPORTED_TARGET)
+  pkg_check_modules(libavcodec REQUIRED libavcodec IMPORTED_TARGET)
+  target_link_libraries(mq PRIVATE
+    PkgConfig::libswscale PkgConfig::libavutil PkgConfig::libavformat
+    PkgConfig::libavcodec)
 endif()
 
 if(AZUR_PLATFORM STREQUAL linux)

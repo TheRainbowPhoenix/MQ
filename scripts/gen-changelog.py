@@ -17,7 +17,7 @@ def _error(text: str) -> NoReturn:
 #=== core  ====================================================================
 
 __ALPHA_VERSION_WARNING = (
-    '> [!WARNING]' +
+    '> [!WARNING]\n' +
     '> This is an "alpha" release of the emulator, expect some bugs and ' +
     'broken feature.\n' +
     '> We highly recommend you to build the project from source until ' +
