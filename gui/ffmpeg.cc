@@ -566,6 +566,7 @@ void mqFFmpeg::detectHardwareEncoders()
         m_encoders.push_back(codec_name);
     }
 
+    m_error_info = "";
     m_hardware_encoders_detected = true;
 }
 

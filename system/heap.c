@@ -4,76 +4,33 @@
 //   |:::o/010    License: MIT <https://opensource.org/licenses/MIT>         //
 //-- `---/101 ---------------------------------------------------------------//
 
-/* The following is a copy of gint's allocator, sparsely modified. The main
-   changes are removing some gint-exclusive features, allowing stats to be read
-   from the emulator side, and distinguishing "emulated pointers" (u32) from
-   "host pointers" (void *), the conversion between which is given by the
-   mq_resolvePointer() and mq_createPointer() below. Note that the internal
-   layout is host-endian and may absolutely not be the same as the layout on
-   calculator. This is not a problem because the heap's internal details are
-   hidden by the syscall interface and add-ins shouldn't be looking there. */
+/* The following is a modification of gint's heap allocator. It skips gint-
+   exclusive features, exposes stats to the emulator, and distinguishes guest
+   pointers (u32, blockptr_t) from host pointers (void *, block_t *), with a
+   mapping given by the resolve() function. The block structure is host-endian
+   but this is hidden behind the syscall API anyway, so it doesn't matter. */
 
 #include <mq/system/heap.h>
 #include <mq/memory.h>
+#include <mq/defs.h>
 #include <string.h>
 
-/* Globals to avoid modifying the allocator code too much. */
 static u32 mq_heapBase = 0;
 static u32 mq_heapEnd = 0;
 static void *mq_heapBuffer = NULL;
 
-static void *mq_resolvePointer(u32 address)
+static void *resolve(u32 address)
 {
     if(address == 0)
         return NULL;
-    return mq_heapBuffer + (address - mq_heapBase);
+    if(address >= mq_heapBase && address < mq_heapEnd + 1)
+        return mq_heapBuffer + (address - mq_heapBase);
+
+    mq_log(MQ_LOG_WARNING, "out-of-bounds heap pointer %08x (heap offset %d)",
+        address, (i32)address - mq_heapBase);
+    return NULL;
 }
 
-static u32 mq_createPointer(void volatile const *ptr)
-{
-    if(ptr == NULL)
-        return 0;
-    return mq_heapBase + (ptr - mq_heapBuffer);
-}
-
-//=== (Mostly) original gint allocator =======================================//
-// The comments below are original and not related to MQ.
-
-/* block_t: A memory block managed by the heap.
-
-   The heap is a sequence of blocks made of a block_t header (4 bytes) and raw
-   data (any size between 8 bytes and the size of the heap). The sequence
-   extends from the start of the arena region (past the index structure) up to
-   the end of the arena region.
-
-   Free blocks use the unused raw data to store a footer of either 8 or 12
-   bytes, which links to the start of the block, the previous free block, and
-   the next free block. This forms a doubly-linked list of free blocks (or, to
-   be more precise, several intertwined doubly-linked lists, each handling a
-   different class of block sizes).
-
-   The possible ways to traverse the structure are:
-   1. Traverse the sequence from left to right -> next_block()
-   2. Go back to the previous block, if it's free -> previous_block_if_free()
-   3. Traverse each linked list from left to right -> next_link()
-   4. Traverse each linked list from right to left -> previous_link()
-
-   Way #2 is implemented using the boundary tag optimization. Basically each
-   block has a bit (the boundary tag) that tells whether the previous block is
-   free. If it's free, then that block's footer can be accessed, and because
-   the footer contains the size the header can be accessed too. This is used to
-   detect whether to merge into the previous block after a free().
-
-   The allocation algorithm will mostly use way #3 to find free blocks. When
-   freeing, ways #1 and #2 are used to coalesce adjacent blocks. Ways #3 and #4
-   are used to maintain the linked lists.
-
-   The footer uses 8 bytes if the block has 8 bytes of raw data, and 12 bytes
-   otherwise. The LSB of the last byte is used to distinguish the cases:
-   * For a block of 8 bytes, the footer has one block_t pointer to the previous
-     link, then one block_t pointer to the next link with LSB=1
-   * For a larger block, the footer has a 4-byte block size, then a pointer to
-     the previous link, and a pointer to the next link with LSB=0. */
 typedef volatile struct {
     u32 :5;
     /* Marks the last block of the sequence */
@@ -89,12 +46,14 @@ typedef volatile struct {
 
 MQ_STATIC_ASSERT(sizeof(block_t) == 4);
 
+typedef u32 blockptr_t;
+
 typedef mq_heap_stats_t stats_t;
 
 /* index_t: Data structure at the root of the heap, indexing linked lists */
 typedef struct {
     /* Entry points of the free lists for each block size */
-    block_t *classes[16];
+    blockptr_t classes[16];
     /* Pointer to statistics, if used */
     stats_t stats;
 } index_t;
@@ -103,107 +62,149 @@ typedef struct {
 // Block-level operations
 //---
 
-/* Returns a pointer to the next block in the sequence (might be used) */
-static block_t *next_block(block_t *b)
+/* Get a pointer to the block's footer. OOB: 0. */
+static u32 *block_footer(blockptr_t b)
 {
-    if(b->last) return NULL;
-    return (void *)b + sizeof(block_t) + b->size;
+    block_t *bp = resolve(b);
+    if(!bp) return NULL;
+
+    u32 footer_address = b + sizeof(block_t) + bp->size;
+    void *footer = resolve(footer_address - 12);
+    return footer ? footer + 12 : NULL;
 }
 
-/* Returns a pointer to the previous block's header, if it's a free block */
-static block_t *previous_block_if_free(block_t *b)
+/* Get a pointer to the previous block's footer. OOB: 0. */
+static u32 *previous_block_footer(blockptr_t b)
 {
-    if(b->previous_used) return NULL;
+    void *footer = resolve(b - 12);
+    return footer ? footer + 12 : NULL;
+}
+
+/* Next block in the sequence. OOB: 0. */
+static blockptr_t next_block(blockptr_t b)
+{
+    block_t *bp = resolve(b);
+    if(!bp || bp->last) return 0;
+    return b + sizeof(block_t) + bp->size;
+}
+
+/* Previous block in the sequence, if it's free. OOB: 0. */
+static blockptr_t previous_block_if_free(blockptr_t b)
+{
+    block_t *bp = resolve(b);
+    if(!bp || bp->previous_used) return 0;
+
     /* The footer of the previous block indicates its size */
-    uint32_t *footer = (void *)b;
-    uint32_t previous_size = (footer[-1] & 1) ? 8 : footer[-3];
-    return (void *)b - previous_size - sizeof(block_t);
+    u32 *footer = previous_block_footer(b);
+    if(!footer) return 0;
+    u32 previous_size = (footer[-1] & 1) ? 8 : footer[-3];
+    return b - previous_size - sizeof(block_t);
 }
 
 /* Splits a used or free-floating block into a first block with (size) bytes
    and a free second block with the rest. Returns the address of the second
-   block. If the initial block is too small to split, returns NULL. */
-static block_t *split(block_t *b, int size)
+   block. If the initial block is too small to split, returns 0. OOB: 0. */
+static blockptr_t split(blockptr_t b, int size)
 {
-    size_t extra_size = b->size - size;
-    if(extra_size < sizeof(block_t) + 8) return NULL;
+    block_t *bp = resolve(b);
+    if(!bp) return 0;
 
-    block_t *second = (void *)b + sizeof(block_t) + size;
-    second->last = b->last;
-    second->used = false;
-    second->previous_used = b->used;
-    second->size = extra_size - sizeof(block_t);
+    size_t extra_size = bp->size - size;
+    if(extra_size < sizeof(block_t) + 8) return 0;
 
-    block_t *third = next_block(second);
-    if(third) third->previous_used = second->used;
+    blockptr_t second = b + sizeof(block_t) + size;
+    block_t *secondp = resolve(second);
+    if(!secondp) return 0;
+    secondp->last = bp->last;
+    secondp->used = false;
+    secondp->previous_used = bp->used;
+    secondp->size = extra_size - sizeof(block_t);
 
-    b->last = 0;
-    b->size = size;
+    blockptr_t third = next_block(second);
+    block_t *thirdp = resolve(third);
+    if(thirdp) thirdp->previous_used = secondp->used;
+
+    bp->last = 0;
+    bp->size = size;
 
     return second;
 }
 
 /* Merge a used or free-floating block with its free neighbor. There are two
-   parameters for clarity, but really (right == next_block(left)). */
-static void merge(block_t *left, block_t *right)
+   parameters for clarity, but really (right == next_block(left)). OOB: nop. */
+static void merge(blockptr_t left, blockptr_t right)
 {
-    size_t extra_size = sizeof(block_t) + right->size;
-    left->last = right->last;
-    left->size += extra_size;
+    block_t *leftp = resolve(left);
+    block_t *rightp = resolve(right);
+    if(!leftp || !rightp) return;
 
-    block_t *next = next_block(left);
-    if(next) next->previous_used = left->used;
+    size_t extra_size = sizeof(block_t) + rightp->size;
+    leftp->last = rightp->last;
+    leftp->size += extra_size;
+
+    blockptr_t next = next_block(left);
+    block_t *nextp = resolve(next);
+    if(nextp) nextp->previous_used = leftp->used;
 }
 
 //---
 // List-level operations
 //---
 
-/* Returns the next free block in the list, assumes (b) is free */
-static block_t *next_link(block_t *b)
+/* Returns the next free block in the list, assumes (b) is free. OOB: 0; */
+static blockptr_t next_link(blockptr_t b)
 {
-    uint32_t *footer = (void *)b + sizeof(block_t) + b->size;
-    return mq_resolvePointer(footer[-1] & ~3);
+    u32 *footer = block_footer(b);
+    return footer ? footer[-1] & ~3 : 0;
 }
 
-/* Returns the previous free block in the list, assumes (b) is free */
-static block_t *previous_link(block_t *b)
+/* Returns the previous free block in the list, assumes (b) is free. OOB: 0. */
+static blockptr_t previous_link(blockptr_t b)
 {
-    uint32_t *footer = (void *)b + sizeof(block_t) + b->size;
-    return mq_resolvePointer(footer[-2]);
+    u32 *footer = block_footer(b);
+    return footer ? footer[-2] : 0;
 }
 
-/* Writes the given free block links to the footer of free block (b) */
-static void set_footer(block_t *b, block_t *previous_link, block_t *next_link)
+/* Writes free block links to the footer of free block (b). OOB: nop. */
+static void set_footer(
+    blockptr_t b, blockptr_t previous_link, blockptr_t next_link)
 {
-    uint32_t *footer = (void *)b + sizeof(block_t) + b->size;
+    block_t *bp = resolve(b);
+    if(!bp) return;
+
+    u32 *footer = block_footer(b);
+    if(!footer) return;
+
     /* 8-byte block: store the next link with LSB=1 */
-    if(b->size == 8)
+    if(bp->size == 8)
     {
-        footer[-2] = mq_createPointer(previous_link);
-        footer[-1] = mq_createPointer(next_link) | 1;
+        footer[-2] = previous_link;
+        footer[-1] = next_link | 1;
     }
     /* Larger block: store the size first then the link */
     else
     {
-        footer[-3] = b->size;
-        footer[-2] = mq_createPointer(previous_link);
-        footer[-1] = mq_createPointer(next_link);
+        footer[-3] = bp->size;
+        footer[-2] = previous_link;
+        footer[-1] = next_link;
     }
 }
 
-/* Find a best fit for the requested size in the list */
-static block_t *best_fit(block_t *list, size_t size)
+/* Find a best fit for the requested size in the list. OOB: 0. */
+static blockptr_t best_fit(blockptr_t list, size_t size)
 {
-    block_t *best_match = NULL;
+    blockptr_t best_match = 0;
     size_t best_size = 0xffffffff;
 
     while(list && best_size != size)
     {
-        if(list->size >= size && list->size < best_size)
+        block_t *listp = resolve(list);
+        if(!listp) return 0;
+
+        if(listp->size >= size && listp->size < best_size)
         {
             best_match = list;
-            best_size = list->size;
+            best_size = listp->size;
         }
         list = next_link(list);
     }
@@ -224,13 +225,15 @@ MQ_INLINE int size_class(size_t size)
 }
 
 /* Removes a block from a list, updating the index if needed. The free block is
-   in a temporary state of being in no list, called "free-floating" */
-static void remove_link(block_t *b, index_t *index)
+   in a temporary state of being in no list, called "free-floating". */
+static void remove_link(blockptr_t b, index_t *index)
 {
-    int c = size_class(b->size);
+    block_t *bp = resolve(b);
+    if(!bp) return;
+    int c = size_class(bp->size);
 
-    block_t *prev = previous_link(b);
-    block_t *next = next_link(b);
+    blockptr_t prev = previous_link(b);
+    blockptr_t next = next_link(b);
 
     /* Redirect links around (b) in its list */
     if(prev) set_footer(prev, previous_link(prev), next);
@@ -238,21 +241,23 @@ static void remove_link(block_t *b, index_t *index)
 
     if(index->classes[c] == b) index->classes[c] = next;
 
-    index->stats.free_memory -= b->size;
+    index->stats.free_memory -= bp->size;
 }
 
 /* Prepends a block to the list for its size class, and update the index */
-static void prepend_link(block_t *b, index_t *index)
+static void prepend_link(blockptr_t b, index_t *index)
 {
-    int c = size_class(b->size);
+    block_t *bp = resolve(b);
+    if(!bp) return;
+    int c = size_class(bp->size);
 
-    block_t *first = index->classes[c];
-    set_footer(b, NULL, first);
+    blockptr_t first = index->classes[c];
+    set_footer(b, 0, first);
     if(first) set_footer(first, b, next_link(first));
 
     index->classes[c] = b;
 
-    index->stats.free_memory += b->size;
+    index->stats.free_memory += bp->size;
 }
 
 //---
@@ -268,18 +273,18 @@ static size_t round_size(size_t size)
 u32 mq_heap_malloc(size_t size)
 {
     if(!size)
-        return mq_createPointer(NULL);
+        return 0;
 
-    index_t *index = mq_resolvePointer(mq_heapBase);
+    index_t *index = resolve(mq_heapBase);
     stats_t *s = &index->stats;
     size = round_size(size);
     int c = size_class(size);
 
     /* Try to find a class that has a free block available */
-    block_t *alloc = NULL;
+    blockptr_t alloc = 0;
     for(; c <= 15; c++)
     {
-        block_t *list = index->classes[c];
+        blockptr_t list = index->classes[c];
         /* The first 14 classes are exact-size, so there is no need to
            search. For the last two, we use a best fit. */
         alloc = (c < 14) ? list : best_fit(list, size);
@@ -290,22 +295,26 @@ u32 mq_heap_malloc(size_t size)
         if(s->free_memory >= size) s->fragmentation_failures++;
         if(s->free_memory <  size) s->exhaustion_failures++;
         s->total_failures++;
-        return mq_createPointer(NULL);
+        return 0;
     }
+
+    block_t *allocp = resolve(alloc);
+    if(!allocp) return 0;
 
     /* Remove the block to allocate from its list */
     remove_link(alloc, index);
 
     /* If it's larger than needed, split it and reinsert the leftover */
-    block_t *rest = split(alloc, size);
+    blockptr_t rest = split(alloc, size);
     if(rest) prepend_link(rest, index);
 
     /* Mark the block as allocated and return it */
-    block_t *next = next_block(alloc);
-    alloc->used = true;
-    if(next) next->previous_used = true;
+    blockptr_t next = next_block(alloc);
+    allocp->used = true;
+    block_t *nextp = resolve(next);
+    if(nextp) nextp->previous_used = true;
 
-    s->used_memory += alloc->size;
+    s->used_memory += allocp->size;
     if(s->used_memory > s->peak_used_memory)
         s->peak_used_memory = s->used_memory;
 
@@ -314,35 +323,37 @@ u32 mq_heap_malloc(size_t size)
         s->peak_live_blocks = s->live_blocks;
     s->total_volume += size;
     s->total_blocks++;
-    return mq_createPointer((void *)alloc + sizeof(block_t));
+    return alloc + sizeof(block_t);
 }
 
-void mq_heap_free(u32 ptr32)
+void mq_heap_free(u32 ptr)
 {
-    if(!ptr32)
+    if(!ptr)
         return;
 
-    void *ptr = mq_resolvePointer(ptr32);
-    index_t *index = mq_resolvePointer(mq_heapBase);
-    block_t *b = ptr - sizeof(block_t);
+    index_t *index = resolve(mq_heapBase);
+    blockptr_t b = ptr - sizeof(block_t);
+    block_t *bp = resolve(b);
 
-    block_t *prev = previous_block_if_free(b);
-    block_t *next = next_block(b);
+    blockptr_t prev = previous_block_if_free(b);
+    blockptr_t next = next_block(b);
+    block_t *prevp = resolve(prev);
+    block_t *nextp = resolve(next);
 
     /* Mark the block as free */
-    b->used = false;
+    bp->used = false;
     index->stats.live_blocks--;
-    index->stats.used_memory -= b->size;
-    if(next) next->previous_used = false;
+    index->stats.used_memory -= bp->size;
+    if(nextp) nextp->previous_used = false;
 
     /* Merge with the next block if free */
-    if(next && !next->used)
+    if(nextp && !nextp->used)
     {
         remove_link(next, index);
         merge(b, next);
     }
     /* Merge with the previous block if free */
-    if(prev)
+    if(prevp)
     {
         remove_link(prev, index);
         merge(prev, b);
@@ -353,30 +364,31 @@ void mq_heap_free(u32 ptr32)
     prepend_link(b, index);
 }
 
-u32 mq_heap_realloc(u32 ptr32, size_t size)
+u32 mq_heap_realloc(u32 ptr, size_t size)
 {
-    if(!ptr32)
+    if(!ptr)
         return mq_heap_malloc(size);
     if(!size) {
-        mq_heap_free(ptr32);
-        return mq_createPointer(NULL);
+        mq_heap_free(ptr);
+        return 0;
     }
 
-    void *ptr = mq_resolvePointer(ptr32);
-    index_t *index = mq_resolvePointer(mq_heapBase);
+    index_t *index = resolve(mq_heapBase);
     stats_t *s = &index->stats;
-    block_t *b = ptr - sizeof(block_t);
+    blockptr_t b = ptr - sizeof(block_t);
+    block_t *bp = resolve(b);
     size = round_size(size);
-    int size_before = b->size;
+    int size_before = bp->size;
 
     /* When requesting a smaller size, split the original block */
-    if(size <= b->size)
+    if(size <= bp->size)
     {
-        block_t *rest = split(b, size);
+        blockptr_t rest = split(b, size);
         if(rest) {
             /* Try to merge the rest with a following free block */
-            block_t *next = next_block(rest);
-            if(next && !next->used)
+            blockptr_t next = next_block(rest);
+            block_t *nextp = resolve(next);
+            if(nextp && !nextp->used)
             {
                 remove_link(next, index);
                 merge(rest, next);
@@ -387,76 +399,79 @@ u32 mq_heap_realloc(u32 ptr32, size_t size)
         }
         s->total_volume += size;
         s->total_blocks++;
-        return mq_createPointer(ptr);
+        return ptr;
     }
 
     /* When requesting a larger size and the next block is free and large
        enough, expand the original allocation */
-    block_t *next = next_block(b);
-    int next_needed = size - b->size - sizeof(block_t);
+    blockptr_t next = next_block(b);
+    block_t *nextp = resolve(next);
+    int next_needed = size - bp->size - sizeof(block_t);
 
-    if(next && !next->used && next->size >= next_needed)
+    if(nextp && !nextp->used && nextp->size >= next_needed)
     {
         remove_link(next, index);
-        block_t *rest = split(next, next_needed);
+        blockptr_t rest = split(next, next_needed);
         if(rest) prepend_link(rest, index);
         merge(b, next);
 
-        s->used_memory += (b->size - size_before);
+        s->used_memory += (bp->size - size_before);
         s->expanding_reallocs++;
         s->total_volume += size;
         s->total_blocks++;
-        return mq_createPointer(ptr);
+        return ptr;
     }
 
     /* Otherwise, perform a brand new allocation */
-    void *new_ptr = mq_resolvePointer(mq_heap_malloc(size));
+    u32 new_ptr = mq_heap_malloc(size);
     if(!new_ptr)
     {
         if(size >= s->free_memory) s->exhaustion_failures++;
         if(size <  s->free_memory) s->fragmentation_failures++;
         s->total_failures++;
-        return mq_createPointer(NULL);
+        return 0;
     }
 
     /* Move the data and free the original block */
-    memcpy(new_ptr, ptr, b->size);
-    mq_heap_free(ptr32);
+    memcpy(resolve(new_ptr), resolve(ptr), bp->size);
+    mq_heap_free(ptr);
 
     s->relocating_reallocs++;
     s->total_volume += size;
     s->total_blocks++;
-    return mq_createPointer(new_ptr);
+    return new_ptr;
 }
 
 bool mq_heap_init(u32 start, u32 end, void *buffer)
 {
     if(end - start < 256 || !start)
         return false;
-    block_t *entry_block;
+    blockptr_t entry_block;
+    block_t *entry_blockp;
 
     mq_heapBase = start;
     mq_heapEnd = end;
     mq_heapBuffer = buffer;
 
     /* The index is located at the very start of the arena */
-    index_t *index = mq_resolvePointer(start);
+    index_t *index = resolve(start);
     memset(index, 0, sizeof *index);
-    entry_block = mq_resolvePointer(start + sizeof(index_t));
+    entry_block = start + sizeof(index_t);
+    entry_blockp = resolve(entry_block);
 
     /* Initialize the first block */
-    entry_block->last = 1;
-    entry_block->used = 0;
-    entry_block->previous_used = 1;
-    entry_block->size = end - start - sizeof(index_t) - sizeof(block_t);
-    set_footer(entry_block, NULL, NULL);
+    entry_blockp->last = 1;
+    entry_blockp->used = 0;
+    entry_blockp->previous_used = 1;
+    entry_blockp->size = end - start - sizeof(index_t) - sizeof(block_t);
+    set_footer(entry_block, 0, 0);
 
     /* Initialize the index */
-    for(int i = 0; i < 16; i++) index->classes[i] = NULL;
-    index->classes[size_class(entry_block->size)] = entry_block;
+    for(int i = 0; i < 16; i++) index->classes[i] = 0;
+    index->classes[size_class(entry_blockp->size)] = entry_block;
 
     /* Initialize statistics */
-    index->stats.free_memory = entry_block->size;
+    index->stats.free_memory = entry_blockp->size;
     return true;
 }
 
@@ -480,20 +495,20 @@ bool mq_heap_isInitialized(u32 *start, u32 *end)
 
 mq_heap_stats_t *mq_heap_stats(void)
 {
-    index_t *index = mq_resolvePointer(mq_heapBase);
+    index_t *index = resolve(mq_heapBase);
     return &index->stats;
 }
 
 //=== Introspection and debugging (also original functions) ==================//
 
-static block_t *first_block(void)
+static blockptr_t first_block(void)
 {
-    return mq_resolvePointer(mq_heapBase + sizeof(index_t));
+    return mq_heapBase + sizeof(index_t);
 }
 
 int mq_heap_dbg_sequence_length(void)
 {
-    block_t *b = first_block();
+    blockptr_t b = first_block();
     int length = 0;
     while(b) b = next_block(b), length++;
     return length;
@@ -501,13 +516,13 @@ int mq_heap_dbg_sequence_length(void)
 
 bool mq_heap_dbg_sequence_covers(void)
 {
-    block_t *b = first_block();
+    blockptr_t b = first_block();
+    block_t *bp;
     int total_size = 0;
 
-    while(mq_createPointer(b) >= mq_heapBase
-          && mq_createPointer(b) < mq_heapEnd)
+    while(b >= mq_heapBase && b < mq_heapEnd && (bp = resolve(b)))
     {
-        total_size += sizeof(block_t) + b->size;
+        total_size += sizeof(block_t) + bp->size;
         b = next_block(b);
     }
 
@@ -516,20 +531,25 @@ bool mq_heap_dbg_sequence_covers(void)
 
 bool mq_heap_dbg_sequence_terminator(void)
 {
-    block_t *b = first_block();
-    while(!b->last) b = next_block(b);
-    return (mq_createPointer(b) + sizeof(block_t) + b->size == mq_heapEnd);
+    blockptr_t b = first_block();
+    block_t *bp;
+    while((bp = resolve(b)) && !bp->last) b = next_block(b);
+    return bp && b + sizeof(block_t) + bp->size == mq_heapEnd;
 }
 
 bool mq_heap_dbg_sequence_coherent_used(void)
 {
-    block_t *b = first_block(), *next;
-    if(!b->previous_used) return false;
+    blockptr_t b = first_block(), next;
+    block_t *bp = resolve(b);
+    if(!bp || !bp->previous_used) return false;
 
     while(b)
     {
         next = next_block(b);
-        if(next && b->used != next->previous_used) return false;
+        block_t *nextp = resolve(next);
+        bp = resolve(b);
+        if(!bp || (next && (!nextp || bp->used != nextp->previous_used)))
+            return false;
         b = next;
     }
     return true;
@@ -537,24 +557,33 @@ bool mq_heap_dbg_sequence_coherent_used(void)
 
 bool mq_heap_dbg_sequence_footer_size(void)
 {
-    for(block_t *b = first_block(); b; b = next_block(b))
+    for(blockptr_t b = first_block(); b; b = next_block(b))
     {
-        if(b->used) continue;
-        uint32_t *footer = (void *)b + sizeof(block_t) + b->size;
+        block_t *bp = resolve(b);
+        if(!bp)
+            return false;
+        if(bp->used) continue;
+        u32 *footer = block_footer(b);
+        if(!footer) return false;
 
-        if((footer[-1] & 1) != (b->size == 8)) return false;
-        if(b->size != 8 && (b->size != footer[-3])) return false;
+        if((footer[-1] & 1) != (bp->size == 8)) return false;
+        if(bp->size != 8 && (bp->size != footer[-3])) return false;
     }
     return true;
 }
 
 bool mq_heap_dbg_sequence_merged_free(void)
 {
-    for(block_t *b = first_block(); b; b = next_block(b))
+    for(blockptr_t b = first_block(); b; b = next_block(b))
     {
-        if(b->used) continue;
+        block_t *bp = resolve(b);
+        if(!bp)
+            return false;
+        if(bp->used) continue;
         if(previous_block_if_free(b)) return false;
-        if(next_block(b) && !next_block(b)->used) return false;
+        blockptr_t next = next_block(b);
+        block_t *nextp = resolve(next);
+        if(next && (!nextp || !nextp->used)) return false;
     }
     return true;
 }
@@ -563,13 +592,14 @@ bool mq_heap_dbg_sequence_merged_free(void)
 
 bool mq_heap_dbg_list_structure(void)
 {
-    index_t *index = mq_resolvePointer(mq_heapBase);
+    index_t *index = resolve(mq_heapBase);
 
     for(int c = 0; c < 16; c++)
     {
-        block_t *b = index->classes[c], *next;
+        blockptr_t b = index->classes[c], next;
         if(!b) continue;
-        if(b->used) return false;
+        block_t *bp = resolve(b);
+        if(!bp || bp->used) return false;
         if(previous_link(b)) return false;
 
         while((next = next_link(b)))
@@ -585,18 +615,22 @@ bool mq_heap_dbg_list_structure(void)
 
 bool mq_heap_dbg_index_covers(void)
 {
-    index_t *index = mq_resolvePointer(mq_heapBase);
+    index_t *index = resolve(mq_heapBase);
     int32_t total_size = 0;
 
-    for(block_t *b = first_block(); b; b = next_block(b))
+    for(blockptr_t b = first_block(); b; b = next_block(b))
     {
-        if(b->used) total_size += sizeof(block_t) + b->size;
+        block_t *bp = resolve(b);
+        if(!bp) return false;
+        if(bp->used) total_size += sizeof(block_t) + bp->size;
     }
 
     for(int c = 0; c < 16; c++)
-    for(block_t *b = index->classes[c]; b; b = next_link(b))
+    for(blockptr_t b = index->classes[c]; b; b = next_link(b))
     {
-        total_size += sizeof(block_t) + b->size;
+        block_t *bp = resolve(b);
+        if(!bp) return false;
+        total_size += sizeof(block_t) + bp->size;
     }
 
     return (total_size + sizeof(index_t) == mq_heapEnd - mq_heapBase);
@@ -604,12 +638,14 @@ bool mq_heap_dbg_index_covers(void)
 
 bool mq_heap_dbg_index_class_separation(void)
 {
-    index_t *index = mq_resolvePointer(mq_heapBase);
+    index_t *index = resolve(mq_heapBase);
 
     for(int c = 0; c < 16; c++)
-    for(block_t *b = index->classes[c]; b; b = next_link(b))
+    for(blockptr_t b = index->classes[c]; b; b = next_link(b))
     {
-        if(size_class(b->size) != c) return false;
+        block_t *bp = resolve(b);
+        if(!bp) return false;
+        if(size_class(bp->size) != c) return false;
     }
     return true;
 }
