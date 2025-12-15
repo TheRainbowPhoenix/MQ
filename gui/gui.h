@@ -106,9 +106,12 @@ struct GUI
     struct OpenFileBuffer inputFile;
     /* List of add-ins in CWD (detected at startup) */
     std::vector<std::string> workingFolderAddins;
+    std::string workingFolderPrefix;
+    struct WatchInfo workingFolderWatcher = \
+        { .fd = -1, .wd = -1, .is_file = false };
     /* File tracked for reloading the currently active file when changed */
     bool watch_enabled = false;
-    struct WatchInfo watch_info = { .fd = -1, .wd = -1 };
+    struct WatchInfo watch_info = { .fd = -1, .wd = -1, .is_file = false };
 
     /* Path of the currently-running program, "" if none. */
     std::filesystem::path current_program_path = "";

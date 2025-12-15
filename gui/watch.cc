@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <sys/inotify.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
 #include <limits.h>
@@ -14,10 +15,28 @@
 #define __INOTIFY_EVENT_SIZE \
     (sizeof(struct inotify_event) + NAME_MAX + 1)
 
-bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
+bool watch_init(struct WatchInfo *info, std::string const &pathname)
 {
+    struct stat stat_buff;
+    int watch_flags;
+
     if(info == nullptr || pathname.empty()) {
         mq_log(MQ_LOG_ERROR, "watch_init: invalid arguments");
+        return false;
+    }
+    if(stat(pathname.c_str(), &stat_buff) != 0) {
+        mq_log(MQ_LOG_ERROR, "watch_init: unable to perform stat()");
+        return false;
+    }
+    if(stat_buff.st_mode & S_IFDIR) {
+        info->is_file = false;
+        watch_flags   = IN_CREATE   | IN_DELETE | IN_MODIFY |
+                        IN_MOVED_TO | IN_MOVED_FROM;
+    } else if (stat_buff.st_mode & S_IFREG) {
+        info->is_file = true;
+        watch_flags   = IN_CLOSE_WRITE | IN_DELETE_SELF;
+    } else {
+        mq_log(MQ_LOG_ERROR, "watch_init: not a valid file");
         return false;
     }
     if(info->fd < 0) {
@@ -32,13 +51,10 @@ bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
             info->wd = -1;
         }
     }
-    info->wd = inotify_add_watch(
-        info->fd,
-        pathname.c_str(),
-        IN_CLOSE_WRITE | IN_DELETE_SELF);
+    info->wd = inotify_add_watch(info->fd, pathname.c_str(), watch_flags);
     if(info->wd == -1) {
         mq_log(MQ_LOG_ERROR, "inotify_add_watch: cannot watch '%s': %s",
-            pathname, strerror(errno));
+            pathname.c_str(), strerror(errno));
         return false;
     }
     return true;
@@ -61,17 +77,45 @@ enum WatchEvent watch_poll(struct WatchInfo *info)
     while (true) {
         // process "pending" (see the comment on the `read()` operation)
         // from the previous event fetching
-        if(size >= sizeof(struct inotify_event)) {
-            if(event->mask & IN_CLOSE) {
-                watch_event = MQ_WATCH_EVT_UPDATED;
-            } else if(event->mask & IN_DELETE_SELF) {
-                watch_event = MQ_WATCH_EVT_DELETED;
-            } else if(event->mask & IN_IGNORED) {
-                watch_event = MQ_WATCH_EVT_NONE;
+        if((unsigned long)size >= sizeof(struct inotify_event)) {
+            if(info->is_file) {
+                if(event->mask & IN_CLOSE) {
+                    watch_event = MQ_WATCH_EVT_UPDATED;
+                } else if(event->mask & IN_DELETE_SELF) {
+                    watch_event = MQ_WATCH_EVT_DELETED;
+                } else if(event->mask & IN_IGNORED) {
+                    watch_event = MQ_WATCH_EVT_NONE;
+                } else {
+                    mq_log(MQ_LOG_WARNING,
+                        "watch_poll: unknown event %x\n", event->mask);
+                    watch_event = MQ_WATCH_EVT_NONE;
+                }
             } else {
-                mq_log(MQ_LOG_WARNING,
-                    "watch_poll: unknown event %x\n", event->mask);
-                watch_event = MQ_WATCH_EVT_NONE;
+                if (event->mask & IN_CREATE) {
+                    mq_log(MQ_LOG_DEBUG,
+                        "watch_poll : file `%s` created", event->name);
+                    watch_event = MQ_WATCH_EVT_DIR_UPDATED;
+                } else if (event->mask & IN_DELETE) {
+                    mq_log(MQ_LOG_DEBUG,
+                        "watch_poll : file `%s` deleted", event->name);
+                    watch_event = MQ_WATCH_EVT_DIR_UPDATED;
+                } else if (event->mask & IN_MODIFY) {
+                    mq_log(MQ_LOG_DEBUG,
+                        "watch_poll : file `%s` modified", event->name);
+                    watch_event = MQ_WATCH_EVT_DIR_UPDATED;
+                } else if (event->mask & IN_MOVED_TO) {
+                    mq_log(MQ_LOG_DEBUG,
+                        "watch_poll : file `%s` moved to", event->name);
+                    watch_event = MQ_WATCH_EVT_DIR_UPDATED;
+                } else if (event->mask & IN_MOVED_FROM) {
+                    mq_log(MQ_LOG_DEBUG,
+                        "watch_poll : file `%s` moved from", event->name);
+                    watch_event = MQ_WATCH_EVT_DIR_UPDATED;
+                } else {
+                    mq_log(MQ_LOG_WARNING,
+                        "watch_poll: unknown event %x\n", event->mask);
+                    watch_event = MQ_WATCH_EVT_NONE;
+                }
             }
             uintptr_t event_size = sizeof(struct inotify_event) + event->len;
             event = (struct inotify_event *)((uintptr_t)event + event_size);
