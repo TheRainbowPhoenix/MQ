@@ -32,11 +32,16 @@ cd ../../../ || exit 1
 echo 'Building Azur...'
 mkdir -p build/web/azur
 cd build/web/azur || exit 1
+git clone \
+    https://git.planet-casio.com/Lephenixnoir/Azur.git \
+    --recurse-submodules \
+    --depth 1 \
+    source
 mkdir -p sysroot
 export AZUR_PATH_emscripten="$PWD/sysroot"
 emcmake cmake \
     -B build \
-    -S ../../../3rdparty/azur \
+    -S source \
     -DAZUR_PLATFORM=emscripten \
     -DCMAKE_INSTALL_PREFIX="$AZUR_PATH_emscripten"
 if ! cmake --build build --target install --parallel ; then

@@ -18,11 +18,16 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 echo 'Building Azur...'
 mkdir -p build/linux/azur
 cd build/linux/azur || exit 1
+git clone \
+    https://git.planet-casio.com/Lephenixnoir/Azur.git \
+    --recurse-submodules \
+    --depth 1 \
+    source
 mkdir -p sysroot
 export AZUR_PATH_linux="$PWD/sysroot"
 cmake \
     -B build \
-    -S ../../../3rdparty/azur \
+    -S source \
     -DAZUR_PLATFORM=linux \
     -DCMAKE_INSTALL_PREFIX="$AZUR_PATH_linux"
 if ! cmake --build build --target install --parallel ; then
