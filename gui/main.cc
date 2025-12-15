@@ -45,6 +45,23 @@ mqController *emu0 = NULL;
 
 //============================================================================//
 
+static void find_cwd_addins(
+    std::string const &search_prefix,
+    std::vector<std::string> &addins
+) {
+    addins.clear();
+    for(auto const &entry: fs::directory_iterator(search_prefix)) {
+        if(!entry.is_regular_file())
+            continue;
+        std::string ext = entry.path().extension();
+        if(ext == ".g1a" || ext == ".G1A" || ext == ".g3a" || ext == ".G3A")
+            addins.push_back(entry.path().filename());
+    }
+    std::sort(addins.begin(), addins.end());
+}
+
+//============================================================================//
+
 void update_machine(mqMachine *mach, bool startRunning);
 
 static void handle_log(enum mq_log_priority priority, char *str)
@@ -208,9 +225,24 @@ static int update(void)
         gui.ConsoleText.unlock();
     }
 
+    // watch addin folder
+    enum WatchEvent event;
+    bool need_refresh = false;
+    while(true) {
+        event = watch_poll(&gui.workingFolderWatcher);
+        if(event == MQ_WATCH_EVT_NONE)
+            break;
+        if(event != MQ_WATCH_EVT_DIR_UPDATED)
+            continue;
+        need_refresh = true;
+        mq_log(MQ_LOG_DEBUG, "refresh addin folder");
+    }
+    if(need_refresh)
+        find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
+
+
     fs::path loadPath = "";
     if(gui.watch_enabled) {
-        enum WatchEvent event;
         while((event = watch_poll(&gui.watch_info)) != MQ_WATCH_EVT_NONE) {
             if(event == MQ_WATCH_EVT_DELETED)
                 mq_log(MQ_LOG_WARNING, "watch: addin has been removed");
@@ -444,20 +476,6 @@ static void load_icons(char const *rid)
     stbi_image_free(icon_px);
 }
 
-static void find_cwd_addins(std::vector<std::string> &addins)
-{
-    for(auto const &entry: fs::directory_iterator(".")) {
-        if(!entry.is_regular_file())
-            continue;
-
-        std::string ext = entry.path().extension();
-        if(ext == ".g1a" || ext == ".G1A" || ext == ".g3a" || ext == ".G3A")
-            addins.push_back(entry.path().filename());
-    }
-
-    std::sort(addins.begin(), addins.end());
-}
-
 static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
 {
     ImGuiIO &io = ImGui::GetIO();
@@ -565,7 +583,10 @@ int main(int argc, char **argv)
     ImGui_LoadMQStyle(ImGui::GetStyle());
 
     /* Provide options for loading add-ins in the current folder */
-    find_cwd_addins(gui.workingFolderAddins);
+    gui.workingFolderPrefix = ".";
+    find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
+    if(!watch_init(&gui.workingFolderWatcher, gui.workingFolderPrefix))
+        mq_log(MQ_LOG_ERROR, "unable to watche the addin folder");
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
     mq_controller_stopThread(emu0);

@@ -6,4 +6,5 @@ CompileFlags:
     - '-xc++'
     - '-std=c++20'
     - '-DMQ_VIDEO_FFMPEG'
+    - '-DAZUR_PLATFORM_LINUX'
   Compiler: clang++
