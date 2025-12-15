@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(MQ VERSION 0.0.2 LANGUAGES CXX C ASM)
+project(MQ VERSION 0.1 LANGUAGES CXX C ASM)
 
 list(APPEND CMAKE_MODULE_PATH "$ENV{AZUR_PATH_${AZUR_PLATFORM}}/lib/cmake")
 find_package(Azur 0.2 REQUIRED)

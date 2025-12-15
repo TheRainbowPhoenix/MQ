@@ -26,8 +26,8 @@ fi
 
 # checking CMake project version
 version=$(cat ./CMakeLists.txt)
-version=$(echo "$version" | grep -Eo 'project\(MQ VERSION ([0-9]+.){2}[0-9]+')
-version=$(echo "$version" | grep -Eo '([0-9]+.?){3}')
+version=$(echo "$version" | grep -Po 'project\(MQ VERSION \d+\.\d+(\.\d+)?')
+version=$(echo "$version" | grep -Po '\d+\.\d+(\.\d+)?')
 if [ "$version" != "$1" ] ; then
     echo 'CMakeLists.txt version mismatch, fix and retry' >&2
     echo "$version != $1" >&2

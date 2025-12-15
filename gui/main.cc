@@ -18,8 +18,8 @@
 #include <azur/azur.h>
 #include <azur/resources.h>
 #include <azur/log.h>
-#include <stb_image.h>
 #include <SDL2/SDL.h>
+#include <stb_image.h>
 
 #include <stdio.h>
 #include <stdlib.h>
