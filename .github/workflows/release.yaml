@@ -10,8 +10,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Checkout Submodules
-        uses: ./.github/actions/mq-submodule-sync
       - name: Check integrity
         uses: ./.github/actions/mq-env-exec
         with:
@@ -27,8 +25,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Checkout Submodules
-        uses: ./.github/actions/mq-submodule-sync
+        with:
+          submodules: recursive
       - name: Build all (linux)
         uses: ./.github/actions/mq-env-exec
         with:
@@ -55,8 +53,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
-      - name: Checkout Submodules
-        uses: ./.github/actions/mq-submodule-sync
+        with:
+          submodules: recursive
       - name: Build all (Emscripten)
         uses: ./.github/actions/mq-env-exec
         with:
