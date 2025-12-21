@@ -30,6 +30,8 @@ struct GUIActions
     std::optional<fs::path> fileLoadPath;
     /* Update the inotify watch on the currently-running add-in. */
     bool fileUpdateWatch = false;
+    /* Reload the current add-in. */
+    bool fileReload = false;
 
     /* Initialize machine with given initializeKind. */
     std::optional<int> machineInitialize;

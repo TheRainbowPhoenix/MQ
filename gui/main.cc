@@ -253,6 +253,8 @@ static int update(void)
             }
         }
     }
+    if(gui.actions.fileReload)
+        loadPath = gui.current_program_path;
     if(auto p = gui.actions.fileLoadPath)
         loadPath = *p;
     if(!loadPath.empty()) {

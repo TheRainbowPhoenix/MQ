@@ -40,6 +40,8 @@ void GUI::Render(mqController *controller)
         ImGuiInputFlags_RouteGlobal);
     actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
         ImGuiInputFlags_RouteGlobal);
+    bool wantsReload = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_R,
+        ImGuiInputFlags_RouteGlobal);
 
     if(ImGui::BeginCustomMenuBar()) {
         if(ImGui::BeginCustomMenuChild("##menutitle", {30,0}, {1,4})) {
@@ -87,6 +89,10 @@ void GUI::Render(mqController *controller)
             if(ImGui::IconButton(2, "Step", !paused))
                 actions.machineSetPendingCycles = 1;
             ImGui::SameLine(0, 6);
+
+            if(ImGui::IconButton(10, "Reset (Ctrl+R)"))
+                actions.fileReload = true;
+            ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
             ImGui::MoveCursorScreenPos({0, 3});
@@ -97,7 +103,7 @@ void GUI::Render(mqController *controller)
             else
                 ImGui::Text(paused ? "Paused" : "Running...");
 
-            ImGui::SetCursorScreenPos({cursor.x + 140, cursor.y});
+            ImGui::SetCursorScreenPos({cursor.x + 180, cursor.y});
             ImGui::CustomMenuSeparator();
             ImGui::SameLine(0, 6);
 
@@ -159,6 +165,8 @@ void GUI::Render(mqController *controller)
 
     if(pauseUnpause && canRunMachine)
         actions.machineSetPendingCycles = paused ? -1 : 0;
+    if(wantsReload && canRunMachine)
+        actions.fileReload = true;
 
     auto dock = ImGui::DockSpaceOverViewport();
 
