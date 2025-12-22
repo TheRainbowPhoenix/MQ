@@ -33,7 +33,6 @@ jobs:
             cmake
             python3
             libsdl2-dev
-            libsdl2-image-dev
             libopengl-dev
             nasm
           commands: |
