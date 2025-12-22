@@ -148,7 +148,6 @@ target_include_directories(mq PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/include"
   "${CMAKE_CURRENT_BINARY_DIR}" # for auto-generated source fragments
   "${CMAKE_CURRENT_BINARY_DIR}/autogen" # for auto-generated headers
-  "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/stb"
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
 target_link_options(mq PRIVATE ${MQ_OPT_LD} -pthread)
 
@@ -162,6 +161,7 @@ endif()
 
 if(MQ_VIDEO_FFMPEG)
   target_link_libraries(mq PRIVATE Azur::ffmpeg)
+  target_link_options(mq PRIVATE -Wl,--gc-sections -Wl,-Map=mq.map)
 endif()
 
 if(AZUR_PLATFORM STREQUAL linux)
