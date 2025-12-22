@@ -3,6 +3,7 @@ project(MQ VERSION 0.1 LANGUAGES CXX C ASM)
 
 list(APPEND CMAKE_MODULE_PATH "$ENV{AZUR_PATH_${AZUR_PLATFORM}}/lib/cmake")
 find_package(Azur 0.2 REQUIRED)
+find_package(Python3 COMPONENTS Interpreter)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED TRUE)
@@ -88,8 +89,9 @@ set(LIB_SOURCES
 
 add_custom_command(OUTPUT "${AUTOGEN}/sh-isa.inc"
   COMMAND mkdir -p "${AUTOGEN}"
-  COMMAND python3 tools/gen-isa.py --table core/sh-isa.def
-                  "${AUTOGEN}/sh-isa.inc"
+  COMMAND "${Python3_EXECUTABLE}"
+          tools/gen-isa.py --table core/sh-isa.def
+          "${AUTOGEN}/sh-isa.inc"
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Generating decoder for sh-isa"
   DEPENDS tools/gen-isa.py core/sh-isa.def)
@@ -108,9 +110,10 @@ set(EMBEDDED_ASSETS
 add_custom_command(
   OUTPUT "${AUTOGEN}/assets.c" "${AUTOGEN}/assets.h"
   COMMAND mkdir -p "${AUTOGEN}"
-  COMMAND python3 tools/gen-assets.py
-                  -c "${AUTOGEN}/assets.c" -h "${AUTOGEN}/assets.h"
-                  ${EMBEDDED_ASSETS}
+  COMMAND "${Python3_EXECUTABLE}"
+          tools/gen-assets.py
+          -c "${AUTOGEN}/assets.c" -h "${AUTOGEN}/assets.h"
+          ${EMBEDDED_ASSETS}
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   COMMENT "Embeddeding assets"
   DEPENDS tools/gen-assets.py ${EMBEDDED_ASSETS})
