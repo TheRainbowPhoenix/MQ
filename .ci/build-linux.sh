@@ -14,27 +14,11 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 # rudimentary argument check
 [ $# -ne 1 ] && echo 'missing version information' >&2 && exit 1
 
-# manually and locally install Azur (temporary hack)
-echo 'Building Azur...'
-mkdir -p build/linux/azur
-cd build/linux/azur || exit 1
-git clone \
-    https://git.planet-casio.com/Lephenixnoir/Azur.git \
-    --recurse-submodules \
-    --depth 1 \
-    source
-mkdir -p sysroot
-export AZUR_PATH_linux="$PWD/sysroot"
-cmake \
-    -B build \
-    -S source \
-    -DAZUR_PLATFORM=linux \
-    -DCMAKE_INSTALL_PREFIX="$AZUR_PATH_linux"
-if ! cmake --build build --target install --parallel ; then
-    echo 'Unable to build Azur, abort :(' >&2
-    exit 1
-fi
-cd ../../../ || exit 1
+# manually and locally install Azur and manually export installation
+# information
+./.ci/build-azur.sh linux "$PWD/build/linux/azur"
+AZUR_PATH_linux="$PWD/build/linux/azur/sysroot"
+export AZUR_PATH_linux
 
 # manually build MQ
 echo 'Building MQ...'

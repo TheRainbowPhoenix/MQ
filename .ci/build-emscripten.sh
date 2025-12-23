@@ -28,27 +28,11 @@ cd emsdk/ || exit 1
 source ./emsdk_env.sh
 cd ../../../ || exit 1
 
-# manually and locally install Azur (temporary hack)
-echo 'Building Azur...'
-mkdir -p build/web/azur
-cd build/web/azur || exit 1
-git clone \
-    https://git.planet-casio.com/Lephenixnoir/Azur.git \
-    --recurse-submodules \
-    --depth 1 \
-    source
-mkdir -p sysroot
-export AZUR_PATH_emscripten="$PWD/sysroot"
-emcmake cmake \
-    -B build \
-    -S source \
-    -DAZUR_PLATFORM=emscripten \
-    -DCMAKE_INSTALL_PREFIX="$AZUR_PATH_emscripten"
-if ! cmake --build build --target install --parallel ; then
-    echo 'Unable to build Azur, abort :(' >&2
-    exit 1
-fi
-cd ../../../ || exit 1
+# manually and locally install Azur and manually export installation
+# information
+./.ci/build-azur.sh emscripten "$PWD/build/web/azur"
+AZUR_PATH_emscripten="$PWD/build/web/azur/sysroot"
+export AZUR_PATH_emscripten
 
 # manually build MQ
 echo 'Building MQ...'
