@@ -179,14 +179,14 @@ static void open_addin(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         gui.ResetState();
-        watch_quit(&gui.watch_info);
+        watch_quit(&gui.addinFolderWatcherInfo);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         gui.ResetState();
-        watch_quit(&gui.watch_info);
+        watch_quit(&gui.addinFolderWatcherInfo);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(emu0->mach, data, size);
@@ -225,19 +225,19 @@ static int update(void)
         gui.ConsoleText.unlock();
     }
 
-    // watch addin folder
+    // addin folder refresh
     enum WatchEvent event;
-    if(gui.actions.dirAddinPrefix) {
-        if(gui.workingFolderPrefix)
-            watch_quit(&gui.workingFolderWatcher);
-        gui.workingFolderPrefix = gui.actions.dirAddinPrefix;
-        find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
-        if(!watch_init(&gui.workingFolderWatcher, gui.workingFolderPrefix))
+    bool need_refresh = false;
+    if(gui.actions.addinFolderPrefixUpdate) {
+        if(!gui.addinFolderPrefix.empty())
+            watch_quit(&gui.addinFolderWatcherInfo);
+        gui.addinFolderPrefix = gui.actions.addinFolderPrefixUpdate.value();
+        if(!watch_init(&gui.addinFolderWatcherInfo, gui.addinFolderPrefix))
             mq_log(MQ_LOG_ERROR, "unable to watche the addin folder");
+        need_refresh = true;
     } else {
-        bool need_refresh = false;
         while(true) {
-            event = watch_poll(&gui.workingFolderWatcher);
+            event = watch_poll(&gui.addinFolderWatcherInfo);
             if(event == MQ_WATCH_EVT_NONE)
                 break;
             if(event != MQ_WATCH_EVT_DIR_UPDATED)
@@ -245,31 +245,38 @@ static int update(void)
             need_refresh = true;
             mq_log(MQ_LOG_DEBUG, "refresh addin folder");
         }
-        if(need_refresh)
-            find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
     }
+    if(need_refresh)
+        find_cwd_addins(gui.addinFolderPrefix, gui.addinFolderListName);
 
-    fs::path loadPath = "";
-    if(gui.watch_enabled) {
-        while((event = watch_poll(&gui.watch_info)) != MQ_WATCH_EVT_NONE) {
+    std::string loadPath = "";
+    if(gui.addinFileWatchEnabled) {
+        while(true) {
+            event = watch_poll(&gui.addinFileWatchInfo);
+            if(event == MQ_WATCH_EVT_NONE)
+                break;
             if(event == MQ_WATCH_EVT_DELETED)
                 mq_log(MQ_LOG_WARNING, "watch: addin has been removed");
             if(event == MQ_WATCH_EVT_UPDATED) {
                 mq_log(MQ_LOG_DEBUG, "watch: addin has been updated");
-                loadPath = gui.current_program_path;
+                loadPath = gui.addinFilePath;
                 startRunning = true;
             }
         }
     }
-    if(auto p = gui.actions.fileLoadPath)
-        loadPath = *p;
+    if(gui.actions.addinLoadName) {
+        loadPath = \
+            gui.addinFolderPrefix + "/" + gui.actions.addinLoadName.value();
+    }
+    if(gui.actions.addinLoadPath)
+        loadPath = gui.actions.addinLoadPath.value();
     if(!loadPath.empty()) {
         long size;
         void *data = openAndReadFile(loadPath.c_str(), &size);
         if(data) {
-            gui.inputFile.path = loadPath;
-            gui.inputFile.data = data;
-            gui.inputFile.size = size;
+            gui.addinFileInfo.path = loadPath;
+            gui.addinFileInfo.data = data;
+            gui.addinFileInfo.size = size;
         }
         else
             loadPath = "";
@@ -350,18 +357,18 @@ void update_machine(mqMachine *mach, bool startRunning)
         mq_machine_setCyclesPending(mach, *c);
 
     /* Intentional re-check */
-    if(gui.inputFile.data) {
+    if(gui.addinFileInfo.data) {
         open_addin(
-            gui.inputFile.path,
-            gui.inputFile.data,
-            gui.inputFile.size);
-        free(gui.inputFile.data);
+            gui.addinFileInfo.path,
+            gui.addinFileInfo.data,
+            gui.addinFileInfo.size);
+        free(gui.addinFileInfo.data);
         /* Update the watch if we're loading a new program */
         may_enable_watch = true;
         if(startRunning)
             mq_machine_setCyclesPending(mach, -1);
-        gui.current_program_path = gui.inputFile.path;
-        gui.inputFile = OpenFileBuffer();
+        gui.addinFilePath = gui.addinFileInfo.path;
+        gui.addinFileInfo = OpenFileBuffer();
         render_needed = std::max(render_needed, 1);
     }
 
@@ -370,11 +377,11 @@ void update_machine(mqMachine *mach, bool startRunning)
 
     /* Update the watch if we're clicking on the checkbox and there is a
        program running */
-    if(gui.actions.fileUpdateWatch && !gui.current_program_path.empty())
+    if(gui.actions.addinFileWatchEnableUpdate && !gui.addinFilePath.empty())
         may_enable_watch = true;
 
-    if(gui.watch_enabled && may_enable_watch) {
-        if(!watch_init(&gui.watch_info, gui.current_program_path))
+    if(gui.addinFileWatchEnabled && may_enable_watch) {
+        if(!watch_init(&gui.addinFileWatchInfo, gui.addinFilePath))
             mq_log(MQ_LOG_ERROR, "unable to watch the file o(x_x)o");
     }
 
@@ -504,38 +511,58 @@ bool parse_cli_args(int argc, char **argv)
 {
     for(int i = 1; i < argc; i++) {
         if(!strcmp("--watch", argv[i]) || !strcmp("-w", argv[i]))
-            gui.watch_enabled = true;
+            gui.addinFileWatchEnabled = true;
         else if(!strcmp("--version", argv[i]) || !strcmp("-v", argv[i])) {
             printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,
                 AZUR_VERSION_MINOR);
             return false;
         }
         else if(!strcmp("--dir", argv[i]) || !strcmp("-d", argv[i])) {
-            if(gui.actions.dirAddinPrefix) {
+            if(gui.actions.addinFolderPrefixUpdate) {
                 mq_log(
                     MQ_LOG_WARNING,
                     "dropping previous addin directory request '%s'",
-                    gui.actions.dirAddinPrefix);
+                    gui.actions.addinFolderPrefixUpdate.value().c_str());
             }
             if(++i >= argc) {
                 mq_log(MQ_LOG_ERROR, "missing directory information");
                 return false;
             }
-            gui.actions.dirAddinPrefix = argv[i];
+            gui.actions.addinFolderPrefixUpdate = argv[i];
+        }
+        else if(!strcmp("--addin", argv[i]) || !strcmp("-a", argv[i])) {
+            if(gui.actions.addinLoadName) {
+                mq_log(
+                    MQ_LOG_WARNING,
+                    "dropping previous addin directory request '%s'",
+                    gui.actions.addinLoadName.value().c_str());
+            }
+            if(++i >= argc) {
+                mq_log(MQ_LOG_ERROR, "missing directory information");
+                return false;
+            }
+            gui.actions.addinLoadName = argv[i];
         }
         else {
-            if(gui.actions.fileLoadPath) {
+            if(gui.actions.addinLoadPath) {
                 mq_log(
                     MQ_LOG_WARNING,
                     "dropping previous addin request '%s'",
-                    gui.actions.fileLoadPath->c_str());
+                    gui.actions.addinLoadPath.value().c_str());
             }
-            gui.actions.fileLoadPath = argv[i];
+            gui.actions.addinLoadPath = argv[i];
             gui.actions.machineSetPendingCycles = -1;
         }
     }
-    if(!gui.actions.dirAddinPrefix)
-        gui.actions.dirAddinPrefix = ".";
+    if(!gui.actions.addinFolderPrefixUpdate)
+        gui.actions.addinFolderPrefixUpdate = ".";
+    if(gui.actions.addinLoadPath && gui.actions.addinLoadName) {
+        mq_log(MQ_LOG_WARNING,
+            "You have specified an addin name and an addin path! "
+            "Only the path will be keeped"
+        );
+        gui.actions.addinLoadName.reset();
+    }
     return true;
 }
 
@@ -613,7 +640,7 @@ int main(int argc, char **argv)
 #if MQ_VIDEO_FFMPEG
     gui.recorder.stop(&gui.lastDisplayFrame);
 #endif
-    watch_quit(&gui.watch_info);
+    watch_quit(&gui.addinFileWatchInfo);
 
     azur_quit();
     mq_controller_destroy(emu0);

@@ -67,9 +67,19 @@ void handle_upload_file(
     azlog(WARN, "Open '%s' (%zu bytes)!\n", filename.c_str(), size);
 }
 
-void openFileDialog(OpenFileBuffer *ofb)
+void openFileDialog(OpenFileBuffer *ofb, std::string const &prefix)
 {
+    (void)prefix;
     emscripten_browser_file::upload(".g1a,.g3a", handle_upload_file, ofb);
+}
+
+std::string openDirDialog(
+        std::string const &title, std::string const &current_prefix)
+{
+    // not supported for now
+    (void)title;
+    (void)current_prefix;
+    returnt "";
 }
 
 /* Reimplement download to bypass this bug:
@@ -102,9 +112,9 @@ inline void download2(std::string const &filename,
 
 #include "../3rdparty/portable-file-dialogs/portable-file-dialogs.h"
 
-void openFileDialog(OpenFileBuffer *ofb)
+void openFileDialog(OpenFileBuffer *ofb, std::string const &prefix)
 {
-    auto paths = pfd::open_file("MQ: Open file", ".",
+    auto paths = pfd::open_file("MQ: Open file", prefix,
         {"Add-ins", "*.g1a *.g3a", "All files", "*"}, pfd::opt::none).result();
     if(!paths.size())
         return;
@@ -118,6 +128,12 @@ void openFileDialog(OpenFileBuffer *ofb)
     ofb->path = path;
     ofb->data = data;
     ofb->size = size;
+}
+
+std::string openDirDialog(
+        std::string const &title, std::string const &current_prefix)
+{
+    return pfd::select_folder(title, current_prefix).result();
 }
 
 #endif

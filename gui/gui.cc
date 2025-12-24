@@ -5,7 +5,6 @@
 #include <mq/modules/intc.h>
 #include <mq/system/heap.h>
 #include <stdio.h>
-#include <format>
 
 GUI::GUI()
 {
@@ -154,8 +153,8 @@ void GUI::Render(mqController *controller)
 
     /* On native builds this fills inputFile instantly, while on emscripten
        this fills it asynchronously and we'll get it in a future frame */
-    if(open)
-        openFileDialog(&inputFile);
+    if(open && !gui.addinFolderPrefix.empty())
+        openFileDialog(&gui.addinFileInfo, gui.addinFolderPrefix);
 
     if(pauseUnpause && canRunMachine)
         actions.machineSetPendingCycles = paused ? -1 : 0;
@@ -259,8 +258,8 @@ OutputPathPattern::SubstitutionMap GUI::makeSubstitutions()
     OutputPathPattern::SubstitutionMap sub;
 
     std::string ADDIN = "unknown";
-    if(gui.current_program_path != "")
-        ADDIN = gui.current_program_path.stem();
+    if(!gui.addinFilePath.empty())
+        ADDIN = gui.addinFilePath.stem();
     sub["%ADDIN%"] = std::make_pair(ADDIN, "Current program's name");
 
     sub["%DATE%"] = std::make_pair(strftimeCurrentTime("%Y%m%d-%H%M%S"),
@@ -271,6 +270,8 @@ OutputPathPattern::SubstitutionMap GUI::makeSubstitutions()
 
 void ControlWindow::renderContents(mqMachine *omach)
 {
+    ImGui::SeparatorTextD("Program");
+
 #ifndef AZUR_PLATFORM_EMSCRIPTEN
     struct mallinfo2 mi = mallinfo2();
     /* This info is not available with AddressSanitizer's wrapper's */
@@ -331,46 +332,61 @@ void ControlWindow::renderContents(mqMachine *omach)
         ImGui::Text("Running...");
 
     char str[256];
-    bool disabled = gui.current_program_path.empty();
-    char const *path = gui.current_program_path.c_str();
+    bool disabled = gui.addinFilePath.empty();
+    char const *path = gui.addinFilePath.c_str();
 
     if(disabled)
         ImGui::BeginDisabled();
 
-    if(gui.watch_enabled)
+    if(gui.addinFileWatchEnabled)
         snprintf(str, sizeof str, "Watching input file: %s", path);
     else if(!disabled)
         snprintf(str, sizeof str, "Watch input file (%s)", path);
     else
         snprintf(str, sizeof str, "Watch input file");
 
-    if(ImGui::Checkbox2(str, &gui.watch_enabled))
-        gui.actions.fileUpdateWatch = gui.watch_enabled;
-    if(gui.watch_info.fd >= 0) {
+    if(ImGui::Checkbox2(str, &gui.addinFileWatchEnabled))
+        gui.actions.addinFileWatchEnableUpdate = gui.addinFileWatchEnabled;
+    if(gui.addinFileWatchInfo.fd >= 0) {
         ImGui::SameLine(0, 0);
         ImGui::TextDisabled(" (%d.%d)",
-            gui.watch_info.fd, gui.watch_info.wd);
+            gui.addinFileWatchInfo.fd, gui.addinFileWatchInfo.wd);
     }
     if(disabled)
         ImGui::EndDisabled();
 
-    if(gui.workingFolderAddins.size() == 0)
+    ImGui::SeparatorTextD("Addin Folder");
+
+    if(!gui.addinFolderPrefix.empty()) {
+        ImGui::Text("%s", gui.addinFolderPrefix.c_str());
+        float available_x = ImGui::GetContentRegionAvail().x;
+        float title_width = \
+            ImGui::CalcTextSize("change").x + \
+            ImGui::GetStyle().FramePadding.x;
+        ImGui::SameLine(available_x - title_width);
+        if(ImGui::Button("change")) {
+            mq_log(MQ_LOG_DEBUG, "openDirDialog()");
+            gui.actions.addinFolderPrefixUpdate = openDirDialog(
+                "MQ: Select addin folder",
+                gui.addinFolderPrefix
+            );
+        }
+    }
+
+    if(gui.addinFolderListName.size() == 0)
         ImGui::Text("(No add-ins in working folder)");
-    else
-        ImGui::Text("Reset and load:");
 
     int spaceLeft = 0;
-    for(uint i = 0; i < gui.workingFolderAddins.size(); i++) {
-        char const *addin = gui.workingFolderAddins[i].c_str();
+    for(uint i = 0; i < gui.addinFolderListName.size(); i++) {
+        char const *addin = gui.addinFolderListName[i].c_str();
         /* Check if we have enough space (32 for button + spacing) */
         int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
         if(spaceLeft < spaceNeeded)
             spaceLeft = ImGui::GetContentRegionAvail().x;
         else
             ImGui::SameLine();
-
         if(ImGui::Button(addin))
-            gui.actions.fileLoadPath = gui.workingFolderAddins[i];
+            gui.actions.addinLoadName = gui.addinFolderListName[i];
         spaceLeft -= spaceNeeded;
     }
 
