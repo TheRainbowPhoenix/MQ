@@ -37,4 +37,5 @@ if ! cmake --build build/linux/mq --target mq --parallel ; then
 fi
 
 # generate final binary information
+strip build/linux/mq/mq
 mv build/linux/mq/mq "./build/mq-linux-$1"
