@@ -227,19 +227,27 @@ static int update(void)
 
     // watch addin folder
     enum WatchEvent event;
-    bool need_refresh = false;
-    while(true) {
-        event = watch_poll(&gui.workingFolderWatcher);
-        if(event == MQ_WATCH_EVT_NONE)
-            break;
-        if(event != MQ_WATCH_EVT_DIR_UPDATED)
-            continue;
-        need_refresh = true;
-        mq_log(MQ_LOG_DEBUG, "refresh addin folder");
-    }
-    if(need_refresh)
+    if(gui.actions.dirAddinPrefix) {
+        if(gui.workingFolderPrefix)
+            watch_quit(&gui.workingFolderWatcher);
+        gui.workingFolderPrefix = gui.actions.dirAddinPrefix;
         find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
-
+        if(!watch_init(&gui.workingFolderWatcher, gui.workingFolderPrefix))
+            mq_log(MQ_LOG_ERROR, "unable to watche the addin folder");
+    } else {
+        bool need_refresh = false;
+        while(true) {
+            event = watch_poll(&gui.workingFolderWatcher);
+            if(event == MQ_WATCH_EVT_NONE)
+                break;
+            if(event != MQ_WATCH_EVT_DIR_UPDATED)
+                continue;
+            need_refresh = true;
+            mq_log(MQ_LOG_DEBUG, "refresh addin folder");
+        }
+        if(need_refresh)
+            find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
+    }
 
     fs::path loadPath = "";
     if(gui.watch_enabled) {
@@ -495,12 +503,25 @@ static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
 bool parse_cli_args(int argc, char **argv)
 {
     for(int i = 1; i < argc; i++) {
-        if(!strcmp("--watch", argv[i]))
+        if(!strcmp("--watch", argv[i]) || !strcmp("-w", argv[i]))
             gui.watch_enabled = true;
-        else if(!strcmp("--version", argv[i])) {
+        else if(!strcmp("--version", argv[i]) || !strcmp("-v", argv[i])) {
             printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,
                 AZUR_VERSION_MINOR);
             return false;
+        }
+        else if(!strcmp("--dir", argv[i]) || !strcmp("-d", argv[i])) {
+            if(gui.actions.dirAddinPrefix) {
+                mq_log(
+                    MQ_LOG_WARNING,
+                    "dropping previous addin directory request '%s'",
+                    gui.actions.dirAddinPrefix);
+            }
+            if(++i >= argc) {
+                mq_log(MQ_LOG_ERROR, "missing directory information");
+                return false;
+            }
+            gui.actions.dirAddinPrefix = argv[i];
         }
         else {
             if(gui.actions.fileLoadPath) {
@@ -513,6 +534,8 @@ bool parse_cli_args(int argc, char **argv)
             gui.actions.machineSetPendingCycles = -1;
         }
     }
+    if(!gui.actions.dirAddinPrefix)
+        gui.actions.dirAddinPrefix = ".";
     return true;
 }
 
@@ -581,12 +604,6 @@ int main(int argc, char **argv)
     load_icons("@mqgui:assets/icons.png");
 
     ImGui_LoadMQStyle(ImGui::GetStyle());
-
-    /* Provide options for loading add-ins in the current folder */
-    gui.workingFolderPrefix = ".";
-    find_cwd_addins(gui.workingFolderPrefix, gui.workingFolderAddins);
-    if(!watch_init(&gui.workingFolderWatcher, gui.workingFolderPrefix))
-        mq_log(MQ_LOG_ERROR, "unable to watche the addin folder");
 
     int rc = azur_main_loop(render, 60, update, -1, AZUR_MAIN_LOOP_TIED);
     mq_controller_stopThread(emu0);

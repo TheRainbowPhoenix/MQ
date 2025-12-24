@@ -67,6 +67,9 @@ struct GUIActions
     bool recordPause = false;
     bool recordUnpause = false;
     bool recordStop = false;
+
+    /* Addin directory change */
+    char const *dirAddinPrefix = NULL;
 };
 
 /* Set of windows. Each window type can instanced on multiple machines. */
@@ -106,7 +109,7 @@ struct GUI
     struct OpenFileBuffer inputFile;
     /* List of add-ins in CWD (detected at startup) */
     std::vector<std::string> workingFolderAddins;
-    std::string workingFolderPrefix;
+    char const *workingFolderPrefix = NULL;
     struct WatchInfo workingFolderWatcher = \
         { .fd = -1, .wd = -1, .is_file = false };
     /* File tracked for reloading the currently active file when changed */

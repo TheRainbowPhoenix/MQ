@@ -407,3 +407,34 @@ void OutputPathPattern::resolve(bool force) const
 
     m_dirty = false;
 }
+
+//=== simple file checking ====================================================
+
+bool fileIsDirectory(std::string const &path)
+{
+#if AZUR_PLATFORM_EMSCRIPTEN
+    /* The browser should not handle directory(?) */
+    (void)path;
+    return false;
+#else
+    struct stat buffer;
+    if(stat(path.c_str(), &buffer) != 0) {
+        mq_log(MQ_LOG_WARNING,
+                "fileIsDirectory: provided path `%s` does not exists", path);
+        return false;
+    }
+    return S_ISDIR(buffer.st_mode);
+#endif
+}
+
+bool fileExists(std::string const &path)
+{
+#if AZUR_PLATFORM_EMSCRIPTEN
+    /* The browser handles naming downloaded files. */
+    (void)path;
+    return false;
+#else
+    struct stat buffer;
+    return stat(path.c_str(), &buffer) == 0;
+#endif
+}
