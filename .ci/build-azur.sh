@@ -9,13 +9,14 @@
 # script will assume argument order like:
 #     $1  ->  platform target ('linux' or emscripten)
 #     $2  ->  build prefix (absolute path)
+#     $3  ->  clone ffmpeg 3rdparty
 # No deep check will be performed here
 
 # setup a proper starting point
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 
 # rudimentary argument check
-[ $# -ne 2 ] && echo 'missing config information' >&2 && exit 1
+[ $# -ne 3 ] && echo 'missing config information' >&2 && exit 1
 
 # external tool check
 if ! command -v cmake >/dev/null 2>&1; then
@@ -31,11 +32,25 @@ fi
 mkdir -p "$2"
 cd "$2" || exit 1
 echo 'Cloning Azur...'
-git clone \
+if [ "$3" = 'true' ]; then
+  git clone \
     https://git.planet-casio.com/Lephenixnoir/Azur.git \
     --recurse-submodules \
     --depth 1 \
     source
+else
+  git clone \
+    https://git.planet-casio.com/Lephenixnoir/Azur.git \
+    --depth 1 \
+    source
+  cd source || exit 1
+  git \
+      -c submodule."3rdparty/ffmpeg".update=none \
+      -c submodule."3rdparty/nv-codec-headers".update=none \
+      -c submodule."3rdparty/x264".update=none \
+      submodule update --init --recursive
+  cd '..' || exit 1
+fi
 
 # building submodules
 echo 'Building Azur dependencies...'

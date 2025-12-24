@@ -30,7 +30,7 @@ cd ../../../ || exit 1
 
 # manually and locally install Azur and manually export installation
 # information
-./.ci/build-azur.sh emscripten "$PWD/build/web/azur"
+./.ci/build-azur.sh emscripten "$PWD/build/web/azur" false
 AZUR_PATH_emscripten="$PWD/build/web/azur/sysroot"
 export AZUR_PATH_emscripten
 

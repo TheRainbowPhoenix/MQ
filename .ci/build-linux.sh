@@ -16,7 +16,7 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 
 # manually and locally install Azur and manually export installation
 # information
-./.ci/build-azur.sh linux "$PWD/build/linux/azur"
+./.ci/build-azur.sh linux "$PWD/build/linux/azur" true
 AZUR_PATH_linux="$PWD/build/linux/azur/sysroot"
 export AZUR_PATH_linux
 
