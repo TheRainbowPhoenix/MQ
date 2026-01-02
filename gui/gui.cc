@@ -1239,6 +1239,7 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         return;
     }
 
+    bool physicalKeyPressed = false;
     for(uint i = 0; i < kbd->keyCount; i++) {
         mqKeyboardKey *key = &kbd->keyInfo[i];
         float x = key->geometry.x, y = key->geometry.y;
@@ -1255,8 +1256,24 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         }
         else
             ImGui::Button(str, {w, h});
-        gui.actions.physicalKeysAssigned[i] = ImGui::IsItemActive();
+        gui.actions.physicalKeysAssigned[i] = false;
+        if(gui.physicalKeyPressed) {
+            /* sliding behaviour */
+            if(ImGui::IsItemActive())
+                physicalKeyPressed = true;
+            if(ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
+                gui.actions.physicalKeysAssigned[i] = true;
+        } else {
+            /* first press */
+            if(ImGui::IsItemActive()) {
+                gui.actions.physicalKeysAssigned[i] = true;
+                physicalKeyPressed = true;
+            }
+        }
     }
+    /* enable / disable sliding */
+    if(gui.physicalKeyPressed != physicalKeyPressed)
+        gui.physicalKeyPressed = physicalKeyPressed;
 
     static const map<ImGuiKey, mqKeyboardKeycode> keymap = {
         {ImGuiKey_LeftArrow,    MQ_KEY_LEFT},
