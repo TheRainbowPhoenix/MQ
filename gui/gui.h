@@ -167,7 +167,8 @@ struct GUI
 
     //=== Miscellaneous ======================================================//
 
-    /* ... add here ... */
+    /* Hack to handle keyboard sliding operation */
+    bool physicalKeyPressed = false;
 };
 
 #endif /* MQ_UI_GUI_H */
