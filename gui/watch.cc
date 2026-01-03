@@ -175,7 +175,7 @@ bool watch_quit(struct WatchInfo *info)
 
 #else
 
-bool watch_init(struct WatchInfo *info, std::filesystem::path &pathname)
+bool watch_init(struct WatchInfo *info, std::string const &pathname)
 {
     (void)info;
     (void)pathname;

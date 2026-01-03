@@ -2,6 +2,13 @@
 
 #if MQ_VIDEO_FFMPEG
 
+struct mqFFmpegInterface builtinStaticLibrary = {
+#define ASSIGN_FUNCTION_POINTER(NAME) \
+    .NAME = ::NAME,
+MQ_FFMPEG_INTERFACE_FUNCTIONS(ASSIGN_FUNCTION_POINTER)
+#undef ASSIGN_FUNCTION_POINTER
+};
+
 //=== time ms ================================================================//
 
 extern "C" {
@@ -34,7 +41,7 @@ int mqFFmpeg::ffmpeg_hwdevice_config(
     *hw_device_ctx = NULL;
 
     // create the hardware device context
-    err = av_hwdevice_ctx_create(
+    err = F->av_hwdevice_ctx_create(
         hw_device_ctx,
         hw_device_type,
         NULL,
@@ -46,7 +53,7 @@ int mqFFmpeg::ffmpeg_hwdevice_config(
         goto hwdevice_config_error;
     }
     // note: per-device output pixel format
-    hw_frames_ref = av_hwframe_ctx_alloc(*hw_device_ctx);
+    hw_frames_ref = F->av_hwframe_ctx_alloc(*hw_device_ctx);
     if (hw_frames_ref == NULL) {
         ffmpeg_error(ENOMEM, "Failed to create hwdevice frame");
         goto hwdevice_config_error;
@@ -57,21 +64,21 @@ int mqFFmpeg::ffmpeg_hwdevice_config(
     hw_frames_ctx->width     = codec_ctx->width;
     hw_frames_ctx->height    = codec_ctx->height;
     hw_frames_ctx->initial_pool_size = 20;
-    err = av_hwframe_ctx_init(hw_frames_ref);
+    err = F->av_hwframe_ctx_init(hw_frames_ref);
     if(err < 0) {
         ffmpeg_error(ENOMEM, "Failed to initialize hwframe");
         goto hwdevice_config_error;
     }
-    codec_ctx->hw_frames_ctx = av_buffer_ref(hw_frames_ref);
+    codec_ctx->hw_frames_ctx = F->av_buffer_ref(hw_frames_ref);
     if (!codec_ctx->hw_frames_ctx) {
         ffmpeg_error(err, "Failed allocate hwframes");
         goto hwdevice_config_error;
     }
-    av_buffer_unref(&hw_frames_ref);
+    F->av_buffer_unref(&hw_frames_ref);
     return 0;
 
 hwdevice_config_error:
-    av_buffer_unref(&hw_frames_ref);
+    F->av_buffer_unref(&hw_frames_ref);
     return err;
 }
 
@@ -94,12 +101,12 @@ bool mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     m_core.framerate = (AVRational){ m_config.fps, 1 };
 
     // try to find the provided codec
-    avcodec = avcodec_find_encoder_by_name(encoder_name);
+    avcodec = F->avcodec_find_encoder_by_name(encoder_name);
     if (avcodec == NULL)
         return ffmpeg_error(ENOMEM, "Could not find the provided codec");
 
     // allocate and default init codec context
-    avcodec_ctx = avcodec_alloc_context3(avcodec);
+    avcodec_ctx = F->avcodec_alloc_context3(avcodec);
     if(avcodec_ctx == NULL)
         return ffmpeg_error(ENOMEM, "avcodec avcodec_ctx alloc fail");
     avcodec_ctx->width     = m_config.width_out;
@@ -109,7 +116,7 @@ bool mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
 
     // per-encoder codec context configuration
     avcodec_opt = NULL;
-    err = av_dict_set(&avcodec_opt, "crf", "16", 0);
+    err = F->av_dict_set(&avcodec_opt, "crf", "16", 0);
     if(err < 0) {
         ffmpeg_error(err, "Could not generate codec options");
         goto codec_config_error;
@@ -150,7 +157,7 @@ bool mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     }
 
     // try to open the codec with configuration
-    err = avcodec_open2(avcodec_ctx, avcodec, &avcodec_opt);
+    err = F->avcodec_open2(avcodec_ctx, avcodec, &avcodec_opt);
     if(err < 0) {
         ffmpeg_error(err, "unable to open the codec");
         goto codec_config_error;
@@ -163,7 +170,7 @@ bool mqFFmpeg::ffmpeg_codec_config(char const *encoder_name)
     return true;
 
 codec_config_error:
-    av_dict_free(&avcodec_opt);
+    F->av_dict_free(&avcodec_opt);
     return false;
 }
 
@@ -175,9 +182,9 @@ bool mqFFmpeg::ffmpeg_codec_exist(const char *codec_name)
     m_config.width_out = 640;
     m_config.height_out = 360;
     bool err = ffmpeg_codec_config(codec_name);
-    avcodec_free_context(&m_core.codec_ctx);
-    av_dict_free(&m_core.codec_opt);
-    av_buffer_unref(&m_core.hwdevice_ctx);
+    F->avcodec_free_context(&m_core.codec_ctx);
+    F->av_dict_free(&m_core.codec_opt);
+    F->av_buffer_unref(&m_core.hwdevice_ctx);
     return err;
 }
 
@@ -195,18 +202,19 @@ bool mqFFmpeg::ffmpeg_file_config(char const *pathname)
     packet     = NULL;
 
     // guess the output file format information based on the final file name
-    err = avformat_alloc_output_context2(&format_ctx, NULL, NULL, pathname);
+    err = F->avformat_alloc_output_context2(&format_ctx, NULL, NULL, pathname);
     if (err < 0)
         return ffmpeg_error(err, "Could not allocate format context");
 
     // create the video stream based on the selected codec
-    stream = avformat_new_stream(format_ctx, NULL);
+    stream = F->avformat_new_stream(format_ctx, NULL);
     if (stream == NULL) {
         ffmpeg_error(ENOMEM, "Could not allocate stream memory");
         goto file_config_error;
     }
     stream->time_base = m_core.time_base;
-    err = avcodec_parameters_from_context(stream->codecpar, m_core.codec_ctx);
+    err = F->avcodec_parameters_from_context(stream->codecpar,
+        m_core.codec_ctx);
     if (err < 0) {
         ffmpeg_error(err, "Could not initialize stream parameters");
         goto file_config_error;
@@ -215,19 +223,19 @@ bool mqFFmpeg::ffmpeg_file_config(char const *pathname)
     // try to open the output filename in write-only mode (since we will just
     // generate the video on-the-fly) and write the starting header
     // information
-    err = avio_open(&(format_ctx->pb), pathname, AVIO_FLAG_WRITE);
+    err = F->avio_open(&(format_ctx->pb), pathname, AVIO_FLAG_WRITE);
     if (err < 0) {
         ffmpeg_error(err, "could not open avio");
         goto file_config_error;
     }
-    err = avformat_write_header(format_ctx, &m_core.codec_opt);
+    err = F->avformat_write_header(format_ctx, &m_core.codec_opt);
     if (err < 0) {
         ffmpeg_error(err, "write header error");
         goto file_config_error;
     }
 
     // allocate packet used to send frame to the file
-    packet = av_packet_alloc();
+    packet = F->av_packet_alloc();
     if (packet == NULL) {
         ffmpeg_error(err, "Unable to init packet!!");
         goto file_config_error;
@@ -245,9 +253,9 @@ bool mqFFmpeg::ffmpeg_file_config(char const *pathname)
     // free all allocated memory
     // note that `stream` is freed during `format_ctx` cleanup
 file_config_error:
-    avio_close(format_ctx->pb);
-    avformat_free_context(format_ctx);
-    av_packet_free(&packet);
+    F->avio_close(format_ctx->pb);
+    F->avformat_free_context(format_ctx);
+    F->av_packet_free(&packet);
     return false;
 }
 
@@ -256,7 +264,7 @@ int mqFFmpeg::ffmpeg_file_write_frame(AVFrame *frame)
     int err;
 
     // send the frame and check error
-    err = avcodec_send_frame(m_core.codec_ctx, frame);
+    err = F->avcodec_send_frame(m_core.codec_ctx, frame);
     if (err < 0)
         return ffmpeg_error(err, "Error sending frame to codec");
 
@@ -265,7 +273,7 @@ int mqFFmpeg::ffmpeg_file_write_frame(AVFrame *frame)
     m_core.packet->size = 0;
     while(err >= 0) {
         // receive the pending packet
-        err = avcodec_receive_packet(m_core.codec_ctx, m_core.packet);
+        err = F->avcodec_receive_packet(m_core.codec_ctx, m_core.packet);
         if(err == AVERROR(EAGAIN))
             return 0;
         if(err == AVERROR_EOF)
@@ -275,7 +283,7 @@ int mqFFmpeg::ffmpeg_file_write_frame(AVFrame *frame)
         // We set the packet PTS and DTS taking in the account our FPS
         // (second argument), and the time base that our selected format
         // uses (third argument).
-        av_packet_rescale_ts(
+        F->av_packet_rescale_ts(
             m_core.packet,
             m_core.time_base,
             m_core.stream_video->time_base
@@ -283,10 +291,10 @@ int mqFFmpeg::ffmpeg_file_write_frame(AVFrame *frame)
         m_core.packet->stream_index = m_core.stream_video->index;
 
         // Write the encoded frame to the mp4 file.
-        err = av_interleaved_write_frame(m_core.format_ctx, m_core.packet);
+        err = F->av_interleaved_write_frame(m_core.format_ctx, m_core.packet);
         if (err != 0)
             ffmpeg_error(err, "av_interleaved_write_frame(): error");
-        av_packet_unref(m_core.packet);
+        F->av_packet_unref(m_core.packet);
     }
     return err;
 }
@@ -328,7 +336,7 @@ bool mqFFmpeg::ffmpeg_scale_config()
     }
 
     // input frame allocation
-    frame_in = av_frame_alloc();
+    frame_in = F->av_frame_alloc();
     if (frame_in == NULL) {
         ffmpeg_error(ENOMEM, "could not allocate RGB frame");
         goto scale_config_error;
@@ -336,14 +344,14 @@ bool mqFFmpeg::ffmpeg_scale_config()
     frame_in->format = m_core.pix_fmt_in;
     frame_in->height = m_config.height_in;
     frame_in->width  = m_config.width_in;
-    err = av_frame_get_buffer(frame_in, 0);
+    err = F->av_frame_get_buffer(frame_in, 0);
     if (err < 0) {
         ffmpeg_error(err, "could not finish allocate IN frame");
         goto scale_config_error;
     }
 
     // output frame allocation
-    frame_out = av_frame_alloc();
+    frame_out = F->av_frame_alloc();
     if (frame_out == NULL) {
         ffmpeg_error(ENOMEM, "could not allocate OUT frame");
         goto scale_config_error;
@@ -351,7 +359,7 @@ bool mqFFmpeg::ffmpeg_scale_config()
     frame_out->format = m_core.pix_fmt_out;
     frame_out->height = m_config.height_out;
     frame_out->width  = m_config.width_out;
-    err = av_frame_get_buffer(frame_out, 0);
+    err = F->av_frame_get_buffer(frame_out, 0);
     if (err < 0) {
         ffmpeg_error(err, "could not finish allocate OUT frame");
         goto scale_config_error;
@@ -359,12 +367,12 @@ bool mqFFmpeg::ffmpeg_scale_config()
 
     frame_out_hw = NULL;
     if(m_core.hwdevice_ctx) {
-        frame_out_hw = av_frame_alloc();
+        frame_out_hw = F->av_frame_alloc();
         if (frame_out_hw == NULL) {
             ffmpeg_error(ENOMEM, "could not allocate OUT frame");
             goto scale_config_error;
         }
-        err = av_hwframe_get_buffer(
+        err = F->av_hwframe_get_buffer(
             m_core.codec_ctx->hw_frames_ctx,
             frame_out_hw,
             0
@@ -384,9 +392,9 @@ bool mqFFmpeg::ffmpeg_scale_config()
 
 scale_config_error:
     sws_freeContext(scale_ctx);
-    av_frame_free(&frame_out_hw);
-    av_frame_free(&frame_out);
-    av_frame_free(&frame_in);
+    F->av_frame_free(&frame_out_hw);
+    F->av_frame_free(&frame_out);
+    F->av_frame_free(&frame_in);
     return false;
 }
 
@@ -488,7 +496,7 @@ bool mqFFmpeg::ffmpeg_scale_get_frame(
     *frame_out = m_core.frame_out;
     if(m_core.hwdevice_ctx) {
         m_core.frame_out->pts = m_core.iframe;
-        err = av_hwframe_transfer_data(
+        err = F->av_hwframe_transfer_data(
             m_core.frame_out_hw,
             m_core.frame_out,
             0
@@ -505,6 +513,8 @@ bool mqFFmpeg::ffmpeg_scale_get_frame(
 
 mqFFmpeg::mqFFmpeg()
 {
+    this->F = &builtinStaticLibrary;
+
     /* For now only count some software encoders. We'll extend the table with
        hardware encoders once we detect them later. */
     m_encoders.push_back("libx264");
@@ -526,23 +536,23 @@ void mqFFmpeg::detectHardwareEncoders()
     bool found;
 
     mq_log(MQ_LOG_DEBUG, "ffmpeg: detecting hardware encoders...");
-    av_log_set_level(AV_LOG_QUIET);
+    F->av_log_set_level(AV_LOG_QUIET);
 
     // detect all hardware device available. Note that the CUDA hardware
     // acceleration concern the NVENC encoder (and NVDEC/CUVID decoder not
     // used here) and all CUDA-related encoder use the nvenc name extension
     hwdevice = AV_HWDEVICE_TYPE_NONE;
-    while ((hwdevice = av_hwdevice_iterate_types(hwdevice))) {
+    while ((hwdevice = F->av_hwdevice_iterate_types(hwdevice))) {
         if(hwdevice == AV_HWDEVICE_TYPE_NONE)
             break;
-        hwdevice_name = av_hwdevice_get_type_name(hwdevice);
+        hwdevice_name = F->av_hwdevice_get_type_name(hwdevice);
         if(strstr(hwdevice_name, "cuda"))
             hwdevices.push_back("nvenc");
         hwdevices.push_back(hwdevice_name);
     }
 
-    while ((codec = av_codec_iterate(&i))) {
-        if (!av_codec_is_encoder(codec))
+    while ((codec = F->av_codec_iterate(&i))) {
+        if (!F->av_codec_is_encoder(codec))
             continue;
         if(codec->type != AVMEDIA_TYPE_VIDEO)
             continue;
@@ -709,21 +719,21 @@ bool mqFFmpeg::stop()
             }
         }
         // Writing the end of the file.
-        av_write_trailer(m_core.format_ctx);
+        F->av_write_trailer(m_core.format_ctx);
         // Closing the file.
-        avio_flush(m_core.format_ctx->pb);
-        avio_close(m_core.format_ctx->pb);
+        F->avio_flush(m_core.format_ctx->pb);
+        F->avio_close(m_core.format_ctx->pb);
     }
 
     // Freeing all the allocated memory:
-    av_packet_free(&m_core.packet);
+    F->av_packet_free(&m_core.packet);
     sws_freeContext(m_core.scale_ctx);
-    av_frame_free(&m_core.frame_out);
-    av_frame_free(&m_core.frame_in);
-    avformat_free_context(m_core.format_ctx);
-    av_dict_free(&m_core.codec_opt);
-    av_buffer_unref(&m_core.hwdevice_ctx);
-    avcodec_free_context(&m_core.codec_ctx);
+    F->av_frame_free(&m_core.frame_out);
+    F->av_frame_free(&m_core.frame_in);
+    F->avformat_free_context(m_core.format_ctx);
+    F->av_dict_free(&m_core.codec_opt);
+    F->av_buffer_unref(&m_core.hwdevice_ctx);
+    F->avcodec_free_context(&m_core.codec_ctx);
 
     // manually reset all information
     m_core.codec_ctx = NULL;
