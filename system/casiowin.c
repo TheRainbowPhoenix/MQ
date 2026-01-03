@@ -800,6 +800,9 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     case 0x1da3: /* Bfile_OpenFile() */
         cpu->r[0] = -1;
         return;
+    case 0x1da4: /* Bfile_CloseFile() */
+        cpu->r[0] = -1;
+        return;
     case 0x1db4: /* Bfile_DeleteEntry() */
         cpu->r[0] = -1;
         return;
@@ -811,6 +814,9 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = -1;
         return;
     case 0x01dae: /* Bfile_CreateEntry() */
+        cpu->r[0] = -1;
+        return;
+    case 0x01daf: /* Bfile_WriteFIle() */
         cpu->r[0] = -1;
         return;
 
