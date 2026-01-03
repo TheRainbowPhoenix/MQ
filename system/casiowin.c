@@ -144,12 +144,23 @@ static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin, void *buffer)
     mqCasiowin_OSInfo const *info = Casiowin->info;
     u32 data = info->dataAreaAddress;
 
-    /* VRAM */
-    if(info->dataVramCount)
-        Casiowin->vramLE = buffer;
+    (void)buffer;
+
+    /* VRAM
+     * Note that we explicitly un-align the VRAM by 1 byte if we are
+     * emulating an FX device. This is to fix weird display bugs with
+     * MonochromLib which does not properly handle 4-aligned VRAM */
+    if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_FX)
+        data += 2;
     for(int i = 0; i < info->dataVramCount; i++) {
         Casiowin->dataVramAddresses[i] = data;
         data += info->dataVramSize;
+    }
+    if(info->dataVramCount) {
+        Casiowin->vramLE = mq_memory_access(
+            mach->memory,
+            Casiowin->dataVramAddresses[0]
+        );
     }
 
     // TODO: VRAM backups
@@ -502,16 +513,12 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0143: /* Bdisp_AllClr_VRAM() */
-        u8 *dst = mq_memory_access(
-            mach->memory,
-            Casiowin->dataVramAddresses[0]
-        );
         /* Since this is aligned, we can memset it */
-        memset(dst, 0xff, 128 * 64 * 1);
+        memset(Casiowin->vramLE, 0xff, Casiowin->info->dataVramSize);
         return;
 
     case 0x0146: /* Bdisp_SetPoint_VRAM() */
-        mq_casiowin_mono_set_pixel(Casiowin->vramLE,
+        mq_casiowin_mono_set_pixel((u8*)Casiowin->vramLE,
             cpu->r[4], cpu->r[5], cpu->r[6]);
         return;
 
