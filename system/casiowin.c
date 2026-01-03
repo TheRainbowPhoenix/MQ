@@ -151,7 +151,7 @@ static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin, void *buffer)
      * emulating an FX device. This is to fix weird display bugs with
      * MonochromLib which does not properly handle 4-aligned VRAM */
     if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_FX)
-        data += 2;
+        data += 1;
     for(int i = 0; i < info->dataVramCount; i++) {
         Casiowin->dataVramAddresses[i] = data;
         data += info->dataVramSize;
@@ -162,6 +162,8 @@ static void setupDataArea(mqMachine *mach, mqCasiowin *Casiowin, void *buffer)
             Casiowin->dataVramAddresses[0]
         );
     }
+    if(Casiowin->info->OSSeries == MQ_CASIOWIN_SERIES_FX)
+        data += 3;
 
     // TODO: VRAM backups
 
@@ -513,8 +515,9 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0143: /* Bdisp_AllClr_VRAM() */
-        /* Since this is aligned, we can memset it */
-        memset(Casiowin->vramLE, 0xff, Casiowin->info->dataVramSize);
+        /* TODO: mq_memory_memset() */
+        for(unsigned int i = 0 ; i < Casiowin->info->dataVramSize ; i++)
+            *(u8*)(((uintptr_t)Casiowin->vramLE + i) ^ 3) = 0xff;
         return;
 
     case 0x0146: /* Bdisp_SetPoint_VRAM() */
