@@ -50,24 +50,23 @@ static void write_t6k11_data(mqMachine *mach, u32 value)
         reg = T6K11->REG + 200;
     switch(reg) {
         case 208:
-        case 104: { /* (T6K11) Y-address / X-address (depending on state) */
-            bool setY = (value >> 7) & 1;
-            if(setY)
+        case 104: /* (T6K11) Y-address / X-address (depending on state) */
+            bool setX = (value >> 7) & 1;
+            if(setX)
                 T6K11->row = value & 0x3f;
             else
                 T6K11->col = (value & 0x1f) - ((reg == 208) ? 4 : 0);
             break;
-        }
+
         case 210:
-        case 107: {  /* Data */
+        case 107: /* Data */
             if(T6K11->col >= 16 || T6K11->row >= 64) {
                 mq_log(MQ_LOG_ERROR, "write_t6k11_data: out-of-bounds pixel "
                     "write at (col %d, row %d) ", T6K11->col, T6K11->row);
                 mq_machine_setStuck(mach);
                 return;
             }
-            int idx = (128 * T6K11->row) + (8 * T6K11->col);
-            u8 *dst = &((u8*)mach->display->data)[idx];
+            u8 *dst = (u8*)mach->display->data + 128 * T6K11->row + 8 * T6K11->col;
             for(int i = 0; i < 8; i++) {
                 *dst++ = ~((i8)value >> 7);
                 value <<= 1;
@@ -75,7 +74,7 @@ static void write_t6k11_data(mqMachine *mach, u32 value)
             T6K11->col++;
             mq_display_setDirty(mach->display, true);
             break;
-        }
+
         default: {
             mq_log(MQ_LOG_DEBUG, "write_t6k11_data: REG: %02x, value: %08x "
                 "(register not implemented)", T6K11->REG, value);
