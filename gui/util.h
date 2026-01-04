@@ -59,10 +59,6 @@ std::string strftimeCurrentTime(char const *fmt);
 int screenshotPNG(mqDisplay *display, int scale, std::string const &path);
 std::string screenshotPNG_strerror(int err);
 
-/* simple path utilities */
-bool fileIsDirectory(std::string const &path);
-bool fileExists(std::string const &path);
-
 /* Utility class to name an output file with a substitution pattern, determine
    if it already exists and, if requested, automatically make it unique with a
    numerical suffix. With lazy stat() calls and lazy substitutions (because

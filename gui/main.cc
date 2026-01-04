@@ -512,14 +512,14 @@ static ImFont *ImGui_AddFontFromResource(char const *rid, float pointSize)
 bool parse_cli_args(int argc, char **argv)
 {
     for(int i = 1; i < argc; i++) {
-        if(!strcmp("--watch", argv[i]) || !strcmp("-w", argv[i]))
+        if(!strcmp("--watch", argv[i]))
             gui.addinFileWatchEnabled = true;
-        else if(!strcmp("--version", argv[i]) || !strcmp("-v", argv[i])) {
+        else if(!strcmp("--version", argv[i])) {
             printf("MQ on Azur %d.%d\n", AZUR_VERSION_MAJOR,
                 AZUR_VERSION_MINOR);
             return false;
         }
-        else if(!strcmp("--dir", argv[i]) || !strcmp("-d", argv[i])) {
+        else if(!strcmp("--dir", argv[i])) {
             if(gui.actions.addinFolderPrefixUpdate) {
                 mq_log(
                     MQ_LOG_WARNING,
@@ -532,7 +532,7 @@ bool parse_cli_args(int argc, char **argv)
             }
             gui.actions.addinFolderPrefixUpdate = argv[i];
         }
-        else if(!strcmp("--addin", argv[i]) || !strcmp("-a", argv[i])) {
+        else if(!strcmp("--addin", argv[i])) {
             if(gui.actions.addinLoadName) {
                 mq_log(
                     MQ_LOG_WARNING,
@@ -561,7 +561,7 @@ bool parse_cli_args(int argc, char **argv)
     if(gui.actions.addinLoadPath && gui.actions.addinLoadName) {
         mq_log(MQ_LOG_WARNING,
             "You have specified an addin name and an addin path! "
-            "Only the path will be keeped"
+            "Only the path will be kept"
         );
         gui.actions.addinLoadName.reset();
     }

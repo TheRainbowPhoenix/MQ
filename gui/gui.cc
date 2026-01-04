@@ -90,9 +90,11 @@ void GUI::Render(mqController *controller)
             ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
+            ImGui::BeginDisabled(!omach->initialized);
             if(ImGui::IconButton(10, "Reset (Ctrl+R)"))
                 actions.fileReload = true;
             ImGui::SameLine(0, 6);
+            ImGui::EndDisabled();
 
             ImGui::MoveCursorScreenPos({0, 3});
             if(!omach->initialized)
