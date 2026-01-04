@@ -28,6 +28,53 @@ struct mqFFmpegStats
     int time_min;
 };
 
+#define MQ_FFMPEG_INTERFACE_FUNCTIONS(X) \
+    X(av_hwdevice_ctx_create) \
+    X(av_hwdevice_iterate_types) \
+    X(av_hwdevice_get_type_name) \
+    X(av_hwframe_ctx_alloc) \
+    X(av_hwframe_ctx_init) \
+    X(av_hwframe_get_buffer) \
+    X(av_hwframe_transfer_data) \
+    X(av_buffer_ref) \
+    X(av_buffer_unref) \
+    X(av_dict_set) \
+    X(av_dict_free) \
+    X(av_packet_alloc) \
+    X(av_packet_unref) \
+    X(av_packet_free) \
+    X(av_packet_rescale_ts) \
+    X(av_frame_alloc) \
+    X(av_frame_get_buffer) \
+    X(av_frame_free) \
+    X(av_interleaved_write_frame) \
+    X(av_write_trailer) \
+    X(av_log_set_level) \
+    X(av_codec_iterate) \
+    X(av_codec_is_encoder) \
+    X(avio_open) \
+    X(avio_flush) \
+    X(avio_close) \
+    X(avcodec_find_encoder_by_name) \
+    X(avcodec_alloc_context3) \
+    X(avcodec_free_context) \
+    X(avcodec_open2) \
+    X(avcodec_parameters_from_context) \
+    X(avcodec_send_frame) \
+    X(avcodec_receive_packet) \
+    X(avformat_alloc_output_context2) \
+    X(avformat_free_context) \
+    X(avformat_new_stream) \
+    X(avformat_write_header) \
+
+struct mqFFmpegInterface
+{
+#define DEFINE_FUNCTION_POINTER(NAME) \
+    decltype(::NAME) *NAME;
+MQ_FFMPEG_INTERFACE_FUNCTIONS(DEFINE_FUNCTION_POINTER)
+#undef MAKE_FUNCTION_POINTER
+};
+
 class mqFFmpeg
 {
 public:
@@ -61,6 +108,8 @@ public:
     std::string lasterror() { return m_error_info; }
 
 private:
+    struct mqFFmpegInterface const *F; // functions
+
     int ffmpeg_hwdevice_config(
         AVCodecContext *codec_ctx,
         AVBufferRef **hw_device_ctx,

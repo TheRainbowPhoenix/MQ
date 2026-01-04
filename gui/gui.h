@@ -34,6 +34,9 @@ struct GUIActions
     std::optional<std::string> addinFolderPrefixUpdate;
     /* Update the inotify watch on the currently-running add-in. */
     bool addinFileWatchEnableUpdate = false;
+    bool fileUpdateWatch = false;
+    /* Reload the current add-in. */
+    bool fileReload = false;
 
     /* Initialize machine with given initializeKind. */
     std::optional<int> machineInitialize;
@@ -170,7 +173,8 @@ struct GUI
 
     //=== Miscellaneous ======================================================//
 
-    /* ... add here ... */
+    /* Hack to handle keyboard sliding operation */
+    bool physicalKeyPressed = false;
 };
 
 #endif /* MQ_UI_GUI_H */

@@ -270,6 +270,8 @@ static int update(void)
     }
     if(gui.actions.addinLoadPath)
         loadPath = gui.actions.addinLoadPath.value();
+    if(gui.actions.fileReload)
+        loadPath = gui.addinFilePath;
     if(!loadPath.empty()) {
         long size;
         void *data = openAndReadFile(loadPath.c_str(), &size);

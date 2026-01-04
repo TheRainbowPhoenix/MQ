@@ -28,9 +28,9 @@ void mq_casiowin_mono_set_pixel(u8 *vramLE, uint x, uint y, int color)
     if(x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
         return;
 
-    int index = ((y * SCREEN_WIDTH + x) / 8) ^ 3;
     u8 mask = 0x80 >> (x & 7);
-    vramLE[index] = (vramLE[index] & ~mask) | (mask * (color != 0));
+    u8 *data = (u8*)((uintptr_t)&vramLE[(y * SCREEN_WIDTH + x) / 8] ^ 3);
+    *data = (*data & ~mask) | (mask * (color != 0));
 }
 
 int mq_casiowin_mono_get_pixel(u8 *vramLE, uint x, uint y)
@@ -38,9 +38,9 @@ int mq_casiowin_mono_get_pixel(u8 *vramLE, uint x, uint y)
     if(x >= SCREEN_WIDTH || y >= SCREEN_HEIGHT)
         return 0;
 
-    int index = ((y * SCREEN_WIDTH + x) / 8) ^ 3;
     u8 mask = 0x80 >> (x & 7);
-    return (vramLE[index] & mask) != 0;
+    u8 *data = (u8*)((uintptr_t)&vramLE[(y * SCREEN_WIDTH + x) / 8] ^ 3);
+    return (*data & mask) != 0;
 }
 
 //=== Text rendering =========================================================//

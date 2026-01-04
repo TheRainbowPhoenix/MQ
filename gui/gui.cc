@@ -39,6 +39,8 @@ void GUI::Render(mqController *controller)
         ImGuiInputFlags_RouteGlobal);
     actions.appQuit |= ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_Q,
         ImGuiInputFlags_RouteGlobal);
+    bool wantsReload = ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_R,
+        ImGuiInputFlags_RouteGlobal);
 
     if(ImGui::BeginCustomMenuBar()) {
         if(ImGui::BeginCustomMenuChild("##menutitle", {30,0}, {1,4})) {
@@ -88,6 +90,10 @@ void GUI::Render(mqController *controller)
             ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
+            if(ImGui::IconButton(10, "Reset (Ctrl+R)"))
+                actions.fileReload = true;
+            ImGui::SameLine(0, 6);
+
             ImGui::MoveCursorScreenPos({0, 3});
             if(!omach->initialized)
                 ImGui::TextDisabled("Not initialized");
@@ -96,7 +102,7 @@ void GUI::Render(mqController *controller)
             else
                 ImGui::Text(paused ? "Paused" : "Running...");
 
-            ImGui::SetCursorScreenPos({cursor.x + 140, cursor.y});
+            ImGui::SetCursorScreenPos({cursor.x + 180, cursor.y});
             ImGui::CustomMenuSeparator();
             ImGui::SameLine(0, 6);
 
@@ -158,6 +164,8 @@ void GUI::Render(mqController *controller)
 
     if(pauseUnpause && canRunMachine)
         actions.machineSetPendingCycles = paused ? -1 : 0;
+    if(wantsReload && canRunMachine)
+        actions.fileReload = true;
 
     auto dock = ImGui::DockSpaceOverViewport();
 
@@ -1247,6 +1255,7 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         return;
     }
 
+    bool physicalKeyPressed = false;
     for(uint i = 0; i < kbd->keyCount; i++) {
         mqKeyboardKey *key = &kbd->keyInfo[i];
         float x = key->geometry.x, y = key->geometry.y;
@@ -1263,8 +1272,24 @@ void KeyboardWindow::renderContents(mqMachine *omach)
         }
         else
             ImGui::Button(str, {w, h});
-        gui.actions.physicalKeysAssigned[i] = ImGui::IsItemActive();
+        gui.actions.physicalKeysAssigned[i] = false;
+        if(gui.physicalKeyPressed) {
+            /* sliding behaviour */
+            if(ImGui::IsItemActive())
+                physicalKeyPressed = true;
+            if(ImGui::IsItemHovered(ImGuiHoveredFlags_RectOnly))
+                gui.actions.physicalKeysAssigned[i] = true;
+        } else {
+            /* first press */
+            if(ImGui::IsItemActive()) {
+                gui.actions.physicalKeysAssigned[i] = true;
+                physicalKeyPressed = true;
+            }
+        }
     }
+    /* enable / disable sliding */
+    if(gui.physicalKeyPressed != physicalKeyPressed)
+        gui.physicalKeyPressed = physicalKeyPressed;
 
     static const map<ImGuiKey, mqKeyboardKeycode> keymap = {
         {ImGuiKey_LeftArrow,    MQ_KEY_LEFT},

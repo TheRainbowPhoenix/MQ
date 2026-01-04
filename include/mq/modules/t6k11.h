@@ -14,11 +14,19 @@
 #include <mq/machine.h>
 MQ_START_DEFS
 
+enum mqT6K11Variant {
+    T6K11_VARIANT_NONE,     /* used at startup to detect the variant */
+    T6K11_VARIANT_T6K11,    /* historical "old" screen driver */
+    T6K11_VARIANT_ML9801,   /* "recent" screen driver (e.g Graph35+EII) */
+};
+
 struct mqT6K11 {
     /* Currently-selected register */
     u8 REG;
     /* Current position (TODO: col in bytes?) */
     u16 row, col;
+    /* Variant detected (T6K11 or ML9801) */
+    enum mqT6K11Variant variant;
 };
 
 typedef struct mqT6K11 mqT6K11;
