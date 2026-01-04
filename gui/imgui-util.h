@@ -32,6 +32,11 @@ void TextLR(char const *left, char const *fmt, ...);
    (todo) maybe too specific? */
 void TextCenteredColor(char const *text, u32 color);
 
+/* Same as TextDisabled() but without using formatted string */
+void TextUnformattedDisabled(char const *text);
+/* Same as TextColored() but without using formatted string */
+void TextUnformattedColored(ImVec4 color, char const *text);
+
 /* Separator text, but disabled. */
 void SeparatorTextD(char const *str);
 

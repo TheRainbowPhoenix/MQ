@@ -69,15 +69,29 @@ void TextCenteredColor(char const *text, u32 color)
     float w_text = ImGui::CalcTextSize(text).x;
     ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
     if (color == 0x00000000)
-        ImGui::TextDisabled("%s", text);
+        ImGui::TextUnformattedDisabled(text);
     else {
-        ImGui::TextColored({
+        ImGui::TextUnformattedColored({
             (float)((color >> 16) & 0xff),
             (float)((color >>  8) & 0xff),
             (float)((color >>  0) & 0xff),
             1.0f},
-            "%s", text);
+            text);
     }
+}
+
+void TextUnformattedDisabled(char const *text)
+{
+    ImGui::BeginDisabled();
+    ImGui::TextUnformatted(text);
+    ImGui::EndDisabled();
+}
+
+void TextUnformattedColored(ImVec4 color, char const *text)
+{
+    ImGui::PushStyleColor(ImGuiCol_Text, color);
+    ImGui::TextUnformatted(text);
+    ImGui::PopStyleColor();
 }
 
 void TextError(char const *fmt, ...)
@@ -107,7 +121,7 @@ void HelpMarker(char const *title, char const *desc)
     float available_x = ImGui::GetContentRegionAvail().x;
     float title_width = ImGui::CalcTextSize(title).x;
     ImGui::SameLine(available_x - title_width);
-    ImGui::TextDisabled("%s", title);
+    ImGui::TextUnformattedDisabled(title);
     if(ImGui::BeginItemTooltip()) {
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(desc);
