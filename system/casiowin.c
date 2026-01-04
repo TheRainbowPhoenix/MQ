@@ -441,15 +441,67 @@ static bool readStack32(mqMachine *mach, int offset, void *ptr)
     return mq_memory_read32(mach, mach->memory, cpu->r[15] + offset, ptr);
 }
 
+static bool readTShape(
+    mqMachine *mach, u32 address, struct mqCasiowin_TShape *shape)
+{
+    mqMemory *mem = mach->memory;
+    u32 const_2, type, f2, f3;
+
+    if(!mq_memory_read32(mach, mem, address +  0, &shape->x1) ||
+       !mq_memory_read32(mach, mem, address +  4, &shape->y1) ||
+       !mq_memory_read32(mach, mem, address +  8, &shape->x2) ||
+       !mq_memory_read32(mach, mem, address + 12, &shape->y2) ||
+       !mq_memory_read8 (mach, mem, address + 16, &const_2) ||
+       !mq_memory_read8 (mach, mem, address + 17, &type) ||
+       !mq_memory_read8 (mach, mem, address + 18, &f2) ||
+       !mq_memory_read8 (mach, mem, address + 19, &f3) ||
+       !mq_memory_read32(mach, mem, address + 20, (u32 *)&shape->on_bits) ||
+       !mq_memory_read32(mach, mem, address + 24, (u32 *)&shape->off_bits))
+       return false;
+
+    shape->const_2 = const_2;
+    shape->type = type;
+    shape->f2 = f2;
+    shape->f3 = f3;
+    return true;
+}
+
+static bool readTShapePixelInfo(
+    mqMachine *mach, u32 address, struct mqCasiowin_TShapePixelInfo *info)
+{
+    mqMemory *mem = mach->memory;
+    u32 mode;
+
+    if(!mq_memory_read8 (mach, mem, address +  0, &mode) ||
+       !mq_memory_read32(mach, mem, address +  4, (u32 *)&info->x) ||
+       !mq_memory_read32(mach, mem, address +  8, (u32 *)&info->y) ||
+       !mq_memory_read32(mach, mem, address + 12, (u32 *)&info->dash_counter))
+        return false;
+
+    info->mode = mode;
+    return true;
+}
+
+static bool writeTShapePixelInfo(
+    mqMachine *mach, u32 address, struct mqCasiowin_TShapePixelInfo *info)
+{
+    mqMemory *mem = mach->memory;
+    return mq_memory_write(mach, mem, address +  0, 1, info->mode) &&
+           mq_memory_write(mach, mem, address +  4, 4, info->x) &&
+           mq_memory_write(mach, mem, address +  8, 4, info->y) &&
+           mq_memory_write(mach, mem, address + 12, 4, info->dash_counter);
+}
+
 static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    u32 r4 = cpu->r[4], r5 = cpu->r[5], r6 = cpu->r[6], r7 = cpu->r[7];
 
     /* Log except for syscalls that happen often */
     if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420 &&
        syscallID != 0xc4f && syscallID != 0x807 && syscallID != 0x808 &&
        syscallID != 0x028 && syscallID != 0x03b && syscallID != 0x146 &&
-       syscallID != 0x247)
+       syscallID != 0x247 && syscallID != 0x90f)
         mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
@@ -471,30 +523,67 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         mq_memory_write(mach, mach->memory, mach->cpu.r[7], 2, 0x0000);
         return;
 
-    case 0x028: { /* Bdisp_PutDisp_DD() */
-        if(mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8,
-                    128, 64)) {
-            u8 *src = mq_memory_access(
-                mach->memory,
-                Casiowin->dataVramAddresses[0]
-            );
-            u8 *dst = mach->display->data;
-            for(int p = 0; p < 1024; p++) {
-                u8 value = *(u8*)((uintptr_t)(src++) ^ 3);
-                for(int i = 0; i < 8; i++) {
-                    *dst++ = ~((i8)value >> 7);
-                    value <<= 1;
-                }
-            }
-            mq_display_setDirty(mach->display, true);
-        }
+    case 0x028: /* Bdisp_PutDisp_DD() */
+        mq_casiowin_mono_dupdate(mach);
+        return;
+
+    case 0x02b: /* Bdisp_DrawShape() */
+    case 0x02c: /* Bdisp_DrawShapeLine() */
+    case 0x02d: /* Bdisp_DrawShapeRect() */
+    case 0x02e: /* Bdisp_DrawShapeCircle() */
+    case 0x129: { /* Bdisp_DrawShapePoint() */
+        struct mqCasiowin_TShapePixelInfo pixelinfo;
+        struct mqCasiowin_TShape shape;
+        if(!readTShapePixelInfo(mach, r4, &pixelinfo) ||
+           !readTShape(mach, r5, &shape))
+            return;
+
+        if(syscallID == 0x02b)
+            mq_casiowin_DrawShape(mach, &pixelinfo, &shape);
+        if(syscallID == 0x02c)
+            mq_casiowin_DrawShapeLine(mach, &pixelinfo, &shape);
+        if(syscallID == 0x02d)
+            mq_casiowin_DrawShapeRect(mach, &pixelinfo, &shape);
+        if(syscallID == 0x02e)
+            mq_casiowin_DrawShapeCircle(mach, &pixelinfo, &shape);
+        if(syscallID == 0x129)
+            mq_casiowin_DrawShapePoint(mach, &pixelinfo, &shape);
+
+        writeTShapePixelInfo(mach, r4, &pixelinfo);
+        return;
+    }
+
+    case 0x002f: { /* Bdisp_ShapeToVRAM() */
+        struct mqCasiowin_TShape shape;
+        if(readTShape(mach, r4, &shape))
+            mq_casiowin_ShapeToVRAM(mach, &shape);
         return;
     }
 
     case 0x0030: /* Bdisp_DrawLineVRAM() */
-        mq_log(MQ_LOG_ERROR, "unsupported syscall %%030 Bdisp_DrawLineVRAM()");
-        mq_machine_setStuck(mach);
+        return mq_casiowin_LineToVRAM(mach, r4, r5, r6, r7, 1);
+    case 0x0031: /* Bdisp_ClearLineVRAM() */
+        return mq_casiowin_LineToVRAM(mach, r4, r5, r6, r7, 2);
+
+    case 0x0032: { /* Bdisp_ShapeToDD() */
+        struct mqCasiowin_TShape shape;
+        if(readTShape(mach, r4, &shape))
+            mq_casiowin_ShapeToDD(mach, &shape);
         return;
+    }
+    case 0x0033: { /* Bdisp_ShapeToDDVRAM() */
+        struct mqCasiowin_TShape shape;
+        if(readTShape(mach, r4, &shape))
+            mq_casiowin_ShapeToDDVRAM(mach, &shape);
+        return;
+    }
+
+    case 0x0036: {
+        int mode;
+        if(readStack32(mach, +0, &mode))
+            mq_casiowin_LineToVRAM(mach, r4, r5, r6, r7, mode);
+        return;
+    }
 
     case 0x0039: /* RTC_Reset() */
         if(!mq_casiowin_rtc_reset(mach, cpu->r[4]))
@@ -515,9 +604,13 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         return;
 
     case 0x0143: /* Bdisp_AllClr_VRAM() */
+    case 0x0144: /* Bdisp_AllClr_DDVRAM() */
         /* TODO: mq_memory_memset() */
         for(unsigned int i = 0 ; i < Casiowin->info->dataVramSize ; i++)
-            *(u8*)(((uintptr_t)Casiowin->vramLE + i) ^ 3) = 0xff;
+            *(u8*)(((uintptr_t)Casiowin->vramLE + i) ^ 3) = 0x00;
+
+        if(syscallID == 0x0144)
+            mq_casiowin_mono_dupdate(mach);
         return;
 
     case 0x0146: /* Bdisp_SetPoint_VRAM() */
@@ -617,13 +710,15 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     // case 0x08fe: /* PopupWin() */
     //     return;
 
-    // case 0x090f: /* GetKey() */
-    //     return;
-
-    case 0x090f: /* GetKey() */
-        mq_log(MQ_LOG_ERROR, "Unsupported syscall %%90F GetKey()");
-        mq_machine_setStuck(mach);
+    case 0x090f: { /* GetKey() */
+        mq_casiowin_mono_dupdate(mach);
+        struct mqCasiowin_GetKeyWaitArgs args = {
+            .ptr_u32_key = cpu->r[4],
+            .waitType = MQ_CASIOWIN_KEYWAIT_HALTON_TIMEROFF,
+        };
+        mq_casiowin_GetKeyWait(mach, args);
         return;
+    }
 
     case 0x09ad: /* PrintXY() */
         mq_casiowin_mono_PrintXY(mach,

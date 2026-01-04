@@ -164,6 +164,17 @@ bool mq_casiowin_runBackgroundSyscall(
 int mq_casiowin_mono_get_pixel(u8 *vramLE, uint x, uint y);
 void mq_casiowin_mono_set_pixel(u8 *vramLE, uint x, uint y, int color);
 
+/* Get and set VRAM bytes. */
+int mq_casiowin_mono_get_vram_byte(u8 *vramLE, uint xbyte, uint y);
+void mq_casiowin_mono_set_vram_byte(u8 *vramLE, uint xbyte, uint y, int byte);
+
+/* Base function for ShapeToVRAM, ShapeToDD etc. */
+struct mqCasiowin_TShape;
+struct mqCasiowin_TShapePixelInfo;
+void mq_casiowin_mono_DrawShapePoint(
+    u8 *vramLE, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape);
+
 /* Some common variants of the endless printing functions. */
 void mq_casiowin_mono_Print(
     mqMachine *mach, u32 stringAddress, int maxX);
@@ -171,6 +182,9 @@ void mq_casiowin_mono_PrintMini(
     mqMachine *mach, int x, int y, u32 stringAddress, int mode);
 void mq_casiowin_mono_PrintXY(
     mqMachine *mach, int x, int y, u32 stringAddress, int mode);
+
+/* Display update. */
+void mq_casiowin_mono_dupdate(mqMachine *mach);
 
 /* SaveDisp and RestoreDisp syscalls. */
 void mq_casiowin_mono_SaveDisp(mqMachine *mach, int id);
@@ -196,6 +210,8 @@ bool mq_casiowin_rtc_gettime(
 //=== Syscall support functions ==============================================//
 // These functions are used to serve syscalls on all APIs.
 
+/** GetKeyWait **/
+
 enum {
     MQ_CASIOWIN_KEYWAIT_HALTON_TIMEROFF = 0,
     MQ_CASIOWIN_KEYWAIT_HALTOFF_TIMEROFF = 1,
@@ -216,12 +232,87 @@ struct mqCasiowin_GetKeyWaitArgs {
     int timeout;
     /* Menu setting: 0 allows return to menu (unless no waiting), 1 doesn't */
     int menu;
-    /* Pointer to output keycode variable */
+    /* Pointer to output keycode variable (two possible output sizes) */
     u32 ptr_u16_key;
+    u32 ptr_u32_key;
 };
 
 void mq_casiowin_GetKeyWait(
     mqMachine *mach, struct mqCasiowin_GetKeyWaitArgs args);
+
+/** Shape drawing functions: ShapeToVRAM, ShapeToDD, etc. **/
+
+enum {
+    /* Dot at x1, y1 */
+    MQ_CASIOWIN_SHAPE_DOT = 1,
+    /* Solid line from x1, y1 to x2, y2 */
+    MQ_CASIOWIN_SHAPE_SOLID_LINE = 2,
+    /* Dashed line alternating on_bits, off_bits, on_bits, etc. */
+    MQ_CASIOWIN_SHAPE_ON_OFF_LINE = 3,
+    /* Dashed line alterating off_bits, on_bits, off_bits, etc. */
+    MQ_CASIOWIN_SHAPE_OFF_ON_LINE = 4,
+    /* Rectangle from x1, y1 to x2, y2 */
+    MQ_CASIOWIN_SHAPE_RECT = 5,
+    /* Circle at x1, y1 with radius x2 */
+    MQ_CASIOWIN_SHAPE_CIRCLE = 6,
+};
+
+enum {
+    MQ_CASIOWIN_SHAPE_MODE_VRAM = 0x01,
+    MQ_CASIOWIN_SHAPE_MODE_DD = 0x02,
+};
+
+struct mqCasiowin_TShape {
+    u32 x1, y1, x2, y2;
+    /* Always 2? */
+    u8 const_2;
+    /* Type of shape, see MQ_CASIOWIN_SHAPE_*. */
+    u8 type;
+    /* SimLo says: draw mode:
+       1,1: set
+       1,4: invert
+       2,1: clear
+       3;*: disables every second bit of the display (checkerboard)
+       3,1: invert; checkerboard with (0,0) enabled
+       3,2: set; checkerboard with (0,0) enabled
+       3,3: clear; checkerboard with (0,0) enabled
+       3,4: invert; checkerboard with (0,0) *disabled* */
+    u8 f2, f3;
+    /* Dash pattern for dashed lines */
+    int on_bits, off_bits;
+};
+
+/* Structure for drawing pixels in DrawShape */
+struct mqCasiowin_TShapePixelInfo {
+    u8 mode;
+    int x, y;
+    int dash_counter;
+};
+
+void mq_casiowin_LineToVRAM(
+    mqMachine *mach, int x1, int y1, int x2, int y2, int mode);
+void mq_casiowin_ShapeToVRAM(
+    mqMachine *mach, struct mqCasiowin_TShape const *shape);
+void mq_casiowin_ShapeToDD(
+    mqMachine *mach, struct mqCasiowin_TShape const *shape);
+void mq_casiowin_ShapeToDDVRAM(
+    mqMachine *mach, struct mqCasiowin_TShape const *shape);
+
+void mq_casiowin_DrawShape(
+    mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape);
+void mq_casiowin_DrawShapePoint(
+    mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape);
+void mq_casiowin_DrawShapeLine(
+    mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape);
+void mq_casiowin_DrawShapeRect(
+    mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape);
+void mq_casiowin_DrawShapeCircle(
+    mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape);
 
 //=== All background syscall state ===========================================//
 

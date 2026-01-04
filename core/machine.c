@@ -47,6 +47,12 @@ void mq_machine_reset(mqMachine *mach)
     mach->initialized = false;
     mach->stuck = false;
 
+    mach->internallyPaused = false;
+    mq_timer_reset(&mach->internalPauseTimer, 0);
+    mach->internalPauseTicksRemaining = 0;
+
+    mach->internallyBlocked = false;
+
     if(mach->modules) {
         mq_callhook_module_cleanup(mach);
         free(mach->modules);

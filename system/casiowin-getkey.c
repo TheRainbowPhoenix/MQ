@@ -20,7 +20,7 @@ static bool GetKeyWait_bgsyscall(mqMachine *mach)
     struct mqCasiowin_GetKeyWaitArgs *args = &Casiowin->bgs->GetKeyWait.args;
 
     int keyNumber = mq_keyboard_getPressedKey(kbd);
-    int col = -1, row = -1;
+    int col = -1, row = -1, keycode = -1;
     if(keyNumber == (int)kbd->onKey)
         col = row = 0;
     else if(keyNumber >= 0) {
@@ -29,20 +29,43 @@ static bool GetKeyWait_bgsyscall(mqMachine *mach)
         row = info->row;
     }
 
-    /* In HALTOFF_TIMEROFF mode, we have to return instantly. */
-    if(args->waitType == MQ_CASIOWIN_KEYWAIT_HALTOFF_TIMEROFF) {
-        if(keyNumber >= 0) {
-            mq_memory_write(mach, mach->memory, args->ptr_i32_col, 4, col + 1);
-            mq_memory_write(mach, mach->memory, args->ptr_i32_row, 4, row + 1);
-            cpu->r[0] = MQ_CASIOWIN_KEYREP_KEYEVENT;
-        }
-        else {
-            cpu->r[0] = MQ_CASIOWIN_KEYREP_NOEVENT;
-        }
-        return true;
-        }
+    /* Map from physical key IDs to GetKey() keycodes */
+    keycode = keyNumber; // TODO
 
-    mq_log(MQ_LOG_ERROR, "long GetKeyWait isn't supported yet! o(x_x)o");
+    /* A key event interrupts the call no matter the mode. */
+    if(keyNumber >= 0) {
+        if(args->ptr_i32_col)
+            mq_memory_write(mach, mach->memory, args->ptr_i32_col, 4, col + 1);
+        if(args->ptr_i32_row)
+            mq_memory_write(mach, mach->memory, args->ptr_i32_row, 4, row + 1);
+        if(args->ptr_u16_key)
+            mq_memory_write(mach, mach->memory, args->ptr_u16_key, 2, keycode);
+        if(args->ptr_u32_key)
+            mq_memory_write(mach, mach->memory, args->ptr_u16_key, 4, keycode);
+        cpu->r[0] = MQ_CASIOWIN_KEYREP_KEYEVENT;
+        return true;
+    }
+
+    /* If nothing happens... */
+
+    /* HALTOFF_TIMEROFF: return instantly with KEYREP_NOEVENT */
+    if(args->waitType == MQ_CASIOWIN_KEYWAIT_HALTOFF_TIMEROFF) {
+        cpu->r[0] = MQ_CASIOWIN_KEYREP_NOEVENT;
+        return true;
+    }
+    /* HALTON_TIMEROFF: wait */
+    if(args->waitType == MQ_CASIOWIN_KEYWAIT_HALTON_TIMEROFF) {
+        // mq_log(MQ_LOG_DEBUG, "GetKey: waiting...");
+        return false;
+    }
+    /* HALTON_TIMERON: wait until time limit */
+    if(args->waitType == MQ_CASIOWIN_KEYWAIT_HALTON_TIMERON) {
+        mq_log(MQ_LOG_ERROR, "timed GetKeyWait isn't supported yet! o(x_x)o");
+        mq_machine_setStuck(mach);
+        return false;
+    }
+
+    mq_log(MQ_LOG_ERROR, "invalid GetKeyWait mode! o(x_x)o");
     mq_machine_setStuck(mach);
     return false;
 }

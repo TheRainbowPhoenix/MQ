@@ -82,6 +82,7 @@ set(LIB_SOURCES
 
   system/casiowin.c
   system/casiowin-getkey.c
+  system/casiowin-render.c
   system/casiowin-render-fx.c
   system/casiowin-rtc.c
   system/heap.c)

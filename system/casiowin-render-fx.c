@@ -43,6 +43,95 @@ int mq_casiowin_mono_get_pixel(u8 *vramLE, uint x, uint y)
     return (*data & mask) != 0;
 }
 
+int mq_casiowin_mono_get_vram_byte(u8 *vramLE, uint xbyte, uint y)
+{
+    int index = y * (SCREEN_WIDTH / 8) + xbyte;
+    u8 *vramByte = (u8 *)(((uintptr_t)vramLE + index) ^ 3);
+    return *vramByte;
+}
+
+void mq_casiowin_mono_set_vram_byte(u8 *vramLE, uint xbyte, uint y, int byte)
+{
+    int index = y * (SCREEN_WIDTH / 8) + xbyte;
+    u8 *vramByte = (u8 *)(((uintptr_t)vramLE + index) ^ 3);
+    *vramByte = byte;
+}
+
+//=== Base function for shape functions ======================================//
+
+void mq_casiowin_mono_DrawShapePoint(
+    u8 *vramLE, struct mqCasiowin_TShapePixelInfo *pixelinfo,
+    struct mqCasiowin_TShape const *shape)
+{
+    int x = pixelinfo->x;
+    int y = pixelinfo->y;
+    if((uint)x >= 128 || (uint)y >= 64)
+        return;
+
+    int xoff = x & 7;
+    int input_byte;
+    int output_byte = 0;
+
+    /* Input filter: for dashed lines, apply the dash pattern */
+    if(shape->type == MQ_CASIOWIN_SHAPE_ON_OFF_LINE ||
+       shape->type == MQ_CASIOWIN_SHAPE_OFF_ON_LINE) {
+        int dash_current =
+            pixelinfo->dash_counter % (shape->on_bits + shape->off_bits);
+
+        if(shape->type == MQ_CASIOWIN_SHAPE_ON_OFF_LINE) {
+            if(dash_current <= shape->on_bits && dash_current != 0)
+                output_byte = (0x80 >> xoff);
+        }
+        else {
+            if(shape->off_bits < dash_current || dash_current == 0)
+                output_byte = (0x80 >> xoff);
+        }
+    }
+    /* For other shapes,  use the draw mode */
+    else {
+        if(shape->f2 == 1)
+            output_byte = (0x80 >> xoff);
+        else if(shape->f2 == 2)
+            output_byte = 0;
+        else if(shape->f2 == 3)
+            output_byte = (0x80 >> xoff) & (0xaa >> (y & 1));
+    }
+
+    int mode = pixelinfo->mode;
+
+    if((mode & MQ_CASIOWIN_SHAPE_MODE_VRAM) == 0) {
+        mq_log(MQ_LOG_ERROR, "ShapeToDD: Can't read from DD yet");
+        input_byte = 0;
+        // input_byte = DD_ReadByte(x >> 3, y);
+    }
+    else {
+        input_byte = mq_casiowin_mono_get_vram_byte(vramLE, x >> 3, y);
+    }
+
+    /* Output filter */
+    if(shape->f3 == 1) {
+        if(output_byte)
+            output_byte |= input_byte;
+        else
+            output_byte = input_byte & ~(0x80 >> xoff);
+    }
+    else if(shape->f3 == 2)
+        output_byte |= input_byte;
+    else if(shape->f3 == 3)
+        output_byte = input_byte & (output_byte | ~(0x80 >> xoff));
+    else if(shape->f3 == 4)
+        output_byte = ((input_byte ^ output_byte) & (0x80 >> xoff))
+                    | (input_byte & ~(0x80 >> xoff));
+
+    /* Output the pixel */
+    if(mode & MQ_CASIOWIN_SHAPE_MODE_VRAM)
+        mq_casiowin_mono_set_vram_byte(vramLE, x >> 3, y, output_byte);
+    if(mode & MQ_CASIOWIN_SHAPE_MODE_DD) {
+        mq_log(MQ_LOG_ERROR, "ShapeToDD: Can't write to DD yet");
+        // DD_WriteByte(x >> 3, y, output_byte);
+    }
+}
+
 //=== Text rendering =========================================================//
 
 // PrintXY drawing modes
@@ -196,6 +285,27 @@ void mq_casiowin_mono_PrintXY(
         draw_character(Casiowin->vramLE, codePoint, x, y, mode);
         x += CHAR_WIDTH;
     }
+}
+
+//=== Display access =========================================================//
+
+void mq_casiowin_mono_dupdate(mqMachine *mach)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+
+    if(!mq_display_setFormat(mach->display, MQ_DISPLAY_FORMAT_L8, 128, 64))
+        return;
+
+    u8 *src = mq_memory_access(mach->memory, Casiowin->dataVramAddresses[0]);
+    u8 *dst = mach->display->data;
+    for(int p = 0; p < 1024; p++) {
+        u8 value = *(u8*)((uintptr_t)(src++) ^ 3);
+        for(int i = 0; i < 8; i++) {
+            *dst++ = ~((i8)value >> 7);
+            value <<= 1;
+        }
+    }
+    mq_display_setDirty(mach->display, true);
 }
 
 //=== SaveDisp and RestoreDisp ===============================================//
