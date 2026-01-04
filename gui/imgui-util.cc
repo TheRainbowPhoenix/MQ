@@ -1,8 +1,6 @@
 #include "imgui-util.h"
 #include <imgui_internal.h>
 #include <algorithm>
-#include <optional>
-#include <type_traits>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -71,14 +69,14 @@ void TextCenteredColor(char const *text, u32 color)
     float w_text = ImGui::CalcTextSize(text).x;
     ImGui::SetCursorPosX((w_widget - w_text) * 0.5f);
     if (color == 0x00000000)
-        ImGui::TextDisabled(text);
+        ImGui::TextDisabled("%s", text);
     else {
         ImGui::TextColored({
             (float)((color >> 16) & 0xff),
             (float)((color >>  8) & 0xff),
             (float)((color >>  0) & 0xff),
             1.0f},
-            text);
+            "%s", text);
     }
 }
 
@@ -109,7 +107,7 @@ void HelpMarker(char const *title, char const *desc)
     float available_x = ImGui::GetContentRegionAvail().x;
     float title_width = ImGui::CalcTextSize(title).x;
     ImGui::SameLine(available_x - title_width);
-    ImGui::TextDisabled(title);
+    ImGui::TextDisabled("%s", title);
     if(ImGui::BeginItemTooltip()) {
         ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
         ImGui::TextUnformatted(desc);
