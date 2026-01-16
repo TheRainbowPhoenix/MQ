@@ -14,20 +14,6 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." || exit 1
 # rudimentary argument check
 [ $# -ne 1 ] && echo 'missing version information' >&2 && exit 1
 
-# manually install emsdk
-echo 'Install emsdk...'
-mkdir -p build/web/
-cd build/web/ || exit 1
-git clone https://github.com/emscripten-core/emsdk.git
-cd emsdk/ || exit 1
-./emsdk install latest
-./emsdk activate latest
-# shellcheck disable=SC1091
-# do not statically check if this file exists. It will exists during the
-# execution
-source ./emsdk_env.sh
-cd ../../../ || exit 1
-
 # manually and locally install Azur and manually export installation
 # information
 ./.ci/build-azur.sh emscripten "$PWD/build/web/azur" false
