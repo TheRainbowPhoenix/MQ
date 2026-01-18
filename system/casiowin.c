@@ -497,13 +497,6 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
     u32 r4 = cpu->r[4], r5 = cpu->r[5], r6 = cpu->r[6], r7 = cpu->r[7];
 
-    /* Log except for syscalls that happen often */
-    if(syscallID != 0x015 && syscallID != 0x135 && syscallID != 0x420 &&
-       syscallID != 0xc4f && syscallID != 0x807 && syscallID != 0x808 &&
-       syscallID != 0x028 && syscallID != 0x03b && syscallID != 0x146 &&
-       syscallID != 0x247 && syscallID != 0x90f)
-        mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
-
     switch(syscallID) {
     case 0x0013: /* GlibAddinAplExecutionCheck() */
         cpu->r[0] = 0;
@@ -601,6 +594,10 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x0135: /* GetVRAMAddress() */
         cpu->r[0] = Casiowin->dataVramAddresses[0];
+        return;
+
+    case 0x0138: /* Cursor_SetPosition() */
+        cpu->r[0] = mq_casiowin_Cursor_SetPosition(mach, r4, r5);
         return;
 
     case 0x0143: /* Bdisp_AllClr_VRAM() */
@@ -764,12 +761,6 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
     // TODO: Check syscall API version
-
-    /* Log except for syscalls that happen often */
-    if(syscallID != 0x1e6 && syscallID != 0x25f && syscallID != 0x2c1 &&
-       syscallID != 0x1dd0 && !(syscallID >= 0x1f41 && syscallID <= 0x1f46)
-       && syscallID != 0x1170)
-        mq_log(MQ_LOG_DEBUG, "Syscall! r0=%08x", syscallID);
 
     switch(syscallID) {
     case 0x0029: /* ??? - Glib_AddInAplExecutionCheck something like that. */

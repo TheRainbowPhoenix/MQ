@@ -231,7 +231,7 @@ void mq_casiowin_mono_Print(mqMachine *mach, u32 stringAddress, int max)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
 
-    while(Casiowin->BdispCursorX <= 21 && Casiowin->BdispCursorX < max - 1) {
+    while(Casiowin->BdispCursorX < 21 && Casiowin->BdispCursorX < max - 1) {
         int codePoint = nextCodePoint(mach, &stringAddress);
         if(codePoint == 0)
             break;

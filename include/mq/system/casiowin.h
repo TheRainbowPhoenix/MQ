@@ -190,6 +190,11 @@ void mq_casiowin_mono_dupdate(mqMachine *mach);
 void mq_casiowin_mono_SaveDisp(mqMachine *mach, int id);
 void mq_casiowin_mono_RestoreDisp(mqMachine *mach, int id);
 
+//=== Generic rendering syscalls =============================================//
+
+/* Set the cursor position (0..20, 0..7). */
+int mq_casiowin_Cursor_SetPosition(mqMachine *mach, int column, int row);
+
 //=== RTC functions =========================================================//
 
 /* RTC_GetTicks() - get RTC ticks */

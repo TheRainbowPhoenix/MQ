@@ -9,6 +9,18 @@
 #include <mq/system/casiowin.h>
 #include <stdlib.h>
 
+int mq_casiowin_Cursor_SetPosition(mqMachine *mach, int column, int row)
+{
+    mqCasiowin *Casiowin = mq_casiowin_get(mach);
+
+    if((uint)column > 20 || (uint)row > 7)
+        return 0;
+
+    Casiowin->BdispCursorX = column;
+    Casiowin->BdispCursorY = row;
+    return 1;
+}
+
 //=== Shape rendering functions ==============================================//
 
 void mq_casiowin_LineToVRAM(
@@ -136,6 +148,8 @@ void mq_casiowin_DrawShapeRect(
     mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
     struct mqCasiowin_TShape const *shape)
 {
+    (void)pixelinfo;
+    (void)shape;
     mq_log(MQ_LOG_ERROR, "DrawShapeRect: TODO");
     mq_machine_setStuck(mach);
 }
@@ -144,6 +158,8 @@ void mq_casiowin_DrawShapeCircle(
     mqMachine *mach, struct mqCasiowin_TShapePixelInfo *pixelinfo,
     struct mqCasiowin_TShape const *shape)
 {
+    (void)pixelinfo;
+    (void)shape;
     mq_log(MQ_LOG_ERROR, "DrawShapeCircle: TODO");
     mq_machine_setStuck(mach);
 }
