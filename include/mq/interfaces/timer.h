@@ -32,6 +32,8 @@ struct mqTimer {
 
 typedef struct mqTimer mqTimer;
 
+u64 mq_timer_getCurrentSystemTime(void);
+
 /* Reset the timer and set the tick duration to `resolution_ns` nanoseconds. */
 void mq_timer_reset(mqTimer *timer, u64 resolution_ns);
 

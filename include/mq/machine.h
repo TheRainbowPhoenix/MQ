@@ -51,6 +51,12 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
+    /* A new frame has been generated */
+    struct {
+        bool blocked;
+        u64 timeref;
+        u64 timedelta;
+    } newFrame;
     /* Jump buffer to jump to when the execution gets broken. This is used to
        exit. The jump buffer may or may not
        be present. */

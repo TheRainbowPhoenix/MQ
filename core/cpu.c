@@ -338,6 +338,10 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
            slot is executed. */
         if(MQ_UNLIKELY(ins == 0x002b /* rte */) && cpu->excMask)
             mq_cpu_handleException(mach, cpu);
+
+        /* Handle execution break request */
+        if(mach->internallyBlocked)
+            mq_machine_breakExecution(mach);
     }
     else {
         return mq_cpu_raiseException2(mach, cpu, SH_EXC_INS_ADDR, cpu->pc + 2);

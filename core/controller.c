@@ -8,6 +8,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void thread_syncFPS(void *userdata)
+{
+    mqController *controller = userdata;
+    mqMachine *mach = controller->mach;
+
+    mach->internallyBlocked = false;
+
+    u64 new_timeref = mq_timer_getCurrentSystemTime();
+    u64 new_timedelta = 0;
+    i64 new_timepause = 0;
+    if(mach->newFrame.timeref > 0) {
+        // todo: remove hardcoded 25FPS
+        new_timedelta = new_timeref - mach->newFrame.timeref;
+        new_timepause = ((1000 * 1000000) / 30) - new_timedelta;
+        // mq_log(MQ_LOG_DEBUG,
+        //     "new frame!\n"
+        //     "bef: ref=%lld - delta=%lld\n"
+        //     "new: ref=%lld - delta=%lld - pause=%lld\n"
+        //     "FPS=%lld (raw: %lld)",
+        //     mach->newFrame.timeref, mach->newFrame.timedelta,
+        //     new_timeref, new_timedelta, new_timepause,
+        //     ((1000 * 1000000) / (new_timedelta + new_timepause)),
+        //     ((1000 * 1000000) / new_timedelta)
+        // );
+    }
+
+    if(new_timepause > 0)
+        mq_machine_internalPauseMilliseconds(mach, new_timepause / 1000000);
+
+    mach->newFrame.timedelta = new_timedelta;
+    mach->newFrame.timeref = new_timeref;
+    mach->newFrame.blocked = false;
+}
+
 static void *thread_run(void *userdata)
 {
     mqController *controller = userdata;
@@ -38,6 +72,10 @@ static void *thread_run(void *userdata)
             mq_log(MQ_LOG_WARNING, "machine is stuck!");
             mach->cyclesPending = 0;
         }
+        else if(mach->newFrame.blocked){
+            mq_log(MQ_LOG_WARNING, "machine new frame!");
+            thread_syncFPS(controller);
+        }
 
         mq_machine_clearBreakJumpBuffer(mach);
 #else
@@ -48,6 +86,10 @@ static void *thread_run(void *userdata)
         if(mach->stuck) {
             mq_log(MQ_LOG_WARNING, "machine is stuck!");
             mach->cyclesPending = 0;
+        }
+        if(mach->newFrame.blocked) {
+            mq_log(MQ_LOG_WARNING, "machine new frame!");
+            thread_syncFPS(controller);
         }
 #endif
 

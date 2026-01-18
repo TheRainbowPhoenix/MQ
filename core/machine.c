@@ -440,5 +440,6 @@ void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
 
     mach->internallyPaused = true;
     mq_timer_reset(&mach->internalPauseTimer, 1000000 /* 1 ms */);
+    mq_timer_start(&mach->internalPauseTimer);
     mach->internalPauseTicksRemaining = delay_ms;
 }
