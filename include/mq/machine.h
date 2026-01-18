@@ -51,11 +51,11 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
-    /* Jump buffer to jump to when the machine gets stuck. This is used to
-       unwind in case of unrecoverable failure. The jump buffer may or may not
+    /* Jump buffer to jump to when the execution gets broken. This is used to
+       exit. The jump buffer may or may not
        be present. */
-   bool hasStuckJumpBuffer;
-   jmp_buf stuckJumpBuffer;
+   bool hasBreakJumpBuffer;
+   jmp_buf breakJumpBuffer;
 
     /* Machine is internally paused for a limited time. This is a high-level
        emulation of sleep functions. While internally paused, the machine still
@@ -66,9 +66,9 @@ struct mqMachine
     bool internallyPaused;
     mqTimer internalPauseTimer;
     int internalPauseTicksRemaining;
-    /* Machine is internally blocked for a high-level reason (e.g. a blocking
-       syscall). Unlike internal pausing, this status does not expire
-       automatically and must be cleared by blocking code. */
+    /* Machine is internally blocked for a high-level reason, e.g. a blocking
+       syscall, or stuck. Unlike internal pausing, this status does not expire
+       automatically. */
     bool internallyBlocked;
 
     /* Number of cycles that the machine is scheduled to work for.
@@ -114,19 +114,38 @@ void mq_machine_unlock(mqMachine *mach);
    machine and wait on the condition variable (atomically). */
 void mq_machine_unlockAndWaitForWork(mqMachine *mach);
 
-/* Mark the machine as stuck. This stops all execution. If a stuck jump buffer
-   was setup, long jumps back to it; otherwise, returns normally. */
+/* Mark the machine as stuck and break the execution. */
 void mq_machine_setStuck(mqMachine *mach);
-/* Set a jump buffer target that the machine unwinds to if stuck. The current
-   context is saved in an internal jmp_buf in the machine. This macro contains
-   a setjmp() and returns twice. setStuck() does the longjmp() back. */
-#define mq_machine_setStuckJumpBuffer(mach) ({ \
-   extern void mq_machine_setStuckJumpBufferAux(mqMachine *mach); \
-   mq_machine_setStuckJumpBufferAux(mach); \
-   setjmp(mach->stuckJumpBuffer); \
+
+/* Break the machine's execution. This signals that we have to stop executing
+   instructions, either because the code is blocking (e.g. waiting for a
+   background syscall to end) or because the machine is fully stuck.
+
+   This function sets the machine's internallyBlocked flag which breaks the
+   fetch-decode-execute loop in one of three ways:
+
+   * If we're not executing instructions, there's nothing to break. Otherwise:
+   * In builds where MQ_CONTROLLER_SETJMP is enabled, a break buffer is set up
+     when executing instructions, and breaking longjmps back to it.
+   * In other builds, internallyBlocked is checked after each instruction and
+     control returns to the controller through a series of function returns.
+
+   Because in some builds this function doesn't return, it should always be
+   used as a tail call. It can only be used in functions whose caller are fine
+   with not returning, so each use must be studied separately. */
+void mq_machine_breakExecution(mqMachine *mach);
+
+/* Set a jump buffer target that the machine unwinds to if for some reason we
+   want to interrupt the machine fetch-decode-execute loop. The current context
+   is saved in an internal jmp_buf in the machine. This macro contains a
+   setjmp() and returns twice. setStuck() does the longjmp() back. */
+#define mq_machine_setBreakJumpBuffer(mach) ({ \
+   extern void mq_machine_setBreakJumpBufferAux(mqMachine *mach); \
+   mq_machine_setBreakJumpBufferAux(mach); \
+   setjmp(mach->breakJumpBuffer); \
 })
-/* Clear the jump buffer target that the machine unwinds to if stuck. */
-void mq_machine_clearStuckJumpBuffer(mqMachine *mach);
+/* Clear the jump buffer target that the machine unwinds to upon a break. */
+void mq_machine_clearBreakJumpBuffer(mqMachine *mach);
 
 /* Set the number of pending cycles. This controls the execution of the
    machine. Setting 0 pauses it. Setting a negative number makes it run with no

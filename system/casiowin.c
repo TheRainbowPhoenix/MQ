@@ -630,7 +630,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         };
         if(readStack32(mach, +0, &args.menu) &&
            readStack32(mach, +4, &args.ptr_u16_key))
-            mq_casiowin_GetKeyWait(mach, args);
+            mq_casiowin_GetKeyWait(mach, args, false);
         else
             mq_machine_setStuck(mach);
         return;
@@ -712,11 +712,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x090f: { /* GetKey() */
         mq_casiowin_mono_dupdate(mach);
-        struct mqCasiowin_GetKeyWaitArgs args = {
-            .ptr_u32_key = cpu->r[4],
-            .waitType = MQ_CASIOWIN_KEYWAIT_HALTON_TIMEROFF,
-        };
-        mq_casiowin_GetKeyWait(mach, args);
+        mq_casiowin_GetKey(mach, r4);
         return;
     }
 
@@ -870,7 +866,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         };
         if(readStack32(mach, +0, &args.menu) &&
            readStack32(mach, +4, &args.ptr_u16_key))
-            mq_casiowin_GetKeyWait(mach, args);
+            mq_casiowin_GetKeyWait(mach, args, false);
         else
             mq_machine_setStuck(mach);
         return;
@@ -1026,4 +1022,7 @@ void mq_casiowin_syscall(mqMachine *mach)
         mach->cpu.pc = mach->cpu.spRegs[SH_PR];
         break;
     }
+
+    if(Casiowin->bgsyscall)
+        mq_machine_breakExecution(mach);
 }

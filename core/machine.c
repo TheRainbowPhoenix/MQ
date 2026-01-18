@@ -126,26 +126,32 @@ void mq_machine_unlockAndWaitForWork(mqMachine *mach)
 void mq_machine_setStuck(mqMachine *mach)
 {
     mach->stuck = true;
-    if(mach->hasStuckJumpBuffer)
-        longjmp(mach->stuckJumpBuffer, 1);
+    mq_machine_breakExecution(mach);
 }
 
-void mq_machine_setStuckJumpBufferAux(mqMachine *mach)
+void mq_machine_breakExecution(mqMachine *mach)
 {
-    if(mach->hasStuckJumpBuffer) {
+    mach->internallyBlocked = true;
+    if(mach->hasBreakJumpBuffer)
+        longjmp(mach->breakJumpBuffer, 1);
+}
+
+void mq_machine_setBreakJumpBufferAux(mqMachine *mach)
+{
+    if(mach->hasBreakJumpBuffer) {
         mq_log(MQ_LOG_ERROR, "double stuck jump buffer on a machine!");
         /* Try to stop execution before we unwind incorrectly and crash... */
         mach->stuck = true;
     }
 
-    mach->hasStuckJumpBuffer = true;
+    mach->hasBreakJumpBuffer = true;
 }
 
-void mq_machine_clearStuckJumpBuffer(mqMachine *mach)
+void mq_machine_clearBreakJumpBuffer(mqMachine *mach)
 {
-    mach->hasStuckJumpBuffer = false;
+    mach->hasBreakJumpBuffer = false;
     /* Purge the context copy to avoid accidental jumps back. */
-    memset(mach->stuckJumpBuffer, 0, sizeof mach->stuckJumpBuffer);
+    memset(mach->breakJumpBuffer, 0, sizeof mach->breakJumpBuffer);
 }
 
 void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending)
@@ -317,9 +323,9 @@ bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
 }
 
 #if MQ_CONTROLLER_SETJMP
-# define CHECK_STUCK() (void)0
+# define CHECK_BLOCKED() (void)0
 #else
-# define CHECK_STUCK() if(mach->stuck) goto endRun
+# define CHECK_BLOCKED() if(mach->internallyBlocked) goto endRun
 #endif
 
 int mq_machine_cycle(mqMachine *mach, int cycles)
@@ -369,13 +375,13 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(mach->processTimer % 4 == 0 && mach->processFrequency % 4 == 0) {
         while(cyclesRemaining > 4) {
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_STUCK();
+            CHECK_BLOCKED();
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_STUCK();
+            CHECK_BLOCKED();
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_STUCK();
+            CHECK_BLOCKED();
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_STUCK();
+            CHECK_BLOCKED();
 
             if((mach->processTimer -= 4) <= 0)
                 mq_machine_runProcesses(mach, mach->processFrequency);
@@ -390,7 +396,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
     while(cyclesRemaining > 0) {
         mq_cpu_cycle(mach, &mach->cpu);
-        CHECK_STUCK();
+        CHECK_BLOCKED();
 
         if(--mach->processTimer == 0)
             mq_machine_runProcesses(mach, mach->processFrequency);

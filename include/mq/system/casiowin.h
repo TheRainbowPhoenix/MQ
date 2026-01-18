@@ -237,8 +237,10 @@ struct mqCasiowin_GetKeyWaitArgs {
     u32 ptr_u32_key;
 };
 
+void mq_casiowin_GetKey(mqMachine *mach, u32 ptr_u32_key);
+
 void mq_casiowin_GetKeyWait(
-    mqMachine *mach, struct mqCasiowin_GetKeyWaitArgs args);
+    mqMachine *mach, struct mqCasiowin_GetKeyWaitArgs args, bool isGetkey);
 
 /** Shape drawing functions: ShapeToVRAM, ShapeToDD, etc. **/
 
@@ -317,7 +319,11 @@ void mq_casiowin_DrawShapeCircle(
 //=== All background syscall state ===========================================//
 
 struct mqCasiowin_BGSyscallData {
-    struct { struct mqCasiowin_GetKeyWaitArgs args; } GetKeyWait;
+    struct mqCasiowin_BGSyscallData_GetKeyWait {
+        struct mqCasiowin_GetKeyWaitArgs args;
+        bool idleReached;
+        bool isGetkey;
+    } GetKeyWait;
 };
 
 MQ_END_DEFS

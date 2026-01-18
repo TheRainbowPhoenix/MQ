@@ -312,6 +312,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
        handler to that address. */
     else if(cpu->pc == cpu->syscallHandler && cpu->pc) {
         mq_casiowin_syscall(mach);
+        /* If a background syscall, execution longjmps back to controller. */
         return;
     }
     else {

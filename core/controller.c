@@ -24,19 +24,22 @@ static void *thread_run(void *userdata)
         int cycles = 20000;
 
 #if MQ_CONTROLLER_SETJMP
-        int rc = mq_machine_setStuckJumpBuffer(mach);
+        int rc = mq_machine_setBreakJumpBuffer(mach);
 
         if(rc == 0) {
             TracyCZoneN(_ctxA, "cycles", true);
             mq_machine_cycle(mach, cycles);
             TracyCZoneEnd(_ctxA);
         }
-        else {
+        /* There was an execution break and now the machine is blocked from
+           running more instructions. It's either waiting for a background
+           process or stuck due to an unrecoverable error. */
+        else if(mach->stuck) {
             mq_log(MQ_LOG_WARNING, "machine is stuck!");
             mach->cyclesPending = 0;
         }
 
-        mq_machine_clearStuckJumpBuffer(mach);
+        mq_machine_clearBreakJumpBuffer(mach);
 #else
         TracyCZoneN(_ctxA, "cycles", true);
         mq_machine_cycle(mach, cycles);

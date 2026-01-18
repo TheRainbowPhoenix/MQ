@@ -14,6 +14,9 @@ MQ_START_DEFS
 /* A unified calculator key enumeration that the GUI can use to assign
    shortcuts to keyboard keys. This enumeration covers the set of keys of (at
    least) all supported models. */
+// TODO: Duplicate keys whenever the shift/alpha functions differ
+// This way a mqKeyboardKeycode identifies the key's entire function set and
+// GetKey() can generate the right keycodes without other information
 enum mqKeyboardKeycode {
    /* F-keys */
    MQ_KEY_F1, MQ_KEY_F2, MQ_KEY_F3, MQ_KEY_F4, MQ_KEY_F5, MQ_KEY_F6,
@@ -27,6 +30,10 @@ enum mqKeyboardKeycode {
    /* Number keys */
    MQ_KEY_0, MQ_KEY_1, MQ_KEY_2, MQ_KEY_3, MQ_KEY_4, MQ_KEY_5, MQ_KEY_6,
    MQ_KEY_7, MQ_KEY_8, MQ_KEY_9,
+
+   MQ_KEY__MAX,
+   /* Prevents compiler from constant-propagating "keycode >= 0" conditions */
+   MQ_KEY__NONE = -1,
 };
 
 /* A physical keyboard key. */
