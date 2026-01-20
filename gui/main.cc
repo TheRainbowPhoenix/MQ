@@ -395,6 +395,10 @@ void update_machine(mqMachine *mach, bool startRunning)
             int pause = mach->newFrame.timePause;
             int raw = (1000 * 1000000) / (mach->newFrame.timeDelta);
             int fps = (1000 * 1000000) / (mach->newFrame.timeDelta + pause);
+            if(pause < 0) {
+                fps = raw;
+                pause = 0;
+            }
             gui.perfThrottleStatsPause[idx] = pause / 1000000;
             gui.perfThrottleStatsRaw[idx] = raw;
             gui.perfThrottleStatsFps[idx] = fps;
