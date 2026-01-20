@@ -403,6 +403,12 @@ void update_machine(mqMachine *mach, bool startRunning)
             gui.perfThrottleLastFps = fps;
             gui.perfThrottleLastRaw = raw;
         }
+        /* force-update the throttle request */
+        mach->newFrame.requestFps = gui.perfThrottleRequestFps;
+        if(mach->newFrame.requestFps == 0) {
+            mq_log(MQ_LOG_ERROR, "throttle.requestFps == 0!!");
+            mach->newFrame.requestFps = 60;
+        }
 
         mq_display_setDirty(d, false);
     }

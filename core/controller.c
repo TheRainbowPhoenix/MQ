@@ -19,9 +19,9 @@ static void thread_syncFPS(void *userdata)
     u64 new_timeDelta = 0;
     i64 new_timePause = 0;
     if(mach->newFrame.timeRef > 0) {
-        // todo: remove hardcoded 25FPS
         new_timeDelta = new_timeRef - mach->newFrame.timeRef;
-        new_timePause = ((1000 * 1000000) / 30) - new_timeDelta;
+        new_timePause = \
+            ((1000 * 1000000) / mach->newFrame.requestFps) - new_timeDelta;
         // mq_log(MQ_LOG_DEBUG,
         //     "new frame!\n"
         //     "bef: ref=%lld - delta=%lld\n"

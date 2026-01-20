@@ -192,6 +192,8 @@ struct GUI
     int perfThrottleLastPause = 0;
     int perfThrottleLastFps = 0;
     int perfThrottleLastRaw = 0;
+    /* throttle request */
+    int perfThrottleRequestFps = 30;
 };
 
 #endif /* MQ_UI_GUI_H */

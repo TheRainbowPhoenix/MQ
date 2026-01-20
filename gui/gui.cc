@@ -219,6 +219,10 @@ void GUI::Render(mqController *controller)
         ImGui::Checkbox("##667", &gui.perfThrottleUseCustomFps);
         ImGui::EndDisabled();
 
+        gui.perfThrottleRequestFps = fps;
+        if(gui.perfThrottleUseCustomFps)
+            gui.perfThrottleRequestFps = gui.perfThrottleCustomFps;
+
 #undef _plot
 
         ImGui::SeparatorTextD("Profilling");
