@@ -184,6 +184,40 @@ void GUI::Render(mqController *controller)
     Windows.Record->render(omach);
 
     if(ImGui::Begin("Performance")) {
+        static int throttle_table[] = {-1, 25, 30, 60};
+        char buffer[128];
+
+#define _plot(title, table, max) \
+    ImGui::PlotLines(title, table, 5*60, 0, "", 0.0f, max, ImVec2(0, 40.0f))
+
+        ImGui::SeparatorTextD("Emulation");
+        ImGui::BeginDisabled(!omach->initialized);
+        ImGui::BeginDisabled(omach->cyclesPending == 0);
+        _plot("Pause: Xms", gui.perfThrottleStatsPause, 100.0f);
+        _plot("FPS: X", gui.perfThrottleStatsFps, 70.0f);
+        _plot("RAW: X", gui.perfThrottleStatsRaw, 128.0f);
+        ImGui::EndDisabled();
+        int fps = throttle_table[gui.perfThrottleProfile];
+        if(fps > 0) {
+            snprintf(buffer, 128, "%dFPS", fps);
+            if(!gui.perfThrottleUseCustomFps)
+                gui.perfThrottleCustomFps = fps;
+        } else {
+            strncpy(buffer, "Unlimited", 128);
+        }
+        ImGui::BeginDisabled(gui.perfThrottleUseCustomFps);
+        ImGui::SliderInt("Throttle", &gui.perfThrottleProfile, 0, 3, buffer);
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(!gui.perfThrottleUseCustomFps);
+        ImGui::InputInt("Custom", &gui.perfThrottleCustomFps);
+        ImGui::EndDisabled();
+        ImGui::SameLine();
+        ImGui::Checkbox("##667", &gui.perfThrottleUseCustomFps);
+        ImGui::EndDisabled();
+
+#undef _plot
+
+        ImGui::SeparatorTextD("Profilling");
         bool b = omach->profilingCycles;
         if(ImGui::Checkbox2("Profile individual cycles", &b))
             gui.actions.machineToggleProfilingCycles = true;
