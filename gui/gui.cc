@@ -5,7 +5,6 @@
 #include <mq/modules/intc.h>
 #include <mq/system/heap.h>
 #include <stdio.h>
-#include <format>
 
 GUI::GUI()
 {
@@ -91,9 +90,11 @@ void GUI::Render(mqController *controller)
             ImGui::SameLine(0, 6);
             ImGui::EndDisabled();
 
+            ImGui::BeginDisabled(!omach->initialized);
             if(ImGui::IconButton(10, "Reset (Ctrl+R)"))
-                actions.fileReload = true;
+                actions.programFileReload = true;
             ImGui::SameLine(0, 6);
+            ImGui::EndDisabled();
 
             ImGui::MoveCursorScreenPos({0, 3});
             if(!omach->initialized)
@@ -160,13 +161,13 @@ void GUI::Render(mqController *controller)
 
     /* On native builds this fills inputFile instantly, while on emscripten
        this fills it asynchronously and we'll get it in a future frame */
-    if(open)
-        openFileDialog(&inputFile);
+    if(open && !gui.programFolderPrefix.empty())
+        openFileDialog(&gui.programFileInfo, gui.programFolderPrefix);
 
     if(pauseUnpause && canRunMachine)
         actions.machineSetPendingCycles = paused ? -1 : 0;
     if(wantsReload && canRunMachine)
-        actions.fileReload = true;
+        actions.programFileReload = true;
 
     auto dock = ImGui::DockSpaceOverViewport();
 
@@ -267,8 +268,8 @@ OutputPathPattern::SubstitutionMap GUI::makeSubstitutions()
     OutputPathPattern::SubstitutionMap sub;
 
     std::string ADDIN = "unknown";
-    if(gui.current_program_path != "")
-        ADDIN = gui.current_program_path.stem();
+    if(!gui.programFilePath.empty())
+        ADDIN = gui.programFilePath.stem();
     sub["%ADDIN%"] = std::make_pair(ADDIN, "Current program's name");
 
     sub["%DATE%"] = std::make_pair(strftimeCurrentTime("%Y%m%d-%H%M%S"),
@@ -279,6 +280,8 @@ OutputPathPattern::SubstitutionMap GUI::makeSubstitutions()
 
 void ControlWindow::renderContents(mqMachine *omach)
 {
+    ImGui::SeparatorTextD("Program");
+
 #ifndef AZUR_PLATFORM_EMSCRIPTEN
     struct mallinfo2 mi = mallinfo2();
     /* This info is not available with AddressSanitizer's wrapper's */
@@ -339,46 +342,62 @@ void ControlWindow::renderContents(mqMachine *omach)
         ImGui::Text("Running...");
 
     char str[256];
-    bool disabled = gui.current_program_path.empty();
-    char const *path = gui.current_program_path.c_str();
+    bool disabled = gui.programFilePath.empty();
+    char const *path = gui.programFilePath.c_str();
 
     if(disabled)
         ImGui::BeginDisabled();
 
-    if(gui.watch_enabled)
+    if(gui.programFileWatchEnabled)
         snprintf(str, sizeof str, "Watching input file: %s", path);
     else if(!disabled)
         snprintf(str, sizeof str, "Watch input file (%s)", path);
     else
         snprintf(str, sizeof str, "Watch input file");
 
-    if(ImGui::Checkbox2(str, &gui.watch_enabled))
-        gui.actions.fileUpdateWatch = gui.watch_enabled;
-    if(gui.watch_info.fd >= 0) {
+    if(ImGui::Checkbox2(str, &gui.programFileWatchEnabled))
+        gui.actions.programFileWatchToggle = gui.programFileWatchEnabled;
+    if(gui.programFileWatchInfo.fd >= 0) {
         ImGui::SameLine(0, 0);
         ImGui::TextDisabled(" (%d.%d)",
-            gui.watch_info.fd, gui.watch_info.wd);
+            gui.programFileWatchInfo.fd, gui.programFileWatchInfo.wd);
     }
     if(disabled)
         ImGui::EndDisabled();
 
-    if(gui.workingFolderAddins.size() == 0)
+    ImGui::SeparatorTextD("Program Folder");
+
+    if(!gui.programFolderPrefix.empty()) {
+        ImGui::Text("%s", gui.programFolderPrefix.c_str());
+        float available_x = ImGui::GetContentRegionAvail().x;
+        float title_width = \
+            ImGui::CalcTextSize("change").x + \
+            ImGui::GetStyle().FramePadding.x;
+        ImGui::SameLine(available_x - title_width);
+        if(ImGui::Button("change")) {
+            gui.actions.programFolderPrefixUpdate = openDirDialog(
+                "MQ: Select program folder",
+                gui.programFolderPrefix
+            );
+        }
+    }
+
+    if(gui.programFolderListName.size() == 0)
         ImGui::Text("(No add-ins in working folder)");
-    else
-        ImGui::Text("Reset and load:");
 
     int spaceLeft = 0;
-    for(uint i = 0; i < gui.workingFolderAddins.size(); i++) {
-        char const *addin = gui.workingFolderAddins[i].c_str();
+    for(uint i = 0; i < gui.programFolderListName.size(); i++) {
+        char const *program = gui.programFolderListName[i].c_str();
         /* Check if we have enough space (32 for button + spacing) */
-        int spaceNeeded = ImGui::CalcTextSize(addin).x + 32;
+        int spaceNeeded = ImGui::CalcTextSize(program).x + 32;
         if(spaceLeft < spaceNeeded)
             spaceLeft = ImGui::GetContentRegionAvail().x;
         else
             ImGui::SameLine();
-
-        if(ImGui::Button(addin))
-            gui.actions.fileLoadPath = gui.workingFolderAddins[i];
+        if(ImGui::Button(program)) {
+            gui.actions.programFileLoadByName = \
+                    gui.programFolderListName[i];
+        }
         spaceLeft -= spaceNeeded;
     }
 
@@ -1338,7 +1357,7 @@ void RecordWindow::renderContents(mqMachine *omach)
     mqDisplay *display = &gui.lastDisplayFrame;
 
     if(uninit)
-        ImGui::TextCenteredColor("No addin selected", 0xff0000);
+        ImGui::TextCenteredColor("No program selected", 0xff0000);
 
     std::vector<std::pair<int, std::string>> scaleOptions;
     for(int s: RecordWindow::scaleFactors) {

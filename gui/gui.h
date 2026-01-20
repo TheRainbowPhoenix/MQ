@@ -26,12 +26,16 @@ struct GUIActions
     /* Toggle the demo window. */
     bool appToggleDemoWindow = false;
 
-    /* Replace currently-running program with this file. */
-    std::optional<fs::path> fileLoadPath;
-    /* Update the inotify watch on the currently-running add-in. */
-    bool fileUpdateWatch = false;
-    /* Reload the current add-in. */
-    bool fileReload = false;
+    /* Replace current program directory */
+    std::optional<std::string> programFolderPrefixUpdate;
+    /* Replace currently-running program with an new path */
+    std::optional<std::string> programFileLoadByPath;
+    /* Replace currently-running program with the addin "<name>"*/
+    std::optional<std::string> programFileLoadByName;
+    /* Update the inotify watch on the currently-running progam */
+    bool programFileWatchToggle = false;
+    /* Reload the current program */
+    bool programFileReload = false;
 
     /* Initialize machine with given initializeKind. */
     std::optional<int> machineInitialize;
@@ -104,19 +108,20 @@ struct GUI
 
     //=== Controlling files ==================================================//
 
-    /* File that just got opened. Filled asynchronously by dialog */
-    struct OpenFileBuffer inputFile;
-    /* List of add-ins in CWD (detected at startup) */
-    std::vector<std::string> workingFolderAddins;
-    std::string workingFolderPrefix;
-    struct WatchInfo workingFolderWatcher = \
+    std::string programFolderPrefix = "";
+    /* List of add-ins name in the current directory prefix */
+    std::vector<std::string> programFolderListName;
+    /* Watcher information (inotify) for the current directory prefix */
+    struct WatchInfo programFolderWatcherInfo = \
         { .fd = -1, .wd = -1, .is_file = false };
+    /* File that just got opened. Filled asynchronously by dialog */
+    struct OpenFileBuffer programFileInfo;
+    std::filesystem::path programFilePath = "";
     /* File tracked for reloading the currently active file when changed */
-    bool watch_enabled = false;
-    struct WatchInfo watch_info = { .fd = -1, .wd = -1, .is_file = false };
-
-    /* Path of the currently-running program, "" if none. */
-    std::filesystem::path current_program_path = "";
+    bool programFileWatchEnabled = false;
+    /* Watcher information (inotify) if enabled */
+    struct WatchInfo programFileWatchInfo = \
+        { .fd = -1, .wd = -1, .is_file = false };
 
     //=== Recording ==========================================================//
 
