@@ -1,0 +1,42 @@
+description: Execute command with the MQ env
+inputs:
+  commands:
+    description: Command to execute
+    required: false
+  dependencies:
+    description: Packages to install
+    required: false
+outputs:
+  mq-version:
+    description: MQ version
+    value: ${{ steps.run-commands.outputs.mq-version }}
+  mq-dateinfo:
+    description: MQ date information
+    value: ${{ steps.run-commands.outputs.mq-dateinfo }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install dependencies
+      if: ${{ inputs.dependencies != '' }}
+      run: |
+        deps="${{ inputs.dependencies }}"
+        deps="${deps//$'\n'/ }"
+        apt update -y
+        apt install -y $deps
+    - name: Run commands
+      id: run-commands
+      shell: bash
+      run: |
+        . "$HOME/setupenv.sh"
+        tag_name="$(echo ${{ github.ref_name }})"
+        mq_version="$(echo $tag_name | grep -Po '\d+\.\d+(\.\d+)?$')"
+        mq_dateinfo="$(echo "$(date +'%Y-%m-%d')")"
+        echo "mq-version=$mq_version" >> $GITHUB_OUTPUT
+        echo "mq-dateinfo=$mq_dateinfo" >> $GITHUB_OUTPUT
+        pip install -r ./scripts/requirements.txt
+        if [[ "${{ inputs.commands }}" != '' ]]; then
+          cmd="$(echo "${{ inputs.commands }}")"
+          cmd="$(echo "$cmd" | sed "s/{MQ_VER}/$mq_version/")"
+          $cmd
+        fi

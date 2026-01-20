@@ -1,0 +1,94 @@
+name: Build MQ
+on:
+  release:
+    types: [published]
+
+jobs:
+  Integrity Check:
+    runs-on: calcdev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Check integrity
+        uses: ./.forgejo/actions/mq-env-exec
+        with:
+          dependencies: |
+            shellcheck
+          commands: |
+            ./.ci/check-integrity.sh {MQ_VER}
+
+  Linux Build:
+    runs-on: calcdev
+    needs: Integrity Check
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Build all (linux)
+        uses: ./.forgejo/actions/mq-env-exec
+        with:
+          commands: |
+            ./.ci/build-linux.sh {MQ_VER}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: mq-linux
+          path: ./build/mq-linux*
+          if-no-files-found: error
+          retention-days: 1
+
+  Web Build:
+    runs-on: calcdev
+    needs: Integrity Check
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Build all (Emscripten)
+        uses: ./.forgejo/actions/mq-env-exec
+        with:
+          dependencies: |
+            zip
+          commands: |
+            ./.ci/build-emscripten.sh {MQ_VER}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: mq-web
+          path: ./build/mq-web*
+          if-no-files-found: error
+          retention-days: 1
+
+  Update Release:
+    runs-on: calcdev
+    needs:
+      - Linux Build
+      - Web Build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Setup env
+        uses: ./.forgejo/actions/mq-env-exec
+        id: setup-env
+      - name: Fetch artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./artifacts/
+      - name: Prepare final artifacts
+        run: |
+          mkdir -p ./build
+          mv ./artifacts/mq-web/* ./build/
+          mv ./artifacts/mq-linux/* ./build/
+      - name: 'Create the release'
+        uses: actions/forgejo-release@v2.7.3
+        with:
+          token: ${{ secrets.FORGEJO_WRITE_TOKEN }}
+          direction: upload
+          title: '${{ env.mq_version }} (${{ env.mq_dateinfo }})'
+          override: true
+          release-dir: ./build/
+        env:
+          mq_version: ${{ steps.setup-env.outputs.mq-version }}
+          mq_dateinfo: ${{ steps.setup-env.outputs.mq-dateinfo }}

@@ -48,7 +48,7 @@ Clone this repository recursively. Also install [Azur](https://git.planet-casio.
 In order to test you'll need to serve the files somewehre, as the main `.html` file won't be able to load the others with a `file://` URL. You also need a server that provides appropriate COOP and COEP headers, see [the emscripten docs](https://emscripten.org/docs/porting/pthreads.html#pthreads-support) for details. A local server satisfying these requirement is given in `tools`.
 
 ```bash
-% python tools/local-http-server.py build-emscripten 8000
+% python3 tools/local-http-server.py build-emscripten 8000
 % firefox http://0.0.0.0:8000
 ```
 

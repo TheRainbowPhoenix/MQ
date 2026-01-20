@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 check_frames    - display frame information of a video
 """
