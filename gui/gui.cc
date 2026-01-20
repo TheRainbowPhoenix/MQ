@@ -188,14 +188,18 @@ void GUI::Render(mqController *controller)
         char buffer[128];
 
 #define _plot(title, table, max) \
-    ImGui::PlotLines(title, table, 5*60, 0, "", 0.0f, max, ImVec2(0, 40.0f))
+    ImGui::PlotLines(title, table, 5*60, \
+            gui.perfThrottleStatsIdx, "", 0.0f, max, ImVec2(0, 40.0f))
 
         ImGui::SeparatorTextD("Emulation");
         ImGui::BeginDisabled(!omach->initialized);
         ImGui::BeginDisabled(omach->cyclesPending == 0);
-        _plot("Pause: Xms", gui.perfThrottleStatsPause, 100.0f);
-        _plot("FPS: X", gui.perfThrottleStatsFps, 70.0f);
-        _plot("RAW: X", gui.perfThrottleStatsRaw, 128.0f);
+        snprintf(buffer, 128, "Pause: %dms", gui.perfThrottleLastPause);
+        _plot(buffer, gui.perfThrottleStatsPause, 100.0f);
+        snprintf(buffer, 128, "FPS: %d", gui.perfThrottleLastFps);
+        _plot(buffer, gui.perfThrottleStatsFps, 70.0f);
+        snprintf(buffer, 128, "RAW: %d", gui.perfThrottleLastRaw);
+        _plot(buffer, gui.perfThrottleStatsRaw, 128.0f);
         ImGui::EndDisabled();
         int fps = throttle_table[gui.perfThrottleProfile];
         if(fps > 0) {

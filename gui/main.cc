@@ -389,6 +389,21 @@ void update_machine(mqMachine *mach, bool startRunning)
         /* The frame is new for the GUI */
         gui.lastDisplayFrameNew = true;
 
+        /* fetch throttle statistics */
+        if(mach->newFrame.timeDelta > 0) {
+            int idx = gui.perfThrottleStatsIdx;
+            int pause = mach->newFrame.timePause;
+            int raw = (1000 * 1000000) / (mach->newFrame.timeDelta);
+            int fps = (1000 * 1000000) / (mach->newFrame.timeDelta + pause);
+            gui.perfThrottleStatsPause[idx] = pause / 1000000;
+            gui.perfThrottleStatsRaw[idx] = raw;
+            gui.perfThrottleStatsFps[idx] = fps;
+            gui.perfThrottleStatsIdx = (idx + 1) % (5 * 60);
+            gui.perfThrottleLastPause = pause / 1000000;
+            gui.perfThrottleLastFps = fps;
+            gui.perfThrottleLastRaw = raw;
+        }
+
         mq_display_setDirty(d, false);
     }
 

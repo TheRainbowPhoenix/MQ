@@ -188,6 +188,10 @@ struct GUI
     bool perfThrottleUseCustomFps = false;
     int perfThrottleCustomFps = -1;
     int perfThrottleProfile = GUI_THROTTLE_PROFILE_25FPS;
+    /* last recorded information */
+    int perfThrottleLastPause = 0;
+    int perfThrottleLastFps = 0;
+    int perfThrottleLastRaw = 0;
 };
 
 #endif /* MQ_UI_GUI_H */

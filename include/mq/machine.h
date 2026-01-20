@@ -54,8 +54,9 @@ struct mqMachine
     /* A new frame has been generated */
     struct {
         bool blocked;
-        u64 timeref;
-        u64 timedelta;
+        u64 timeRef;
+        u64 timeDelta;
+        u64 timePause;
     } newFrame;
     /* Jump buffer to jump to when the execution gets broken. This is used to
        exit. The jump buffer may or may not
