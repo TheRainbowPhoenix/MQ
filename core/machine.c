@@ -339,7 +339,6 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
     int cyclesRequested = cycles;
     int cyclesRemaining = cycles;
-    mq_timer_unfreeze();
 
     // TODO[machine]: Host system sleep for long high-level internal pauses
     // TODO[machine]: Not counting cycles during sleep hampers determinism
@@ -347,7 +346,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         int ticks = mq_timer_update(&mach->internalPauseTimer);
 
         /* Stop the internal timer when reaching the end of the sleep period */
-        if((mach->internalPauseTicksRemaining -= ticks) <= 0) {
+        if(ticks >= 0 && (mach->internalPauseTicksRemaining -= ticks) <= 0) {
             mach->internallyPaused = false;
             mq_timer_reset(&mach->internalPauseTimer, 0);
             mach->internalPauseTicksRemaining = 0;
@@ -389,9 +388,9 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
         }
     }
     else if(cyclesRemaining > 100) {
-        mq_log(MQ_LOG_WARNING,
-            "slow run of %d cycles due to misaligned background processes",
-            cyclesRemaining);
+        // mq_log(MQ_LOG_WARNING,
+        //     "slow run of %d cycles due to misaligned background processes",
+        //     cyclesRemaining);
     }
 
     while(cyclesRemaining > 0) {
@@ -404,7 +403,6 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     }
 
 endRun:
-    mq_timer_freeze();
     int cyclesElapsed = (cyclesRequested - cyclesRemaining);
     if(mach->cyclesPending >= 0)
         mach->cyclesPending -= cyclesElapsed;

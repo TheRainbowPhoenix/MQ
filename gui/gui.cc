@@ -373,8 +373,16 @@ void ControlWindow::renderContents(mqMachine *omach)
     else {
         ImGui::Text("Machine is not initialized.");
     }
+
     if(omach->stuck)
         ImGui::Text("Machine is stuck!");
+    else if(omach->internallyBlocked)
+        ImGui::Text("Machine is internally blocked");
+    else if(omach->internallyPaused)
+        ImGui::Text("Machine is paused for %d ms",
+            omach->internalPauseTicksRemaining);
+    else
+        ImGui::Text("Machine is ready");
 
     if(omach->cyclesPending > 0)
         ImGui::Text("Cycles pending: %d", omach->cyclesPending);

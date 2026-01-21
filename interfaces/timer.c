@@ -35,7 +35,8 @@ void mq_timer_unfreeze(void)
 u64 mq_timer_globalTime(void)
 {
     if(globalFreezeStart)
-        mq_log(MQ_LOG_ERROR, "getting global time while frozen!");
+        return globalFreezeStart - globalDelay;
+
     return mq_timer_getCurrentSystemTime() - globalDelay;
 }
 
@@ -59,7 +60,14 @@ bool mq_timer_isRunning(mqTimer *timer)
 static u64 mq_timer_update_ns(mqTimer *timer)
 {
     u64 now = mq_timer_globalTime();
-    u64 difference = now - timer->lastUpdate;
+    i64 difference = now - timer->lastUpdate;
+    if(difference < 0) {
+        mq_log(MQ_LOG_ERROR,
+            "Negative timer update! lastUpdate=%lld, now=%lld, running=%d, "
+            "frozen=%d (tickResolution=%lld)",
+            timer->lastUpdate, now, timer->running, timer->frozen,
+            timer->tickResolution);
+    }
     timer->lastUpdate = now;
     return difference;
 }
