@@ -371,10 +371,10 @@ void ControlWindow::renderContents(mqMachine *omach)
         ImGui::Text("%s", gui.programFolderPrefix.c_str());
         float available_x = ImGui::GetContentRegionAvail().x;
         float title_width = \
-            ImGui::CalcTextSize("change").x + \
+            ImGui::CalcTextSize("Change").x + \
             ImGui::GetStyle().FramePadding.x;
         ImGui::SameLine(available_x - title_width);
-        if(ImGui::Button("change")) {
+        if(ImGui::Button("Change")) {
             gui.actions.programFolderPrefixUpdate = openDirDialog(
                 "MQ: Select program folder",
                 gui.programFolderPrefix
@@ -1369,8 +1369,7 @@ void RecordWindow::renderContents(mqMachine *omach)
 
     /* screenshot section */
     ImGui::SeparatorTextD("Screenshot");
-    ImGui::TextWrapped(
-        "Outputs a PNG. Uses the scaling setting above.");
+    ImGui::TextWrapped("Outputs a PNG.");
 
     ImGui::AlignTextToFramePadding();
     ImGui::SetCursorPosX(37);

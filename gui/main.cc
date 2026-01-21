@@ -278,6 +278,9 @@ static int update(void)
             gui.programFileInfo.path = loadPath;
             gui.programFileInfo.data = data;
             gui.programFileInfo.size = size;
+            // Auto-start the first program that gets loaded
+            if(gui.programFilePath.empty())
+                gui.actions.machineSetPendingCycles = -1;
         }
         else
             loadPath = "";
