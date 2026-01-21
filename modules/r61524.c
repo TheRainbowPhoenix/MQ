@@ -76,7 +76,6 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
                 "r61524: Finished full frame (direct access)");
             R61524->VADDR = 0;
             // request a throttle sync
-            mach->internallyBlocked = true;
             mach->newFrame.blocked = true;
         }
     }
@@ -166,7 +165,6 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
                     "r61524: Finished full frame (register access)");
                 R61524->VADDR = 0;
                 // request a throttle sync
-                mach->internallyBlocked = true;
                 mach->newFrame.blocked = true;
             }
         }

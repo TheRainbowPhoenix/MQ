@@ -340,7 +340,7 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
             mq_cpu_handleException(mach, cpu);
 
         /* Handle execution break request */
-        if(mach->internallyBlocked)
+        if(mach->newFrame.blocked)
             mq_machine_breakExecution(mach);
     }
     else {
