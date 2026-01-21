@@ -73,6 +73,10 @@ static void write_t6k11_data(mqMachine *mach, u32 value)
             }
             T6K11->col++;
             mq_display_setDirty(mach->display, true);
+            if(T6K11->col >= 16 && T6K11->row == 63) {
+                mach->internallyBlocked = true;
+                mach->newFrame.blocked = true;
+            }
             break;
 
         default: {

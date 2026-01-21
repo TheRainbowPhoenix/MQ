@@ -8,6 +8,41 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void thread_syncFPS(void *userdata)
+{
+    mqController *controller = userdata;
+    mqMachine *mach = controller->mach;
+
+    mach->internallyBlocked = false;
+
+    u64 new_timeRef = mq_timer_getCurrentSystemTime();
+    u64 new_timeDelta = 0;
+    i64 new_timePause = 0;
+    if(mach->newFrame.timeRef > 0) {
+        new_timeDelta = new_timeRef - mach->newFrame.timeRef;
+        new_timePause = \
+            ((1000 * 1000000) / mach->newFrame.requestFps) - new_timeDelta;
+        // mq_log(MQ_LOG_DEBUG,
+        //     "new frame!\n"
+        //     "bef: ref=%lld - delta=%lld\n"
+        //     "new: ref=%lld - delta=%lld - pause=%lld\n"
+        //     "FPS=%lld (raw: %lld)",
+        //     mach->newFrame.timeRef, mach->newFrame.timeDelta,
+        //     new_timeRef, new_timeDelta, new_timePause,
+        //     ((1000 * 1000000) / (new_timeDelta + new_timePause)),
+        //     ((1000 * 1000000) / new_timeDelta)
+        // );
+    }
+
+    if(new_timePause > 0)
+        mq_machine_internalPauseMilliseconds(mach, new_timePause / 1000000);
+
+    mach->newFrame.timeDelta = new_timeDelta;
+    mach->newFrame.timeRef = new_timeRef;
+    mach->newFrame.timePause = new_timePause;
+    mach->newFrame.blocked = false;
+}
+
 static void *thread_run(void *userdata)
 {
     mqController *controller = userdata;
@@ -38,6 +73,10 @@ static void *thread_run(void *userdata)
             mq_log(MQ_LOG_WARNING, "machine is stuck!");
             mach->cyclesPending = 0;
         }
+        else if(mach->newFrame.blocked){
+            mq_log(MQ_LOG_WARNING, "machine new frame!");
+            thread_syncFPS(controller);
+        }
 
         mq_machine_clearBreakJumpBuffer(mach);
 #else
@@ -48,6 +87,10 @@ static void *thread_run(void *userdata)
         if(mach->stuck) {
             mq_log(MQ_LOG_WARNING, "machine is stuck!");
             mach->cyclesPending = 0;
+        }
+        if(mach->newFrame.blocked) {
+            mq_log(MQ_LOG_WARNING, "machine new frame!");
+            thread_syncFPS(controller);
         }
 #endif
 

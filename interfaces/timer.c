@@ -11,7 +11,7 @@
 static u64 globalDelay = 0;
 static u64 globalFreezeStart = 0;
 
-static u64 currentTime(void)
+u64 mq_timer_getCurrentSystemTime(void)
 {
     struct timespec tp;
     clock_gettime(CLOCK_MONOTONIC, &tp);
@@ -20,7 +20,7 @@ static u64 currentTime(void)
 
 void mq_timer_freeze(void)
 {
-    globalFreezeStart = currentTime();
+    globalFreezeStart = mq_timer_getCurrentSystemTime();
     globalFreezeStart += (globalFreezeStart == 0);
 }
 
@@ -28,7 +28,7 @@ void mq_timer_unfreeze(void)
 {
     if(!globalFreezeStart)
         return;
-    globalDelay += currentTime() - globalFreezeStart;
+    globalDelay += mq_timer_getCurrentSystemTime() - globalFreezeStart;
     globalFreezeStart = 0;
 }
 
@@ -36,7 +36,7 @@ u64 mq_timer_globalTime(void)
 {
     if(globalFreezeStart)
         mq_log(MQ_LOG_ERROR, "getting global time while frozen!");
-    return currentTime() - globalDelay;
+    return mq_timer_getCurrentSystemTime() - globalDelay;
 }
 
 void mq_timer_reset(mqTimer *timer, u64 resolution_ns)

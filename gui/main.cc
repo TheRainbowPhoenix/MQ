@@ -183,6 +183,8 @@ static void open_program(std::string const &path, void *data, long size)
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
+        //todo: move me ?
+        gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_25FPS;
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         gui.ResetState();
@@ -190,6 +192,7 @@ static void open_program(std::string const &path, void *data, long size)
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(emu0->mach, data, size);
+        gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_60FPS;
     }
     else {
         azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
@@ -402,6 +405,31 @@ void update_machine(mqMachine *mach, bool startRunning)
         gui.lastDisplayFrame.dirty = true;
         /* The frame is new for the GUI */
         gui.lastDisplayFrameNew = true;
+
+        /* fetch throttle statistics */
+        if(mach->newFrame.timeDelta > 0) {
+            int idx = gui.perfThrottleStatsIdx;
+            int pause = mach->newFrame.timePause;
+            int raw = (1000 * 1000000) / (mach->newFrame.timeDelta);
+            int fps = (1000 * 1000000) / (mach->newFrame.timeDelta + pause);
+            if(pause < 0) {
+                fps = raw;
+                pause = 0;
+            }
+            gui.perfThrottleStatsPause[idx] = pause / 1000000;
+            gui.perfThrottleStatsRaw[idx] = raw;
+            gui.perfThrottleStatsFps[idx] = fps;
+            gui.perfThrottleStatsIdx = (idx + 1) % (5 * 60);
+            gui.perfThrottleLastPause = pause / 1000000;
+            gui.perfThrottleLastFps = fps;
+            gui.perfThrottleLastRaw = raw;
+        }
+        /* force-update the throttle request */
+        mach->newFrame.requestFps = gui.perfThrottleRequestFps;
+        if(mach->newFrame.requestFps == 0) {
+            mq_log(MQ_LOG_ERROR, "throttle.requestFps == 0!!");
+            mach->newFrame.requestFps = 60;
+        }
 
         mq_display_setDirty(d, false);
     }

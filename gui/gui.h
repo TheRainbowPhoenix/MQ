@@ -170,10 +170,35 @@ struct GUI
     void DockWindowsStyle1(GUIWindowSet const &Windows, ImGuiID dock);
     void ResetState();
 
-    //=== Miscellaneous ======================================================//
+    //=== Miscellaneous =====================================================//
 
     /* Hack to handle keyboard sliding operation */
     bool physicalKeyPressed = false;
+
+    //=== Performance =======================================================//
+
+    enum {
+        GUI_THROTTLE_PROFILE_UNLIMITED  = 0,
+        GUI_THROTTLE_PROFILE_25FPS      = 1,
+        GUI_THROTTLE_PROFILE_30FPS      = 2,
+        GUI_THROTTLE_PROFILE_60FPS      = 3,
+    };
+
+    /* Various statistics */
+    float perfThrottleStatsPause[5 * 60] = {0};
+    float perfThrottleStatsFps[5 * 60] = {0};
+    float perfThrottleStatsRaw[5 * 60] = {0};
+    int perfThrottleStatsIdx = 0;
+    /* Use custom FPS request */
+    bool perfThrottleUseCustomFps = false;
+    int perfThrottleCustomFps = -1;
+    int perfThrottleProfile = GUI_THROTTLE_PROFILE_25FPS;
+    /* last recorded information */
+    int perfThrottleLastPause = 0;
+    int perfThrottleLastFps = 0;
+    int perfThrottleLastRaw = 0;
+    /* throttle request */
+    int perfThrottleRequestFps = 30;
 };
 
 #endif /* MQ_UI_GUI_H */
