@@ -306,6 +306,7 @@ void mq_casiowin_mono_dupdate(mqMachine *mach)
         }
     }
     mq_display_setDirty(mach->display, true);
+    mach->newFrame.blocked = true;
 }
 
 //=== SaveDisp and RestoreDisp ===============================================//

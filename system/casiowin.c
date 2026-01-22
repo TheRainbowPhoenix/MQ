@@ -789,6 +789,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
                 dst += mach->display->width;
             }
             mq_display_setDirty(mach->display, true);
+            mach->newFrame.blocked = true;
         }
         return;
 
