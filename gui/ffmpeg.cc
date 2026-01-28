@@ -1,13 +1,89 @@
 #include "./ffmpeg.h"
+#include <dlfcn.h>
 
 #if MQ_VIDEO_FFMPEG
 
 struct mqFFmpegInterface builtinStaticLibrary = {
-#define ASSIGN_FUNCTION_POINTER(NAME) \
+#define ASSIGN_FUNCTION_POINTER(LIBRARY, NAME) \
     .NAME = ::NAME,
 MQ_FFMPEG_INTERFACE_FUNCTIONS(ASSIGN_FUNCTION_POINTER)
 #undef ASSIGN_FUNCTION_POINTER
 };
+
+struct mqFFmpegDynload {
+    struct mqFFmpegInterface F;
+    void *libavutil;
+    void *libavcodec;
+    void *libavformat;
+};
+static struct mqFFmpegDynload dynload = { {}, NULL, NULL, NULL };
+struct mqFFmpegInterface const *dynamicallyLoadedLibrary = NULL;
+bool dynamicLoadTried = false;
+
+void mq_ffmpeg_dynload_unload(void)
+{
+    memset(&dynload.F, 0, sizeof dynload.F);
+
+    if(dynload.libavutil)
+        dlclose(dynload.libavutil);
+    dynload.libavutil = NULL;
+
+    if(dynload.libavcodec)
+        dlclose(dynload.libavcodec);
+    dynload.libavcodec = NULL;
+
+    if(dynload.libavformat)
+        dlclose(dynload.libavformat);
+    dynload.libavformat = NULL;
+}
+
+const struct mqFFmpegInterface *mqFFmpeg::loadSystemLibraries(bool force)
+{
+    if(dynamicLoadTried && !force)
+        return dynamicallyLoadedLibrary;
+
+    char *error = NULL;
+    bool has_error = false;
+
+    dynload.libavutil = dlopen("libavutil.so.60", RTLD_LAZY);
+    if((error = dlerror())) {
+        fprintf(stderr, "%s\n", error);
+        goto error;
+    }
+
+    dynload.libavformat = dlopen("libavformat.so.62", RTLD_LAZY);
+    if((error = dlerror())) {
+        fprintf(stderr, "%s\n", error);
+        goto error;
+    }
+
+    dynload.libavcodec = dlopen("libavcodec.so.62", RTLD_LAZY);
+    if((error = dlerror())) {
+        fprintf(stderr, "%s\n", error);
+        goto error;
+    }
+
+#define DLSYM_FUNCTION(LIBRARY, NAME) \
+    *(void **)&dynload.F.NAME = dlsym(dynload.lib ## LIBRARY, #NAME); \
+    if((error = dlerror())) { \
+        fprintf(stderr, \
+            "%s (while loading " #NAME " from " #LIBRARY ")\n", dlerror()); \
+        has_error = true; \
+    }
+MQ_FFMPEG_INTERFACE_FUNCTIONS(DLSYM_FUNCTION)
+#undef DLSYM_FUNCTION
+
+    if(has_error)
+        goto error;
+
+    dynamicallyLoadedLibrary = &dynload.F;
+    atexit(mq_ffmpeg_dynload_unload);
+    return &dynload.F;
+
+error:
+    mq_ffmpeg_dynload_unload();
+    return NULL;
+}
 
 //=== time ms ================================================================//
 
@@ -511,9 +587,9 @@ bool mqFFmpeg::ffmpeg_scale_get_frame(
 
 //=== mqFFmpeg RAII ==========================================================//
 
-mqFFmpeg::mqFFmpeg()
+mqFFmpeg::mqFFmpeg(struct mqFFmpegInterface const *F)
 {
-    this->F = &builtinStaticLibrary;
+    this->F = F ? F : &builtinStaticLibrary;
 
     /* For now only count some software encoders. We'll extend the table with
        hardware encoders once we detect them later. */

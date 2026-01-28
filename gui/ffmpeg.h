@@ -29,47 +29,47 @@ struct mqFFmpegStats
 };
 
 #define MQ_FFMPEG_INTERFACE_FUNCTIONS(X) \
-    X(av_hwdevice_ctx_create) \
-    X(av_hwdevice_iterate_types) \
-    X(av_hwdevice_get_type_name) \
-    X(av_hwframe_ctx_alloc) \
-    X(av_hwframe_ctx_init) \
-    X(av_hwframe_get_buffer) \
-    X(av_hwframe_transfer_data) \
-    X(av_buffer_ref) \
-    X(av_buffer_unref) \
-    X(av_dict_set) \
-    X(av_dict_free) \
-    X(av_packet_alloc) \
-    X(av_packet_unref) \
-    X(av_packet_free) \
-    X(av_packet_rescale_ts) \
-    X(av_frame_alloc) \
-    X(av_frame_get_buffer) \
-    X(av_frame_free) \
-    X(av_interleaved_write_frame) \
-    X(av_write_trailer) \
-    X(av_log_set_level) \
-    X(av_codec_iterate) \
-    X(av_codec_is_encoder) \
-    X(avio_open) \
-    X(avio_flush) \
-    X(avio_close) \
-    X(avcodec_find_encoder_by_name) \
-    X(avcodec_alloc_context3) \
-    X(avcodec_free_context) \
-    X(avcodec_open2) \
-    X(avcodec_parameters_from_context) \
-    X(avcodec_send_frame) \
-    X(avcodec_receive_packet) \
-    X(avformat_alloc_output_context2) \
-    X(avformat_free_context) \
-    X(avformat_new_stream) \
-    X(avformat_write_header) \
+    X(avutil, av_hwdevice_ctx_create) \
+    X(avutil, av_hwdevice_iterate_types) \
+    X(avutil, av_hwdevice_get_type_name) \
+    X(avutil, av_hwframe_ctx_alloc) \
+    X(avutil, av_hwframe_ctx_init) \
+    X(avutil, av_hwframe_get_buffer) \
+    X(avutil, av_hwframe_transfer_data) \
+    X(avutil, av_buffer_ref) \
+    X(avutil, av_buffer_unref) \
+    X(avutil, av_dict_set) \
+    X(avutil, av_dict_free) \
+    X(avcodec, av_packet_alloc) \
+    X(avcodec, av_packet_unref) \
+    X(avcodec, av_packet_free) \
+    X(avcodec, av_packet_rescale_ts) \
+    X(avutil, av_frame_alloc) \
+    X(avutil, av_frame_get_buffer) \
+    X(avutil, av_frame_free) \
+    X(avformat, av_interleaved_write_frame) \
+    X(avformat, av_write_trailer) \
+    X(avutil, av_log_set_level) \
+    X(avcodec, av_codec_iterate) \
+    X(avcodec, av_codec_is_encoder) \
+    X(avformat, avio_open) \
+    X(avformat, avio_flush) \
+    X(avformat, avio_close) \
+    X(avcodec, avcodec_find_encoder_by_name) \
+    X(avcodec, avcodec_alloc_context3) \
+    X(avcodec, avcodec_free_context) \
+    X(avcodec, avcodec_open2) \
+    X(avcodec, avcodec_parameters_from_context) \
+    X(avcodec, avcodec_send_frame) \
+    X(avcodec, avcodec_receive_packet) \
+    X(avformat, avformat_alloc_output_context2) \
+    X(avformat, avformat_free_context) \
+    X(avformat, avformat_new_stream) \
+    X(avformat, avformat_write_header) \
 
 struct mqFFmpegInterface
 {
-#define DEFINE_FUNCTION_POINTER(NAME) \
+#define DEFINE_FUNCTION_POINTER(LIBRARY, NAME) \
     decltype(::NAME) *NAME;
 MQ_FFMPEG_INTERFACE_FUNCTIONS(DEFINE_FUNCTION_POINTER)
 #undef MAKE_FUNCTION_POINTER
@@ -78,7 +78,18 @@ MQ_FFMPEG_INTERFACE_FUNCTIONS(DEFINE_FUNCTION_POINTER)
 class mqFFmpeg
 {
 public:
-    mqFFmpeg();
+    /* Try and dlopen system libraries to get access to a full build of ffmpeg
+       with hardware encoders. Requires the system to have the appropriate
+       dynamic libraries for the major version of ffmpeg that MQ was built for.
+       Prints error messages on failure. The result is cached: the search only
+       runs once, unless force=true. */
+    const static struct mqFFmpegInterface *loadSystemLibraries(
+        bool force=false);
+
+    /* Construct an FFmpeg intrace. If `F` is not given, uses the built-in
+       static library with basic features. The alternative is to load and use
+       the system libraries, but of course they may not be available. */
+    mqFFmpeg(struct mqFFmpegInterface const *F = nullptr);
 
     /* List of encoders. Software encoders come first, then hardware encoders
        (once detected by `detectHardwareEncoders()`. The number of software

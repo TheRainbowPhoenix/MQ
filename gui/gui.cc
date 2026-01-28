@@ -1565,4 +1565,29 @@ void RecordWindow::renderContents(mqMachine *omach)
     ImGui::TextWrapped(
         "Video recording with ffmpeg was not enabled in this build.");
 #endif /* MQ_VIDEO_FFMPEG */
+
+    ImGui::SeparatorTextD("System libraries");
+#if MQ_VIDEO_FFMPEG
+    static mqFFmpeg *SysFFmpeg = NULL;
+    static bool tried = false;
+
+    if(!tried) {
+        if(ImGui::Button("Load system libraries")) {
+            auto F = mqFFmpeg::loadSystemLibraries();
+            if(F) {
+                SysFFmpeg = new mqFFmpeg(F);
+                SysFFmpeg->detectHardwareEncoders();
+                for(auto const &enc: SysFFmpeg->encoderTable())
+                    printf("- %s\n", enc.c_str());
+            }
+            tried = true;
+        }
+    }
+    else {
+        ImGui::Text("System mqFFmpeg: %p", SysFFmpeg);
+    }
+#else
+    ImGui::TextWrapped(
+        "Video recording with ffmpeg was not enabled in this build.");
+#endif /* MQ_VIDEO_FFMPEG */
 }
