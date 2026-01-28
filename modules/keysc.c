@@ -64,6 +64,14 @@ static u32 read_KIUDATA(mqMMIO *io, u32 addr, int size)
     return value;
 }
 
+static u32 read_KIREGS(mqMMIO *io, u32 addr, int size)
+{
+    (void)io;
+    (void)addr;
+    (void)size;
+    return 0;
+}
+
 bool mq_keysc_setup(mqMachine *mach)
 {
     mqPage *pg = mq_memory_getPage(mach->memory, 0xa44b0000);
@@ -89,6 +97,11 @@ bool mq_keysc_setup(mqMachine *mach)
     // 0xa44b0018 KIUINTERVALREG
     // 0xa44b001a KOUTPINSET
     // 0xa44b001c KINPINSET
+
+    int ioID2 = mq_page_addIO(pg, "KIREGS",
+        MQ_MMIO_SIZE_1 | MQ_MMIO_SIZE_2 | MQ_MMIO_SIZE_4,
+        read_KIREGS, NULL, NULL, mach);
+    ok &= mq_page_mapIO(pg, ioID2, 0xa44b000c, 18, 1);
 
     if(ok)
         mach->modules[moduleID] = KEYSC;
