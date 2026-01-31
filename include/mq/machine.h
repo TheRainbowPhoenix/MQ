@@ -58,6 +58,7 @@ struct mqMachine
         u64 timeDelta;
         u64 timePause;
         u64 requestFps;
+        bool dirty;
     } newFrame;
     /* Jump buffer to jump to when the execution gets broken. This is used to
        exit. The jump buffer may or may not
@@ -82,6 +83,8 @@ struct mqMachine
     /* Number of cycles that the machine is scheduled to work for.
        mq_machine_cycle() runs for up to that amount and subtracts it. */
     int cyclesPending;
+    /* Number of frames that the machine is scheduled to work for. */
+    int framesPending;
 
     /* Data from hardware modules; the array has size mq_module_count(). */
     void **modules;
@@ -161,6 +164,9 @@ void mq_machine_clearBreakJumpBuffer(mqMachine *mach);
    (Given the concurrent nature of emulation, setting a finite number is only
    really useful if the machine was previously paused.) */
 void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending);
+
+/* Set the number of pending frames. */
+void mq_machine_setFramesPending(mqMachine *mach, int framesPending);
 
 /* Observer functions for mqMachine. These functions make and destroy an
    "observer" copy of the machine with a snapshot of the metadata but no

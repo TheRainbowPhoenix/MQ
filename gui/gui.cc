@@ -369,6 +369,8 @@ void ControlWindow::renderContents(mqMachine *omach)
         ImGui::SameLine();
         if(ImGui::Button("10k"))
             gui.actions.machineSetPendingCycles = 10000;
+        if(ImGui::Button("1Frame"))
+            gui.actions.machineSetPendingFrames = 1;
     }
     else {
         ImGui::Text("Machine is not initialized.");

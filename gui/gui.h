@@ -41,6 +41,7 @@ struct GUIActions
     std::optional<int> machineInitialize;
     /* Set machine's pendingCycles count. */
     std::optional<int> machineSetPendingCycles;
+    std::optional<int> machineSetPendingFrames;
     /* Generate a mono or RGB frame on the display. */
     bool machineGenerateMonoFrame = false;
     bool machineGenerateRGBFrame = false;

@@ -166,6 +166,13 @@ void mq_machine_setCyclesPending(mqMachine *mach, int cyclesPending)
         pthread_cond_signal(&mach->cond_work_arrived);
 }
 
+void mq_machine_setFramesPending(mqMachine *mach, int framesPending)
+{
+    mach->framesPending = framesPending;
+    if(framesPending > 0 && mach->cyclesPending == 0)
+        mq_machine_setCyclesPending(mach, -1);
+}
+
 mqMachine *mq_machine_createObserver(mqMachine const *mach)
 {
     mqMachine *omach = memdup(mach, sizeof *mach);

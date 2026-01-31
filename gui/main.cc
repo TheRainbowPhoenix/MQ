@@ -362,6 +362,8 @@ void update_machine(mqMachine *mach, bool startRunning)
 
     if(auto c = gui.actions.machineSetPendingCycles)
         mq_machine_setCyclesPending(mach, *c);
+    if(auto c = gui.actions.machineSetPendingFrames)
+        mq_machine_setFramesPending(mach, *c);
 
     /* Intentional re-check */
     if(gui.programFileInfo.data) {
@@ -407,22 +409,29 @@ void update_machine(mqMachine *mach, bool startRunning)
         gui.lastDisplayFrameNew = true;
 
         /* fetch throttle statistics */
-        if(mach->newFrame.timeDelta > 0) {
-            int idx = gui.perfThrottleStatsIdx;
-            int pause = mach->newFrame.timePause;
-            int raw = (1000 * 1000000) / (mach->newFrame.timeDelta);
-            int fps = (1000 * 1000000) / (mach->newFrame.timeDelta + pause);
-            if(pause < 0) {
-                fps = raw;
-                pause = 0;
+        if(mach->newFrame.dirty) {
+            if(mach->newFrame.timeDelta > 0) {
+                int idx = gui.perfThrottleStatsIdx;
+                int pause = mach->newFrame.timePause;
+                int raw = (1000 * 1000000) / (mach->newFrame.timeDelta);
+                int fps = (1000 * 1000000) / (mach->newFrame.timeDelta + pause);
+                if(pause < 0) {
+                    fps = raw;
+                    pause = 0;
+                }
+                gui.perfThrottleStatsPause[idx] = pause / 1000000;
+                gui.perfThrottleStatsRaw[idx] = raw;
+                gui.perfThrottleStatsFps[idx] = fps;
+                gui.perfThrottleStatsIdx = (idx + 1) % (5 * 60);
+                gui.perfThrottleLastPause = pause / 1000000;
+                gui.perfThrottleLastFps = fps;
+                gui.perfThrottleLastRaw = raw;
             }
-            gui.perfThrottleStatsPause[idx] = pause / 1000000;
-            gui.perfThrottleStatsRaw[idx] = raw;
-            gui.perfThrottleStatsFps[idx] = fps;
-            gui.perfThrottleStatsIdx = (idx + 1) % (5 * 60);
-            gui.perfThrottleLastPause = pause / 1000000;
-            gui.perfThrottleLastFps = fps;
-            gui.perfThrottleLastRaw = raw;
+            if(mach->framesPending > 0) {
+                if(--mach->framesPending <= 0)
+                    mach->cyclesPending = 0;
+            }
+            mach->newFrame.dirty = false;
         }
         /* force-update the throttle request */
         mach->newFrame.requestFps = gui.perfThrottleRequestFps;
