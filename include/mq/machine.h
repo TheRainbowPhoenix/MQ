@@ -13,12 +13,13 @@
 #include <mq/interfaces/display.h>
 #include <mq/interfaces/keyboard.h>
 #include <mq/interfaces/timer.h>
-#include <mq/interfaces/filesystem.h>
 #include <pthread.h>
 #include <setjmp.h>
 MQ_START_DEFS
 
 struct mqMemory;
+struct mqFilesystem;
+struct mqBfile;
 
 /* Type of a background process that runs every few CPU cycles.
    TODO: Provide background process hooks with more precising timing info */
@@ -100,8 +101,10 @@ struct mqMachine
     mqDisplay *display;
     /* Keyboard; may be NULL */
     mqKeyboard *keyboard;
-    /* FileSystem; may be NULL */
-    mqFilesystem *fs;
+    /* FileSystem; should not be NULL */
+    struct mqFilesystem *fs;
+    /* Bfile; should not be NULL */
+    struct mqBfile *bfile;
 
     // TODO: Data source for mqTimer; to enable deterministic execution instead
     // of always using clock_gettime().

@@ -8,6 +8,8 @@
 #include <mq/memory.h>
 #include <mq/mq.h>
 #include <mq/hooks.h>
+#include <mq/interfaces/filesystem.h>
+#include <mq/system/bfile.h>
 #include <mq/system/casiowin.h>
 #include <mq/modules/cpg.h>
 #include <mq/modules/cmod.h>
@@ -74,6 +76,10 @@ void mq_machine_reset(mqMachine *mach)
     if(mach->fs)
         mq_filesystem_destroy(&mach->fs);
     mach->fs = NULL;
+
+    if(mach->bfile)
+        mq_bfile_destroy(&mach->bfile);
+    mach->bfile = NULL;
 }
 
 void mq_machine_destroy(mqMachine *mach)
@@ -256,8 +262,6 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
     mach->processFrequency = 64;
     mach->processTimer = mach->processFrequency;
 
-    if(!mach->fs)
-        mach->fs = mq_filesystem_create();
 
     if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX) {
         mq_cpu_setup(&mach->cpu, mach->memory);
@@ -270,6 +274,12 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
 
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
+
+        mach->fs = mq_filesystem_create();
+        mq_filesystem_initialize(mach->fs, MQ_FILESYSTEM_TYPE_FUGUE_FAT12);
+
+        mach->bfile = mq_bfile_create();
+        mq_bfile_initialize(mach->bfile, 8);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
 
@@ -292,6 +302,12 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
 
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
+
+        mach->fs = mq_filesystem_create();
+        mq_filesystem_initialize(mach->fs, MQ_FILESYSTEM_TYPE_FUGUE_FAT16);
+
+        mach->bfile = mq_bfile_create();
+        mq_bfile_initialize(mach->bfile, 8);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
 

@@ -32,8 +32,15 @@ typedef FILE mqFilesystemFile;
 
 //=== info
 
+enum {
+    MQ_FILESYSTEM_TYPE_FUGUE_FAT12,
+    MQ_FILESYSTEM_TYPE_FUGUE_FAT16,
+    //MQ_FILESYSTEM_TYPE_CASIOWIN,
+};
+
 mqFilesystem *mq_filesystem_create(void);
-void mq_filesystem_destroy(mqFilesystem **fs);
+bool mq_filesystem_initialize(mqFilesystem *fs, int fs_type);
+bool mq_filesystem_destroy(mqFilesystem **fs);
 bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname);
 
 //=== Wrapped POSIX functions ===

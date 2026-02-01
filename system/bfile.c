@@ -7,31 +7,15 @@
 #include <mq/system/bfile.h>
 #include <mq/memory.h>
 #include <string.h>
+#include <stdlib.h>
 
-//=== filesystem abstraction
+//=== path manipulation =====================================================//
 
-// static int _fs_uri_conv16(mqMachine *mach,
-//         u16 *buffer, u32 sourceAddr, size_t n)
-// {
-//     u8 *src = (u8*)mq_memory_access(mach->memory, sourceAddr);
-//     size_t i = 0;
-//     u16 curr;
-//
-//     if (!src)
-//         return -1;
-//     while (i < n) {
-//         curr  = 0;
-//         curr |= (*(u8 *)((uintptr_t)(src++) ^ 3)) << 8;
-//         curr |= (*(u8 *)((uintptr_t)(src++) ^ 3)) << 0;
-//         buffer[i++] = curr;
-//         if(curr == 0x0000 || curr == 0xffff)
-//             break;
-//     }
-//     return i;
-// }
-
-/* */
-static int _fs_uri_conv8(mqMachine *mach,
+/* convert the virtual u16 string
+ * - convert to `char` (todo: support SHIFT-JIS)
+ * - skip device information (only fls0)
+ * - replace all "\" into "/" */
+static int _bfile_uri_conv8(mqMachine *mach,
         char *buffer, u32 sourceAddr, size_t n)
 {
     void *src = mq_memory_access(mach->memory, sourceAddr);
@@ -62,7 +46,106 @@ static int _fs_uri_conv8(mqMachine *mach,
     return -1;
 }
 
-//=== bfile interface
+//=== file descriptor table =================================================//
+
+static int _bfile_fdtable_reserve(mqBfile *bfile)
+{
+    if(!bfile) {
+        mq_log(MQ_LOG_ERROR, "fdtable_reserve: internal error");
+        return false;
+    }
+    for(int i = 0 ; i < bfile->fdtable_nb_slot ; i++) {
+        if(bfile->fdtable[i] != NULL)
+            continue;
+        bfile->fdtable[i] = (mqFilesystemFile*)-1;
+        mq_log(MQ_LOG_DEBUG, "bfile_fdtable: reserved slot %d", i);
+        return i;
+    }
+    return -1;
+}
+
+static bool _bfile_fdtable_release(mqBfile *bfile, int slot)
+{
+    if(!bfile) {
+        mq_log(MQ_LOG_ERROR, "fdtable_reserve: internal error");
+        return false;
+    }
+    if(slot < 0 || slot >= bfile->fdtable_nb_slot) {
+        mq_log(MQ_LOG_ERROR, "fdtable_release: invalid slot");
+        return false;
+    }
+    if(bfile->fdtable[slot] == NULL) {
+        mq_log(MQ_LOG_ERROR, "fdtable_release: slot not used %d", slot);
+        return false;
+    }
+    bfile->fdtable[slot] = NULL;
+    mq_log(MQ_LOG_DEBUG, "bfile_fdtable: released slot %d", slot);
+    return true;
+}
+
+static bool _bfile_fdtable_set(mqBfile *bfile,
+        int slot, mqFilesystemFile *fp)
+{
+    if(!bfile) {
+        mq_log(MQ_LOG_ERROR, "fdtable_reserve: internal error");
+        return false;
+    }
+    if(slot < 0 || slot >= bfile->fdtable_nb_slot) {
+        mq_log(MQ_LOG_ERROR, "fdtable_set: invalid slot");
+        return false;
+    }
+    if(bfile->fdtable[slot] != (mqFilesystemFile*)-1) {
+        mq_log(MQ_LOG_ERROR, "fdtable_release: slot not prepared %d", slot);
+        return false;
+    }
+    bfile->fdtable[slot] = fp;
+    mq_log(MQ_LOG_DEBUG, "bfile_fdtable: setup slot %d", slot);
+    return true;
+}
+
+//=== system interface ======================================================//
+
+mqBfile *mq_bfile_create(void)
+{
+    mqBfile *bfile = (mqBfile*)calloc(1, sizeof(mqBfile));
+    if(!bfile) {
+        mq_log(MQ_LOG_ERROR, "bfile_create: calloc() fails");
+        return NULL;
+    }
+    return bfile;
+}
+
+bool mq_bfile_initialize(mqBfile *bfile, int fdtable_nb_slot)
+{
+    if(!bfile) {
+        mq_log(MQ_LOG_ERROR, "bfile_initialize: broken arguments");
+        return false;
+    }
+    bfile->fdtable_nb_slot = 0;
+    bfile->fdtable = (mqFilesystemFile **)calloc(
+            fdtable_nb_slot, sizeof(mqFilesystemFile *));
+    if(!bfile->fdtable) {
+        mq_log(MQ_LOG_ERROR, "bfile_initialize: unable to alloc()");
+        return false;
+    }
+    bfile->fdtable_nb_slot = fdtable_nb_slot;
+    return true;
+}
+
+bool mq_bfile_destroy(mqBfile **bfile)
+{
+    if(!bfile || (*bfile == NULL)) {
+        mq_log(MQ_LOG_ERROR, "bfile_destroy: broken arguments");
+        return false;
+    }
+    if(!(*bfile)->fdtable)
+        free((*bfile)->fdtable);
+    free(*bfile);
+    *bfile = NULL;
+    return true;
+}
+
+//=== bfile interface =======================================================//
 
 void mq_bfile_NameToStr_ncpy(mqMachine *mach,
         u32 destAddr, u32 sourceAddr, size_t n)
@@ -131,6 +214,7 @@ int mq_bfile_DeleteEntry(mqMachine *mach, u32 filenameAddr)
 int mq_bfile_CreateEntry(mqMachine *mach,
         u32 filenameAddr, int mode, u32 sizeAddr)
 {
+    mq_log(MQ_LOG_ERROR, "bfile_CreateEntry not implemented");
     (void)mach;
     (void)filenameAddr;
     (void)mode;
@@ -160,13 +244,13 @@ int mq_bfile_OpenFile(mqMachine *mach,
         u32 filenameAddr, int mode)
 {
     char filename[1024];
+    char const *bits;
 
-    if (_fs_uri_conv8(mach, filename, filenameAddr, 1024) < 0) {
+    if (_bfile_uri_conv8(mach, filename, filenameAddr, 1024) < 0) {
         mq_log(MQ_LOG_DEBUG, "unable to verify the path");
         return -1;
     }
 
-    char const *bits;
     if(mode == BFILE_MODE_READ || mode == BFILE_MODE_READ_SHARE)
         bits = "rb";
     else if(mode == BFILE_MODE_WRITE)
@@ -179,31 +263,27 @@ int mq_bfile_OpenFile(mqMachine *mach,
                 mode, filename);
         return -1;
     }
-
-    mq_filesystem_open(mach->fs, filename, bits);
-    mq_log(MQ_LOG_ERROR, "OpenFile: cannot open `%s` - %s", filename, bits);
-    return -1;
-    //
-    // FILE *fp = fopen(filename, bits);
-    // if(!fp) {
-    //     mq_log(MQ_LOG_ERROR,
-    //             "mq_bfile_OpenFile(): cannot open %s\n", filename);
-    //     return -1;
-    // }
-    //
-    // /* Find open slot in file table */
-    // int slot = 0;
-    // while(slot < MQ_FILESYSTEM_MAX_FD && file_table[slot] != NULL)
-    //     slot++;
-    // if(slot >= MQ_FILESYSTEM_MAX_FD) {
-    //     printf("mq_bfile_OpenFile(): cannot open %s, table is full\n",filename_u8);
-    //     fclose(fp);
-    //     return -1;
-    // }
-    //
-    // printf("mq_bfile_OpenFile(): opened %s\n", filename_u8);
-    // file_table[slot] = fp;
-    // return slot;
+    int slot = _bfile_fdtable_reserve(mach->bfile);
+    if(slot < 0) {
+        mq_log(MQ_LOG_ERROR,
+                "mq_bfile_OpenFile(): cannot open %s, table is full",
+                filename);
+        return -1;
+    }
+    mqFilesystemFile *fp = mq_filesystem_open(mach->fs, filename, bits);
+    if(!fp) {
+        mq_log(MQ_LOG_ERROR,
+                "OpenFile: cannot open `%s` - %s", filename, bits);
+        _bfile_fdtable_release(mach->bfile, slot);
+        return -1;
+    }
+    if(!_bfile_fdtable_set(mach->bfile, slot, fp)) {
+        mq_log(MQ_LOG_ERROR,
+                "OpenFile: unable to set file descriptor %d", slot);
+        _bfile_fdtable_release(mach->bfile, slot);
+        return -1;
+    }
+    return slot;
 }
 
 int mq_bfile_GetFileSize(mqMachine *mach, int fd)

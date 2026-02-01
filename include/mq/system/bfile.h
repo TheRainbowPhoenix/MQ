@@ -14,14 +14,11 @@
 MQ_START_DEFS
 
 #include <glob.h>
-#include <stdio.h>
-
-/* Maximum number of file descriptors and search descriptors. */
-#define MQ_FILESYSTEM_MAX_FD 16
 
 struct mqBfile {
     /* file tracking table */
-    mqFilesystemFile *file_table[MQ_FILESYSTEM_MAX_FD];
+    mqFilesystemFile **fdtable;
+    int fdtable_nb_slot;
     // struct {
     //     int pos;
     //     glob_t glob;
@@ -46,6 +43,11 @@ struct mqBfileFileinfo {
 typedef struct mqBfileFileinfo mqBfileFileinfo;
 
 
+//=== system interface ======================================================//
+
+mqBfile *mq_bfile_create(void);
+bool mq_bfile_initialize(mqBfile *bfile, int fdtable_nb_slot);
+bool mq_bfile_destroy(mqBfile **bfile);
 
 //=== BFile interface =======================================================//
 

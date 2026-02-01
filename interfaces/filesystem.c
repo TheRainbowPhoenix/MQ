@@ -30,7 +30,7 @@ static bool _filesystem_gen_real_pathname(mqFilesystem *fs,
     return true;
 }
 
-//=== info
+//=== system interface ======================================================//
 
 mqFilesystem *mq_filesystem_create(void)
 {
@@ -42,14 +42,26 @@ mqFilesystem *mq_filesystem_create(void)
     return fs;
 }
 
-void mq_filesystem_destroy(mqFilesystem **fs)
+bool mq_filesystem_initialize(mqFilesystem *fs, int fs_type)
+{
+    if(!fs) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_destroy: broken arguments");
+        return false;
+    }
+    //todo: support specific fs-type initialization
+    (void)fs_type;
+    return true;
+}
+
+bool mq_filesystem_destroy(mqFilesystem **fs)
 {
     if(fs == NULL || *fs == NULL) {
         mq_log(MQ_LOG_ERROR, "mq_filesystem_destroy: broken arguments");
-        return;
+        return false;
     }
     free(*fs);
     *fs = NULL;
+    return true;
 }
 
 bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname)
