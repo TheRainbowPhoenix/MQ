@@ -10,6 +10,7 @@
 
 #include <mq/defs.h>
 #include <mq/machine.h>
+#include <mq/interfaces/filesystem.h>
 MQ_START_DEFS
 
 #include <glob.h>
@@ -19,21 +20,32 @@ MQ_START_DEFS
 #define MQ_FILESYSTEM_MAX_FD 16
 
 struct mqBfile {
-    /* Open file descriptor table (-1 when unused). */
-    int fdtable[MQ_FILESYSTEM_MAX_FD];
     /* file tracking table */
-    FILE *file_table[MQ_FILESYSTEM_MAX_FD];
-    struct {
-        int pos;
-        glob_t glob;
-    } search_table[MQ_FILESYSTEM_MAX_FD];
+    mqFilesystemFile *file_table[MQ_FILESYSTEM_MAX_FD];
+    // struct {
+    //     int pos;
+    //     glob_t glob;
+    // } search_table[MQ_FILESYSTEM_MAX_FD];
 };
 typedef struct mqBfile mqBfile;
+
+
+//=== BFile types ============================================================//
+
+enum {
+    BFILE_MODE_READ             = 0x01,
+    BFILE_MODE_WRITE            = 0x02,
+    BFILE_MODE_READWRITE        = (BFILE_MODE_READ | BFILE_MODE_WRITE),
+    BFILE_MODE_READWRITE_SHARE  = (0x80 | BFILE_MODE_READWRITE),
+    BFILE_MODE_READ_SHARE       = (0x80 | BFILE_MODE_READ),
+};
 
 struct mqBfileFileinfo {
     int tmp;
 };
 typedef struct mqBfileFileinfo mqBfileFileinfo;
+
+
 
 //=== BFile interface =======================================================//
 

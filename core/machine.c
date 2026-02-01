@@ -70,6 +70,10 @@ void mq_machine_reset(mqMachine *mach)
     if(mach->keyboard)
         mq_keyboard_destroy(mach->keyboard);
     mach->keyboard = NULL;
+
+    if(mach->fs)
+        mq_filesystem_destroy(&mach->fs);
+    mach->fs = NULL;
 }
 
 void mq_machine_destroy(mqMachine *mach)
@@ -251,6 +255,9 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
 
     mach->processFrequency = 64;
     mach->processTimer = mach->processFrequency;
+
+    if(!mach->fs)
+        mach->fs = mq_filesystem_create();
 
     if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX) {
         mq_cpu_setup(&mach->cpu, mach->memory);
@@ -440,4 +447,9 @@ void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
     mq_timer_reset(&mach->internalPauseTimer, 1000000 /* 1 ms */);
     mq_timer_start(&mach->internalPauseTimer);
     mach->internalPauseTicksRemaining = delay_ms;
+}
+
+bool mq_machine_setFilesystemRoot(mqMachine *mach, char const *pathname)
+{
+    return mq_filesystem_set_root_uri(mach->fs, pathname);
 }

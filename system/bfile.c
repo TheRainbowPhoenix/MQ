@@ -5,8 +5,64 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/system/bfile.h>
+#include <mq/memory.h>
 #include <string.h>
 
+//=== filesystem abstraction
+
+// static int _fs_uri_conv16(mqMachine *mach,
+//         u16 *buffer, u32 sourceAddr, size_t n)
+// {
+//     u8 *src = (u8*)mq_memory_access(mach->memory, sourceAddr);
+//     size_t i = 0;
+//     u16 curr;
+//
+//     if (!src)
+//         return -1;
+//     while (i < n) {
+//         curr  = 0;
+//         curr |= (*(u8 *)((uintptr_t)(src++) ^ 3)) << 8;
+//         curr |= (*(u8 *)((uintptr_t)(src++) ^ 3)) << 0;
+//         buffer[i++] = curr;
+//         if(curr == 0x0000 || curr == 0xffff)
+//             break;
+//     }
+//     return i;
+// }
+
+/* */
+static int _fs_uri_conv8(mqMachine *mach,
+        char *buffer, u32 sourceAddr, size_t n)
+{
+    void *src = mq_memory_access(mach->memory, sourceAddr);
+    size_t i = 0;
+    size_t j = 0;
+    u16 curr;
+
+    if (!src)
+        return -1;
+    while (i < n) {
+        curr = mq_buffer_read16(src, j);
+        buffer[i++] = (curr >> 0) & 0xff;
+        if(curr > 0x7f)
+            buffer[i++] = (curr >> 8) & 0xff;
+        if(curr == 0x0000 || curr == 0xffff)
+            break;
+        j += 2;
+    }
+    //todo: error when crd0
+    //todo: replace \ with /
+    if(!memcmp(buffer, "\\\\fls0\\", 7)) {
+        memcpy(&buffer[0], &buffer[7], i - 7);
+        mq_log(MQ_LOG_DEBUG, "conv8: %s - %d", buffer, i - 7);
+        return i - 7;
+    }
+    mq_log(MQ_LOG_DEBUG,
+            "_fs_uri_conv8: unable to verify the path `%s`<%d>", buffer, i);
+    return -1;
+}
+
+//=== bfile interface
 
 void mq_bfile_NameToStr_ncpy(mqMachine *mach,
         u32 destAddr, u32 sourceAddr, size_t n)
@@ -103,46 +159,51 @@ int mq_bfile_CreateEntry(mqMachine *mach,
 int mq_bfile_OpenFile(mqMachine *mach,
         u32 filenameAddr, int mode)
 {
-    (void)mach;
-    (void)filenameAddr;
-    (void)mode;
-    return -1;
-#if 0
-    char filename_u8[1024];
-    mq_bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
+    char filename[1024];
+
+    if (_fs_uri_conv8(mach, filename, filenameAddr, 1024) < 0) {
+        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+        return -1;
+    }
 
     char const *bits;
-    if(mode == BFILE_READ || mode == BFILE_READ_SHARE)
+    if(mode == BFILE_MODE_READ || mode == BFILE_MODE_READ_SHARE)
         bits = "rb";
-    else if(mode == BFILE_WRITE)
+    else if(mode == BFILE_MODE_WRITE)
         bits = "wb";
-    else if(mode == BFILE_READWRITE || mode == BFILE_READWRITE_SHARE)
+    else if(mode == BFILE_MODE_READWRITE || mode == BFILE_MODE_READWRITE_SHARE)
         bits = "w+b";
     else {
-        printf("mq_bfile_OpenFile(): invalid mode %d for %s\n", mode, filename_u8);
+        mq_log(MQ_LOG_DEBUG,
+                "mq_bfile_OpenFile(): invalid mode %d for %s\n",
+                mode, filename);
         return -1;
     }
 
-    FILE *fp = fopen(filename_u8, bits);
-    if(!fp) {
-        printf("mq_bfile_OpenFile(): cannot open %s: %m\n", filename_u8);
-        return -1;
-    }
-
-    /* Find open slot in file table */
-    int slot = 0;
-    while(slot < MQ_FILESYSTEM_MAX_FD && file_table[slot] != NULL)
-        slot++;
-    if(slot >= MQ_FILESYSTEM_MAX_FD) {
-        printf("mq_bfile_OpenFile(): cannot open %s, table is full\n",filename_u8);
-        fclose(fp);
-        return -1;
-    }
-
-    printf("mq_bfile_OpenFile(): opened %s\n", filename_u8);
-    file_table[slot] = fp;
-    return slot;
-#endif
+    mq_filesystem_open(mach->fs, filename, bits);
+    mq_log(MQ_LOG_ERROR, "OpenFile: cannot open `%s` - %s", filename, bits);
+    return -1;
+    //
+    // FILE *fp = fopen(filename, bits);
+    // if(!fp) {
+    //     mq_log(MQ_LOG_ERROR,
+    //             "mq_bfile_OpenFile(): cannot open %s\n", filename);
+    //     return -1;
+    // }
+    //
+    // /* Find open slot in file table */
+    // int slot = 0;
+    // while(slot < MQ_FILESYSTEM_MAX_FD && file_table[slot] != NULL)
+    //     slot++;
+    // if(slot >= MQ_FILESYSTEM_MAX_FD) {
+    //     printf("mq_bfile_OpenFile(): cannot open %s, table is full\n",filename_u8);
+    //     fclose(fp);
+    //     return -1;
+    // }
+    //
+    // printf("mq_bfile_OpenFile(): opened %s\n", filename_u8);
+    // file_table[slot] = fp;
+    // return slot;
 }
 
 int mq_bfile_GetFileSize(mqMachine *mach, int fd)

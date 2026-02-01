@@ -70,6 +70,7 @@ set(LIB_SOURCES
   interfaces/display.c
   interfaces/keyboard.c
   interfaces/timer.c
+  interfaces/filesystem.c
 
   modules/cmod.c
   modules/dma.c
