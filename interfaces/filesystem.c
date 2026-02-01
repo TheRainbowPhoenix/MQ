@@ -7,6 +7,10 @@
 #include <mq/interfaces/filesystem.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 //=== Helpers
 
@@ -85,7 +89,7 @@ bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname)
     return true;
 }
 
-//=== POSIX interface
+//=== POSIX interface =======================================================//
 
 mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
         char const *pathname, char const *mode)
@@ -106,4 +110,39 @@ mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
         return NULL;
     }
     return fp;
+}
+
+
+bool mq_filesystem_create_file(mqFilesystem *fs,
+        char const *pathname, bool is_dir)
+{
+    char real_pathname[1024];
+    struct stat st;
+    int ret;
+
+    if(!pathname) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return false;
+    }
+    if(!_filesystem_gen_real_pathname(fs, real_pathname, pathname, 1024))
+        return false;
+    ret = stat(real_pathname, &st);
+    if (ret != -1) {
+        mq_log(MQ_LOG_ERROR,
+                "filesystem_create: file already exists %s - %d",
+                real_pathname, ret);
+        return false;
+    }
+    if(is_dir) {
+        ret = mkdir(real_pathname, 0700);
+    } else {
+        ret = creat(real_pathname, 0644);
+    }
+    if(ret < 0) {
+        mq_log(MQ_LOG_ERROR,
+                "filesystem_create: unable to create the file %s",
+                real_pathname);
+        return false;
+    }
+    return true;
 }

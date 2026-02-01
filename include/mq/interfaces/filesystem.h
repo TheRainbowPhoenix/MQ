@@ -48,7 +48,9 @@ bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname);
 mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
         char const *path, char const *mode);
 
-// int mq_filesystem_creat(mqFilesystem *fs, char const *path, u32 mode);
+bool mq_filesystem_create_file(mqFilesystem *fs,
+        char const *path, bool is_dir);
+
 // i32 mq_filesystem_read(mqFilesystem *fs, int fd, void *buf, i32 count);
 // i32 mq_filesystem_write(mqFilesystem *fs, int fd, void const *buf, i32 count);
 // i32 mq_filesystem_lseek(mqFilesystem *fs, int fd, i32 offset, int whence);

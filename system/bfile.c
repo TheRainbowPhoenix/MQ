@@ -214,30 +214,34 @@ int mq_bfile_DeleteEntry(mqMachine *mach, u32 filenameAddr)
 int mq_bfile_CreateEntry(mqMachine *mach,
         u32 filenameAddr, int mode, u32 sizeAddr)
 {
-    mq_log(MQ_LOG_ERROR, "bfile_CreateEntry not implemented");
-    (void)mach;
-    (void)filenameAddr;
-    (void)mode;
-    (void)sizeAddr;
-    return -1;
-#if 0
-    u16 const *filename_u16;
-    char filename_u8[1024];
-    mq_bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
+    char filename[1024];
+    size_t size;
 
+    if (_bfile_uri_conv8(mach, filename, filenameAddr, 1024) < 0) {
+        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+        return -1;
+    }
+    size = mq_buffer_read32(mq_memory_access(mach->memory, sizeAddr), 0);
     if(mode == BFILE_CREATEMODE_FILE) {
-        printf("Creating %s with size %zu (virtually)\n", filename_u8, *size);
+        mq_log(MQ_LOG_DEBUG,
+                "bfile_create: Creating file %s with size %zu (virtually)",
+                filename, size);
+        if (!mq_filesystem_create_file(mach->fs, filename, false))
+            return -1;
+        return 0;
     }
     else if(mode == BFILE_CREATEMODE_FOLDER) {
-        printf("Cannot create folder %s: Not Implemented\n", filename_u8);
-        return -1;
+        mq_log(MQ_LOG_DEBUG,
+                "bfile_create: Creating dir %s with size %zu (virtually)",
+                filename, size);
+        if (!mq_filesystem_create_file(mach->fs, filename, true))
+            return -1;
+        return 0;
     }
     else {
-        printf("mq_bfile_CreateEntry(): Invalid mode %d\n", mode);
+        mq_log(MQ_LOG_ERROR, "bfile_CreateEntry(): Invalid mode %d", mode);
         return -1;
     }
-    return 0;
-#endif
 }
 
 int mq_bfile_OpenFile(mqMachine *mach,
@@ -250,7 +254,6 @@ int mq_bfile_OpenFile(mqMachine *mach,
         mq_log(MQ_LOG_DEBUG, "unable to verify the path");
         return -1;
     }
-
     if(mode == BFILE_MODE_READ || mode == BFILE_MODE_READ_SHARE)
         bits = "rb";
     else if(mode == BFILE_MODE_WRITE)

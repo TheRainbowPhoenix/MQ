@@ -36,6 +36,10 @@ enum {
     BFILE_MODE_READWRITE_SHARE  = (0x80 | BFILE_MODE_READWRITE),
     BFILE_MODE_READ_SHARE       = (0x80 | BFILE_MODE_READ),
 };
+enum {
+    BFILE_CREATEMODE_FILE       = 1,
+    BFILE_CREATEMODE_FOLDER     = 5,
+};
 
 struct mqBfileFileinfo {
     int tmp;
