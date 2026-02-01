@@ -1501,10 +1501,18 @@ void RecordWindow::renderContents(mqMachine *omach)
     ImGui::EndDisabled();
 
     ImGui::SameLine();
-    if(ImGui::Button("Detect"))
-        backend.detectEncoders();
-    ImGui::SetItemTooltip(
-        "Detect hardware encoders available on this machine");
+    if(!backend.hasSystemFFmpeg()) {
+        ImGui::BeginDisabled();
+        ImGui::Button("Detect");
+        ImGui::SetItemTooltip("Could not find or load system ffmpeg");
+        ImGui::EndDisabled();
+    }
+    else {
+        if(ImGui::Button("Detect"))
+            backend.detectEncoders();
+        ImGui::SetItemTooltip(
+            "Detect hardware encoders available on this machine");
+    }
     ImGui::AlignTextToFramePadding();
     ImGui::SetCursorPosX(16);
     ImGui::Text("Filename");
@@ -1561,31 +1569,6 @@ void RecordWindow::renderContents(mqMachine *omach)
     /* display error log if available */
     if(!backend.lasterror().empty())
         ImGui::TextCenteredColor(backend.lasterror().c_str(), 0xff0000);
-#else
-    ImGui::TextWrapped(
-        "Video recording with ffmpeg was not enabled in this build.");
-#endif /* MQ_VIDEO_FFMPEG */
-
-    ImGui::SeparatorTextD("System libraries");
-#if MQ_VIDEO_FFMPEG
-    static mqFFmpeg *SysFFmpeg = NULL;
-    static bool tried = false;
-
-    if(!tried) {
-        if(ImGui::Button("Load system libraries")) {
-            auto F = mqFFmpeg::loadSystemLibraries();
-            if(F) {
-                SysFFmpeg = new mqFFmpeg(F);
-                SysFFmpeg->detectHardwareEncoders();
-                for(auto const &enc: SysFFmpeg->encoderTable())
-                    printf("- %s\n", enc.c_str());
-            }
-            tried = true;
-        }
-    }
-    else {
-        ImGui::Text("System mqFFmpeg: %p", SysFFmpeg);
-    }
 #else
     ImGui::TextWrapped(
         "Video recording with ffmpeg was not enabled in this build.");

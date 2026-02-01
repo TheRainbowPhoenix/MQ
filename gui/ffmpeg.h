@@ -95,6 +95,7 @@ public:
        (once detected by `detectHardwareEncoders()`. The number of software
        encoders at the start is given by `softwareEncoderCount()`. */
     std::vector<std::string> const&encoderTable() { return m_encoders; }
+    unsigned int encoderCount() const { return m_encoders.size(); }
     void detectHardwareEncoders();
     int softwareEncoderCount() { return m_software_encoder_count; }
     /* Name of encoder #idx in the `encoderTable`. */

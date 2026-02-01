@@ -2,6 +2,7 @@ __pycache__
 /compile_commands.json
 /.cache
 /build*
+/test
 /*.g1a
 /*.G1A
 /*.g3a

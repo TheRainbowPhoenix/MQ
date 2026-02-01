@@ -47,26 +47,26 @@ const struct mqFFmpegInterface *mqFFmpeg::loadSystemLibraries(bool force)
 
     dynload.libavutil = dlopen("libavutil.so.60", RTLD_LAZY);
     if((error = dlerror())) {
-        fprintf(stderr, "%s\n", error);
+        mq_log(MQ_LOG_ERROR, "%s\n", error);
         goto error;
     }
 
     dynload.libavformat = dlopen("libavformat.so.62", RTLD_LAZY);
     if((error = dlerror())) {
-        fprintf(stderr, "%s\n", error);
+        mq_log(MQ_LOG_ERROR, "%s\n", error);
         goto error;
     }
 
     dynload.libavcodec = dlopen("libavcodec.so.62", RTLD_LAZY);
     if((error = dlerror())) {
-        fprintf(stderr, "%s\n", error);
+        mq_log(MQ_LOG_ERROR, "%s\n", error);
         goto error;
     }
 
 #define DLSYM_FUNCTION(LIBRARY, NAME) \
     *(void **)&dynload.F.NAME = dlsym(dynload.lib ## LIBRARY, #NAME); \
     if((error = dlerror())) { \
-        fprintf(stderr, \
+        mq_log(MQ_LOG_ERROR, \
             "%s (while loading " #NAME " from " #LIBRARY ")\n", dlerror()); \
         has_error = true; \
     }

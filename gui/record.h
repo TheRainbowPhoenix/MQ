@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "ffmpeg.h"
 #include <mq/interfaces/display.h>
@@ -45,14 +46,15 @@ enum {
 class mqRecord
 {
 public:
-    std::vector<std::string> const &encoderTable() {
-        return m_ffmpeg.encoderTable();
-    }
-    std::string encoderName(unsigned int encoder_idx) const {
-        return m_ffmpeg.encoder(encoder_idx);
-    }
-    void detectEncoders() { m_ffmpeg.detectHardwareEncoders(); }
-    int softwareEncoderCount() { return m_ffmpeg.softwareEncoderCount(); }
+    mqRecord();
+
+    /* Whether system ffmpeg could be loaded. */
+    bool hasSystemFFmpeg() { return (bool)m_ffmpegSystem; }
+
+    std::vector<std::string> encoderTable() const;
+    std::string encoderName(unsigned int encoder_idx) const;
+    void detectEncoders();
+    int softwareEncoderCount();
 
     /* take a screenshot of the */
     bool screenshot(mqDisplay *display, int scale, std::string const &path);
@@ -67,7 +69,7 @@ public:
 
     /* Selected encoder */
     int encoder() const { return m_encoder; }
-    void setEncoder(int e) { m_encoder = e; }
+    void setEncoder(int e);
 
     /* Set whether we keep recording through add-in resets */
     bool continuousRecord() const { return m_continuousRecord; }
@@ -87,15 +89,18 @@ public:
     bool pause(mqDisplay *display);
     bool stop(mqDisplay *display);
 
-    bool debug() { return m_ffmpeg.debug(); }
-    std::string lasterror() { return m_ffmpeg.lasterror(); }
+    bool debug() { return m_ffmpeg->debug(); }
+    std::string lasterror() { return m_ffmpeg->lasterror(); }
 
     /* Get recording statistics. Always returns a non-NULL pointer unless the
        current state is NOTSTARTED. Not all fields might be available. */
     mqRecordStats const *stats();
 
 private:
-    mqFFmpeg m_ffmpeg = mqFFmpeg();
+    /* Built-in ffmpeg with minimal software encoders/decoders, always here */
+    std::unique_ptr<mqFFmpeg> m_ffmpegStatic;
+    /* Full-feature system ffmpeg, if present and at the right version */
+    std::unique_ptr<mqFFmpeg> m_ffmpegSystem;
 
     /* State machine */
     int m_status = MQ_RECORD_STATUS_NOTSTARTED;
@@ -104,6 +109,8 @@ private:
     int m_scale = 1;
     /* ID of the selected encoder in the encoder table. */
     int m_encoder = 0;
+    /* Backend that provides said selected encoder. */
+    mqFFmpeg *m_ffmpeg = nullptr;
     /* Continue recording to a new file after program resets */
     bool m_continuousRecord = false;
     /* Use dynamic PTS encoding */
