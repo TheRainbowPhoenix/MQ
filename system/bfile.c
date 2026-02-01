@@ -5,15 +5,19 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/system/bfile.h>
+#include <string.h>
 
-static FILE *file_table[MQ_FILESYSTEM_MAX_FD] = { NULL };
-static struct {
-    int pos;
-    glob_t glob;
-} search_table[MQ_FILESYSTEM_MAX_FD];
 
-void Bfile_NameToStr_ncpy(char *dest, const uint16_t *source, size_t n)
+void mq_bfile_NameToStr_ncpy(mqMachine *mach,
+        u32 destAddr, u32 sourceAddr, size_t n)
 {
+    (void)mach;
+    (void)destAddr;
+    (void)sourceAddr;
+    (void)n;
+    // return -1;
+#if 0
+    u16 const *source;
     size_t i = 0;
 
     if(!memcmp(source, u"\\\\fls0\\", 14))
@@ -25,10 +29,20 @@ void Bfile_NameToStr_ncpy(char *dest, const uint16_t *source, size_t n)
     }
     for(size_t j = i; j < n; j++)
         dest[j] = source[i];
+#endif
 }
 
-void Bfile_StrToName_ncpy(uint16_t *dest, const char *source, size_t n)
+void mq_bfile_StrToName_ncpy(mqMachine *mach,
+        u32 destAddr, u32 sourceAddr, size_t n)
 {
+    (void)mach;
+    (void)destAddr;
+    (void)sourceAddr;
+    (void)n;
+    // return -1;
+#if 0
+    u16 *dest;
+    char const *source;
     if(!strncmp(source, "\\\\fls0\\", 7)) {
         memcpy(dest, u"\\\\fls0\\", 14);
         dest += 7;
@@ -41,20 +55,35 @@ void Bfile_StrToName_ncpy(uint16_t *dest, const char *source, size_t n)
     }
     while(i < n)
         dest[i++] = 0;
+#endif
 }
 
-int Bfile_DeleteEntry(const uint16_t *filename_u16)
+int mq_bfile_DeleteEntry(mqMachine *mach, u32 filenameAddr)
 {
+    (void)mach;
+    (void)filenameAddr;
+    return -1;
+#if 0
+    u16 const *filename_u16;
     char filename_u8[1024];
-    Bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
+    mq_bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
     printf("Deleting %s (virtually)\n", filename_u8);
     return 0;
+#endif
 }
 
-int Bfile_CreateEntry_OS(const uint16_t *filename_u16, int mode, size_t *size)
+int mq_bfile_CreateEntry(mqMachine *mach,
+        u32 filenameAddr, int mode, u32 sizeAddr)
 {
+    (void)mach;
+    (void)filenameAddr;
+    (void)mode;
+    (void)sizeAddr;
+    return -1;
+#if 0
+    u16 const *filename_u16;
     char filename_u8[1024];
-    Bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
+    mq_bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
 
     if(mode == BFILE_CREATEMODE_FILE) {
         printf("Creating %s with size %zu (virtually)\n", filename_u8, *size);
@@ -64,18 +93,23 @@ int Bfile_CreateEntry_OS(const uint16_t *filename_u16, int mode, size_t *size)
         return -1;
     }
     else {
-        printf("Bfile_CreateEntry_OS(): Invalid mode %d\n", mode);
+        printf("mq_bfile_CreateEntry(): Invalid mode %d\n", mode);
         return -1;
     }
-
     return 0;
+#endif
 }
 
-int Bfile_OpenFile_OS(const uint16_t *filename_u16, int mode, int zero)
+int mq_bfile_OpenFile(mqMachine *mach,
+        u32 filenameAddr, int mode)
 {
-    (void)zero;
+    (void)mach;
+    (void)filenameAddr;
+    (void)mode;
+    return -1;
+#if 0
     char filename_u8[1024];
-    Bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
+    mq_bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
 
     char const *bits;
     if(mode == BFILE_READ || mode == BFILE_READ_SHARE)
@@ -85,13 +119,13 @@ int Bfile_OpenFile_OS(const uint16_t *filename_u16, int mode, int zero)
     else if(mode == BFILE_READWRITE || mode == BFILE_READWRITE_SHARE)
         bits = "w+b";
     else {
-        printf("Bfile_OpenFile_OS(): invalid mode %d for %s\n", mode, filename_u8);
+        printf("mq_bfile_OpenFile(): invalid mode %d for %s\n", mode, filename_u8);
         return -1;
     }
 
     FILE *fp = fopen(filename_u8, bits);
     if(!fp) {
-        printf("Bfile_OpenFile_OS(): cannot open %s: %m\n", filename_u8);
+        printf("mq_bfile_OpenFile(): cannot open %s: %m\n", filename_u8);
         return -1;
     }
 
@@ -100,81 +134,161 @@ int Bfile_OpenFile_OS(const uint16_t *filename_u16, int mode, int zero)
     while(slot < MQ_FILESYSTEM_MAX_FD && file_table[slot] != NULL)
         slot++;
     if(slot >= MQ_FILESYSTEM_MAX_FD) {
-        printf("Bfile_OpenFile_OS(): cannot open %s, table is full\n",filename_u8);
+        printf("mq_bfile_OpenFile(): cannot open %s, table is full\n",filename_u8);
         fclose(fp);
         return -1;
     }
 
-    printf("Bfile_OpenFile_OS(): opened %s\n", filename_u8);
+    printf("mq_bfile_OpenFile(): opened %s\n", filename_u8);
     file_table[slot] = fp;
     return slot;
+#endif
 }
 
-int Bfile_GetFileSize_OS(int fd)
+int mq_bfile_GetFileSize(mqMachine *mach, int fd)
 {
+    (void)mach;
+    (void)fd;
+    return -1;
+#if 0
     FILE *fp = file_table[fd];
     long pos = ftell(fp);
     fseek(fp, 0, SEEK_END);
     long size = ftell(fp);
     fseek(fp, pos, SEEK_SET);
     return size;
+#endif
 }
 
-int Bfile_SeekFile_OS(int fd, int pos)
+int mq_bfile_GetFileInfo(mqMachine *mach,
+        u32 pathAddr, u32 fileinfoAddr)
 {
+    (void)mach;
+    (void)pathAddr;
+    (void)fileinfoAddr;
+    return -1;
+}
+
+int mq_bfile_IdentifyDevice(mqMachine *mach, u32 pathAddr)
+{
+    (void)mach;
+    (void)pathAddr;
+    return -1;
+}
+
+int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
+{
+    (void)mach;
+    (void)fd;
+    (void)pos;
+    return -1;
+#if 0
     fseek(file_table[fd], pos, SEEK_SET);
     return 0;
+#endif
 }
 
-int Bfile_ReadFile_OS(int fd, void *buf, int size, int readpos)
+int mq_bfile_Filepos(mqMachine *mach, int fd)
 {
+    (void)mach;
+    (void)fd;
+    return -1;
+}
+
+int mq_bfile_ReadFile(mqMachine *mach,
+        int fd, u32 buffAddr, int size, int readpos)
+{
+    (void)mach;
+    (void)fd;
+    (void)buffAddr;
+    (void)size;
+    (void)readpos;
+    return -1;
+#if 0
   if(readpos != -1)
-    Bfile_SeekFile_OS(fd, readpos);
-
+    mq_bfile_SeekFile(fd, readpos);
   return fread(buf, 1, size, file_table[fd]);
+#endif
 }
 
-int Bfile_WriteFile_OS(int fd, const void *buf, int size)
+int mq_bfile_RenameEntry(mqMachine *mach,
+        u32 oldnameAddr, u32 newnameAddr)
 {
+    (void)mach;
+    (void)oldnameAddr;
+    (void)newnameAddr;
+    return -1;
+}
+
+int mq_bfile_WriteFile(mqMachine *mach,
+        int fd, u32 buffAddr, int size)
+{
+    (void)mach;
+    (void)fd;
+    (void)buffAddr;
+    (void)size;
+    return -1;
+#if 0
     return fwrite(buf, 1, size, file_table[fd]);
+#endif
 }
 
-int Bfile_CloseFile_OS(int fd)
+int mq_bfile_CloseFile(mqMachine *mach, int fd)
 {
+    (void)mach;
+    (void)fd;
+    return -1;
+#if 0
     fclose(file_table[fd]);
     file_table[fd] = NULL;
     return 0;
+#endif
 }
 
-int Bfile_FindFirst(const uint16_t *pattern_u16, int *fd, uint16_t *found,
-  void *fileinfo)
+int mq_bfile_FindFirst(mqMachine *mach,
+    u32 patternAddr, u32 fdAddr, u32 foundAddr, u32 fileinfoAddr)
 {
+    (void)mach;
+    (void)patternAddr;
+    (void)fdAddr;
+    (void)foundAddr;
+    (void)fileinfoAddr;
+    return -1;
+#if 0
     char pattern_u8[1024];
-    Bfile_NameToStr_ncpy(pattern_u8, pattern_u16, 1024);
+    mq_bfile_NameToStr_ncpy(pattern_u8, pattern_u16, 1024);
 
     int slot = 0;
     while(slot < MQ_FILESYSTEM_MAX_FD && search_table[slot].pos != 0)
         slot++;
     if(slot >= MQ_FILESYSTEM_MAX_FD) {
-        printf("Bfile_FindFirst(): cannot search %s, table is full\n", pattern_u8);
+        printf("mq_bfile_FindFirst(): cannot search %s, table is full\n", pattern_u8);
         *fd = -1;
         return -16;
     }
 
     int rc = glob(pattern_u8, 0, NULL, &search_table[slot].glob);
 
-    printf("Bfile_FindFirst(): Searching %s: %zu results\n", pattern_u8,
+    printf("mq_bfile_FindFirst(): Searching %s: %zu results\n", pattern_u8,
         (rc == GLOB_NOMATCH) ? 0 : search_table[slot].glob.gl_pathc);
 
     if(rc == GLOB_NOMATCH)
         return -16;
 
     *fd = slot;
-    return Bfile_FindNext(slot, found, fileinfo);
+    return mq_bfile_FindNext(slot, found, fileinfo);
+#endif
 }
 
-int Bfile_FindNext(int fd, uint16_t *found, void *fileinfo0)
+int mq_bfile_FindNext(mqMachine *mach,
+        int fd, u32 foundAddr, u32 fileinfoAddr)
 {
+    (void)mach;
+    (void)fd;
+    (void)foundAddr;
+    (void)fileinfoAddr;
+    return -1;
+#if 0
     int *pos = &search_table[fd].pos;
     glob_t *glob = &search_table[fd].glob;
 
@@ -182,11 +296,11 @@ int Bfile_FindNext(int fd, uint16_t *found, void *fileinfo0)
         return -16;
 
     const char *name = glob->gl_pathv[*pos];
-    Bfile_StrToName_ncpy(found, name, strlen(name)+1);
+    mq_bfile_StrToName_ncpy(found, name, strlen(name)+1);
     (*pos)++;
 
-    Bfile_FileInfo *fileinfo = fileinfo0;
-    // TODO: More resonsable Bfile_FileInfo entries?
+    mq_bfile_FileInfo *fileinfo = fileinfo0;
+    // TODO: More resonsable mq_bfile_FileInfo entries?
     memset(fileinfo, 0, sizeof *fileinfo);
 
     FILE *fp = fopen(name, "rb");
@@ -197,14 +311,20 @@ int Bfile_FindNext(int fd, uint16_t *found, void *fileinfo0)
     }
 
     return 0;
+#endif
 }
 
-int Bfile_FindClose(int fd)
+int mq_bfile_FindClose(mqMachine *mach, int fd)
 {
+    (void)mach;
+    (void)fd;
+    return -1;
+#if 0
     if(fd < 0 || fd >= MQ_FILESYSTEM_MAX_FD)
         return -1;
 
     search_table[fd].pos = 0;
     globfree(&search_table[fd].glob);
     return 0;
+#endif
 }

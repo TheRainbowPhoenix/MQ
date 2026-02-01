@@ -87,7 +87,8 @@ set(LIB_SOURCES
   system/casiowin-render.c
   system/casiowin-render-fx.c
   system/casiowin-rtc.c
-  system/heap.c)
+  system/heap.c
+  system/bfile.c)
 
 add_custom_command(OUTPUT "${AUTOGEN}/sh-isa.inc"
   COMMAND mkdir -p "${AUTOGEN}"

@@ -18,6 +18,7 @@
 MQ_START_DEFS
 
 struct mqMemory;
+struct mqBfile;
 
 /* Type of a background process that runs every few CPU cycles.
    TODO: Provide background process hooks with more precising timing info */
@@ -99,6 +100,8 @@ struct mqMachine
     mqDisplay *display;
     /* Keyboard; may be NULL */
     mqKeyboard *keyboard;
+    /* BFile abstraction */
+    struct mqBfile *bfile;
 
     // TODO: Data source for mqTimer; to enable deterministic execution instead
     // of always using clock_gettime().

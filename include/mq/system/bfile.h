@@ -9,30 +9,64 @@
 #define MQ_SYSTEM_BFILE_H
 
 #include <mq/defs.h>
+#include <mq/machine.h>
 MQ_START_DEFS
 
-/* 1d9f */ int mq_bfile_IdentifyDevice(u16 const *path);
+#include <glob.h>
+#include <stdio.h>
 
-/* 1da3 */ int mq_bfile_OpenFile(u16 const *path, int mode, int P3);
-/* 1da4 */ int mq_bfile_CloseFile(int fd);
+/* Maximum number of file descriptors and search descriptors. */
+#define MQ_FILESYSTEM_MAX_FD 16
 
-/* 1da6 */ int mq_bfile_GetFileSize(int fd);
-/* 1da7 */ int mq_bfile_GetFileInfo(u16 const *path, FILE_INFO *fileinfo);
+struct mqBfile {
+    /* Open file descriptor table (-1 when unused). */
+    int fdtable[MQ_FILESYSTEM_MAX_FD];
+    /* file tracking table */
+    FILE *file_table[MQ_FILESYSTEM_MAX_FD];
+    struct {
+        int pos;
+        glob_t glob;
+    } search_table[MQ_FILESYSTEM_MAX_FD];
+};
+typedef struct mqBfile mqBfile;
 
-/* 1da9 */ int mq_bfile_SeekFile(int fd, int pos);
-/* 1dab */ int mq_bfile_Filepos(int fd);
+struct mqBfileFileinfo {
+    int tmp;
+};
+typedef struct mqBfileFileinfo mqBfileFileinfo;
 
-/* 1dac */ int mq_bfile_ReadFile(int fd, void *buf, int size, int readpos);
+//=== BFile interface =======================================================//
 
-/* 1dae */ int mq_bfile_CreateEntry(u16 const *filename, int mode, int *size);
-/* 1daf */ int mq_bfile_WriteFile(int fd, const void *buf, int size);
+/* 1d9f */ int mq_bfile_IdentifyDevice(mqMachine *mach, u32 pathAddr);
 
-/* 1db3 */ int mq_bfile_RenameEntry(u16 const *oldname, u16 const *newname);
-/* 1db4 */ int mq_bfile_DeleteEntry(u16 const *entryname);
+/* 1da3 */ int mq_bfile_OpenFile(mqMachine *mach, u32 pathAddr, int mode);
+/* 1da4 */ int mq_bfile_CloseFile(mqMachine *mach, int fd);
 
-/* 1db7 */ int mq_bfile_FindFirst(u16 const *path, int *ffd, u16 *foundfile, FILE_INFO *fileinfo);
-/* 1db9 */ int mq_bfile_FindNext(int ffd, u16 *foundfile, FILE_INFO *fileinfo);
-/* 1dba */ int mq_bfile_FindClose(int ffd);
+/* 1da6 */ int mq_bfile_GetFileSize(mqMachine *mach, int fd);
+/* 1da7 */ int mq_bfile_GetFileInfo(mqMachine *mach,
+        u32 pathAddr, u32 fileinfoAddr);
+
+/* 1da9 */ int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos);
+/* 1dab */ int mq_bfile_Filepos(mqMachine *mach, int fd);
+
+/* 1dac */ int mq_bfile_ReadFile(mqMachine *mach,
+        int fd, u32 bufAddr, int size, int readpos);
+
+/* 1dae */ int mq_bfile_CreateEntry(mqMachine *mach,
+        u32 filenameAddr, int mode, u32 sizeAddr);
+/* 1daf */ int mq_bfile_WriteFile(mqMachine *mach,
+        int fd, u32 bufAddr, int size);
+
+/* 1db3 */ int mq_bfile_RenameEntry(mqMachine *mach,
+        u32 oldnameAddr, u32 newnameAddr);
+/* 1db4 */ int mq_bfile_DeleteEntry(mqMachine *mach,
+        u32 entrynameAddr);
+
+/* 1db7 */ int mq_bfile_FindFirst(mqMachine *mach,
+        u32 pathAddr, u32 ffdAddr, u32 foundfileAddr, u32 fileinfoAddr);
+/* 1db9 */ int mq_bfile_FindNext(mqMachine *mach,
+        int ffd, u32 foundfileAddr, u32 fileinfoAddr);
+/* 1dba */ int mq_bfile_FindClose(mqMachine *mach, int ffd);
 
 MQ_END_DEFS
 #endif /* MQ_SYSTEM_BFILE_H */
