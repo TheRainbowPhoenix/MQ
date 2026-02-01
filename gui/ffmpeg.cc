@@ -587,14 +587,19 @@ bool mqFFmpeg::ffmpeg_scale_get_frame(
 
 //=== mqFFmpeg RAII ==========================================================//
 
-mqFFmpeg::mqFFmpeg(struct mqFFmpegInterface const *F)
+mqFFmpeg::mqFFmpeg(struct mqFFmpegInterface const *Functions)
 {
-    this->F = F ? F : &builtinStaticLibrary;
+    this->F = Functions ? Functions : &builtinStaticLibrary;
 
     /* For now only count some software encoders. We'll extend the table with
        hardware encoders once we detect them later. */
-    m_encoders.push_back("libx264");
-    m_encoders.push_back("libvpx-vp9");
+    std::vector<char const *> usualCodecs = { "libx264", "libvpx-vp9" };
+
+    for(auto encoder: usualCodecs) {
+        if(F->avcodec_find_encoder_by_name(encoder))
+            m_encoders.push_back(encoder);
+    }
+
     m_software_encoder_count = m_encoders.size();
 }
 
