@@ -112,7 +112,6 @@ mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
     return fp;
 }
 
-
 bool mq_filesystem_create_file(mqFilesystem *fs,
  char const *pathname, bool is_dir)
 {
@@ -157,4 +156,24 @@ bool mq_filesystem_close(mqFilesystem *fs,
     fclose(*file);
     *file = NULL;
     return true;
+}
+
+int mq_filesystem_lseek(mqFilesystem *fs,
+        mqFilesystemFile *file, int offset, int whence)
+{
+    if(!fs || !file) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return -1;
+    }
+    return fseek(file, offset, whence);
+}
+
+u32 mq_filesystem_read(mqFilesystem *fs,
+        mqFilesystemFile *file, void *buff, u32 count)
+{
+    if(!fs || !file || !buff) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return -1;
+    }
+    return fread(buff, sizeof(u8), count, file);
 }

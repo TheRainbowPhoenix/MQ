@@ -168,56 +168,6 @@ bool mq_bfile_destroy(mqBfile **bfile)
 
 //=== bfile interface =======================================================//
 
-void mq_bfile_NameToStr_ncpy(mqMachine *mach,
-        u32 destAddr, u32 sourceAddr, size_t n)
-{
-    (void)mach;
-    (void)destAddr;
-    (void)sourceAddr;
-    (void)n;
-    // return -1;
-#if 0
-    u16 const *source;
-    size_t i = 0;
-
-    if(!memcmp(source, u"\\\\fls0\\", 14))
-        source += 7;
-
-    while(i < n && source[i] != 0x0000 && source[i] != 0xffff) {
-        dest[i] = source[i];
-        i++;
-    }
-    for(size_t j = i; j < n; j++)
-        dest[j] = source[i];
-#endif
-}
-
-void mq_bfile_StrToName_ncpy(mqMachine *mach,
-        u32 destAddr, u32 sourceAddr, size_t n)
-{
-    (void)mach;
-    (void)destAddr;
-    (void)sourceAddr;
-    (void)n;
-    // return -1;
-#if 0
-    u16 *dest;
-    char const *source;
-    if(!strncmp(source, "\\\\fls0\\", 7)) {
-        memcpy(dest, u"\\\\fls0\\", 14);
-        dest += 7;
-    }
-
-    size_t i = 0;
-    while(i < n && source[i]) {
-        dest[i] = source[i];
-        i++;
-    }
-    while(i < n)
-        dest[i++] = 0;
-#endif
-}
-
 int mq_bfile_DeleteEntry(mqMachine *mach, u32 filenameAddr)
 {
     (void)mach;
@@ -334,13 +284,6 @@ int mq_bfile_GetFileInfo(mqMachine *mach,
     return -1;
 }
 
-int mq_bfile_IdentifyDevice(mqMachine *mach, u32 pathAddr)
-{
-    (void)mach;
-    (void)pathAddr;
-    return -1;
-}
-
 int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
 {
     (void)mach;
@@ -363,17 +306,43 @@ int mq_bfile_Filepos(mqMachine *mach, int fd)
 int mq_bfile_ReadFile(mqMachine *mach,
         int fd, u32 buffAddr, int size, int readpos)
 {
-    (void)mach;
-    (void)fd;
-    (void)buffAddr;
-    (void)size;
-    (void)readpos;
-    return -1;
-#if 0
-  if(readpos != -1)
-    mq_bfile_SeekFile(fd, readpos);
-  return fread(buf, 1, size, file_table[fd]);
-#endif
+    u8 buffer[1024];
+    u32 read_size;
+    u32 need_size;
+    u32 try_size;
+
+    mq_log(MQ_LOG_DEBUG,
+            "Bfile_ReadFile(): size=%d && seek=%d", size, readpos);
+    mqFilesystemFile *fp = _bfile_fdtable_find(mach->bfile, fd);
+    if(!fp) {
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        return 0;
+    }
+    void *buffVirt = mq_memory_access(mach->memory, buffAddr);
+    if(!buffVirt) {
+        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): requested addr error");
+        return 0;
+    }
+    if(readpos < 0) {
+        if(!mq_filesystem_lseek(mach->fs, fp, readpos, SEEK_SET)) {
+            mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): seek error");
+            return 0;
+        }
+    }
+    read_size = 0;
+    while(size > 0) {
+        need_size = (size > 1024) ? 1024 : size;
+        try_size = mq_filesystem_read(mach->fs, fp, buffer, need_size);
+        for(u32 j = 0 ; j < need_size ; j++)
+            mq_buffer_write8(buffVirt, j, buffer[j]);
+        if(try_size != need_size) {
+            mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): need != try");
+            return read_size + try_size;
+        }
+        read_size += try_size;
+        size -= try_size;
+    }
+    return read_size;
 }
 
 int mq_bfile_RenameEntry(mqMachine *mach,

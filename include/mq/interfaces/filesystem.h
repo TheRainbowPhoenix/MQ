@@ -54,9 +54,11 @@ bool mq_filesystem_create_file(mqFilesystem *fs,
 bool mq_filesystem_close(mqFilesystem *fs,
         mqFilesystemFile **file);
 
-// i32 mq_filesystem_read(mqFilesystem *fs, int fd, void *buf, i32 count);
-// i32 mq_filesystem_write(mqFilesystem *fs, int fd, void const *buf, i32 count);
-// i32 mq_filesystem_lseek(mqFilesystem *fs, int fd, i32 offset, int whence);
+u32 mq_filesystem_read(mqFilesystem *fs,
+        mqFilesystemFile *file, void *buf, u32 count);
+
+int mq_filesystem_lseek(mqFilesystem *fs,
+        mqFilesystemFile *file, int offset, int whence);
 
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_FILESYSTEM_H */

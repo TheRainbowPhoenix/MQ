@@ -913,9 +913,6 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = 0;
         return;
 
-    case 0x1d9f: /* Bfile_IdentifyDevice_OS() */
-        cpu->r[0] = mq_bfile_IdentifyDevice(mach, cpu->r[4]);
-        return;
     case 0x1da3: /* Bfile_OpenFile() */
         cpu->r[0] = mq_bfile_OpenFile(mach, cpu->r[4], cpu->r[5]);
         return;
