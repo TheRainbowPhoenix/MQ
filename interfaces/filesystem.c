@@ -114,7 +114,7 @@ mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
 
 
 bool mq_filesystem_create_file(mqFilesystem *fs,
-        char const *pathname, bool is_dir)
+ char const *pathname, bool is_dir)
 {
     char real_pathname[1024];
     struct stat st;
@@ -144,5 +144,17 @@ bool mq_filesystem_create_file(mqFilesystem *fs,
                 real_pathname);
         return false;
     }
+    return true;
+}
+
+bool mq_filesystem_close(mqFilesystem *fs,
+        mqFilesystemFile **file)
+{
+    if(!fs || !file || (*file == NULL)) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return false;
+    }
+    fclose(*file);
+    *file = NULL;
     return true;
 }

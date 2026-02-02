@@ -103,6 +103,27 @@ static bool _bfile_fdtable_set(mqBfile *bfile,
     return true;
 }
 
+static mqFilesystemFile *_bfile_fdtable_find(mqBfile *bfile, int slot)
+{
+    if(!bfile) {
+        mq_log(MQ_LOG_ERROR, "fdtable_reserve: internal error");
+        return NULL;
+    }
+    if(slot < 0 || slot >= bfile->fdtable_nb_slot) {
+        mq_log(MQ_LOG_ERROR, "fdtable_set: invalid slot");
+        return NULL;
+    }
+    if(bfile->fdtable[slot] == NULL) {
+        mq_log(MQ_LOG_ERROR, "fdtable_release: slot in used %d", slot);
+        return NULL;
+    }
+    if(bfile->fdtable[slot] == (mqFilesystemFile*)-1) {
+        mq_log(MQ_LOG_ERROR, "fdtable_release: slot not prepared %d", slot);
+        return NULL;
+    }
+    return bfile->fdtable[slot];
+}
+
 //=== system interface ======================================================//
 
 mqBfile *mq_bfile_create(void)
@@ -379,14 +400,17 @@ int mq_bfile_WriteFile(mqMachine *mach,
 
 int mq_bfile_CloseFile(mqMachine *mach, int fd)
 {
-    (void)mach;
-    (void)fd;
-    return -1;
-#if 0
-    fclose(file_table[fd]);
-    file_table[fd] = NULL;
+    mq_log(MQ_LOG_DEBUG, "Bfile_CloseFile(): fd == %d", fd);
+    mqFilesystemFile *fp = _bfile_fdtable_find(mach->bfile, fd);
+    if(!fp) {
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        return -1;
+    }
+    if(!mq_filesystem_close(mach->fs, &fp))
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): filesystem error");
+    if(!_bfile_fdtable_release(mach->bfile, fd))
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): fd release error");
     return 0;
-#endif
 }
 
 int mq_bfile_FindFirst(mqMachine *mach,
