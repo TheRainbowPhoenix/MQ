@@ -121,6 +121,8 @@ static mqFilesystemFile *_bfile_fdtable_find(mqBfile *bfile, int slot)
         mq_log(MQ_LOG_ERROR, "fdtable_release: slot not prepared %d", slot);
         return NULL;
     }
+    mq_log(MQ_LOG_DEBUG,
+        "bfile_fdtable: find slot %d - %p", slot, bfile->fdtable[slot]);
     return bfile->fdtable[slot];
 }
 
@@ -336,7 +338,9 @@ int mq_bfile_ReadFile(mqMachine *mach,
         for(u32 j = 0 ; j < need_size ; j++)
             mq_buffer_write8(buffVirt, j, buffer[j]);
         if(try_size != need_size) {
-            mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): need != try");
+            mq_log(MQ_LOG_ERROR,
+                    "Bfile_WriteFile(): need(%d) != try(%d)",
+                    need_size, try_size);
             return read_size + try_size;
         }
         read_size += try_size;
@@ -357,14 +361,39 @@ int mq_bfile_RenameEntry(mqMachine *mach,
 int mq_bfile_WriteFile(mqMachine *mach,
         int fd, u32 buffAddr, int size)
 {
-    (void)mach;
-    (void)fd;
-    (void)buffAddr;
-    (void)size;
-    return -1;
-#if 0
-    return fwrite(buf, 1, size, file_table[fd]);
-#endif
+    u8 buffer[1024];
+    u32 write_size;
+    u32 need_size;
+    u32 try_size;
+
+    mq_log(MQ_LOG_DEBUG,
+            "Bfile_WriteFile(): size=%d", size);
+    mqFilesystemFile *fp = _bfile_fdtable_find(mach->bfile, fd);
+    if(!fp) {
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        return 0;
+    }
+    void *buffVirt = mq_memory_access(mach->memory, buffAddr);
+    if(!buffVirt) {
+        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): requested addr error");
+        return 0;
+    }
+    write_size = 0;
+    while(size > 0) {
+        need_size = (size > 1024) ? 1024 : size;
+        for(u32 j = 0 ; j < need_size ; j++)
+            buffer[j] = mq_buffer_read8(buffVirt, j);
+        try_size = mq_filesystem_write(mach->fs, fp, buffer, need_size);
+        if(try_size != need_size) {
+            mq_log(MQ_LOG_ERROR,
+                    "Bfile_WriteFile(): need(%d) != try(%d)",
+                    need_size, try_size);
+            return write_size + try_size;
+        }
+        write_size += try_size;
+        size -= try_size;
+    }
+    return write_size;
 }
 
 int mq_bfile_CloseFile(mqMachine *mach, int fd)

@@ -173,7 +173,19 @@ u32 mq_filesystem_read(mqFilesystem *fs,
 {
     if(!fs || !file || !buff) {
         mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return 0;
+    }
+    mq_log(MQ_LOG_DEBUG, "fs_read(): count == %d", count);
+    return fread(buff, sizeof(u8), count, file);
+}
+
+u32 mq_filesystem_write(mqFilesystem *fs,
+        mqFilesystemFile *file, void *buff, u32 count)
+{
+    if(!fs || !file || !buff) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
         return -1;
     }
-    return fread(buff, sizeof(u8), count, file);
+    mq_log(MQ_LOG_DEBUG, "fs_write(): count == %d", count);
+    return fwrite(buff, sizeof(u8), count, file);
 }

@@ -57,6 +57,9 @@ bool mq_filesystem_close(mqFilesystem *fs,
 u32 mq_filesystem_read(mqFilesystem *fs,
         mqFilesystemFile *file, void *buf, u32 count);
 
+u32 mq_filesystem_write(mqFilesystem *fs,
+        mqFilesystemFile *file, void *buf, u32 count);
+
 int mq_filesystem_lseek(mqFilesystem *fs,
         mqFilesystemFile *file, int offset, int whence);
 
