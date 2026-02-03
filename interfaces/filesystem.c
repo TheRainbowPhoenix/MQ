@@ -146,18 +146,6 @@ bool mq_filesystem_create_file(mqFilesystem *fs,
     return true;
 }
 
-bool mq_filesystem_close(mqFilesystem *fs,
-        mqFilesystemFile **file)
-{
-    if(!fs || !file || (*file == NULL)) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
-        return false;
-    }
-    fclose(*file);
-    *file = NULL;
-    return true;
-}
-
 int mq_filesystem_lseek(mqFilesystem *fs,
         mqFilesystemFile *file, int offset, int whence)
 {
@@ -188,4 +176,59 @@ u32 mq_filesystem_write(mqFilesystem *fs,
     }
     mq_log(MQ_LOG_DEBUG, "fs_write(): count == %d", count);
     return fwrite(buff, sizeof(u8), count, file);
+}
+
+bool mq_filesystem_close(mqFilesystem *fs,
+        mqFilesystemFile **file)
+{
+    if(!fs || !file || (*file == NULL)) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return false;
+    }
+    fclose(*file);
+    *file = NULL;
+    return true;
+}
+
+//=== search functions ======================================================//
+
+mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
+        char const *pattern)
+{
+    char real_pattern[1024];
+    mqFilesystemSearch *search;
+    int rc;
+
+    if(!pattern) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return NULL;
+    }
+    if(!_filesystem_gen_real_pathname(fs, real_pattern, pattern, 1024))
+        return NULL;
+    search = (mqFilesystemSearch*)calloc(1, sizeof(mqFilesystemFile));
+    if(!search) {
+        mq_log(MQ_LOG_ERROR, "fs_search_open(): unable to callo()");
+        return NULL;
+    }
+    rc = glob(real_pattern, 0, NULL, &(search->glob));
+    printf("fs_search_open(): Searching %s: %zu results\n", real_pattern,
+        (rc == GLOB_NOMATCH) ? 0 : search->glob.gl_pathc);
+
+    if(rc == GLOB_NOMATCH) {
+        free(search);
+        return NULL;
+    }
+    return search;
+}
+
+bool mq_filesystem_search_close(mqFilesystem *fs,
+        mqFilesystemSearch **search)
+{
+    if(!fs || !search || (*search == NULL)) {
+        mq_log(MQ_LOG_ERROR, "fs_search_open: broken arguments");
+        return false;
+    }
+    globfree(&((*search)->glob));
+    *search = NULL;
+    return true;
 }

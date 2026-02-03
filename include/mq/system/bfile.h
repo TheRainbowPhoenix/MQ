@@ -13,16 +13,10 @@
 #include <mq/interfaces/filesystem.h>
 MQ_START_DEFS
 
-#include <glob.h>
-
 struct mqBfile {
-    /* file tracking table */
-    mqFilesystemFile **fdtable;
+    mqFilesystemFile **table_file;
+    mqFilesystemSearch **table_search;
     int fdtable_nb_slot;
-    // struct {
-    //     int pos;
-    //     glob_t glob;
-    // } search_table[MQ_FILESYSTEM_MAX_FD];
 };
 typedef struct mqBfile mqBfile;
 

@@ -20,14 +20,20 @@
 
 MQ_START_DEFS
 
+#include <glob.h>
 #include <stdio.h>
 
 struct mqFilesystem {
-    /* current */
+    /* current root path */
     char  *root_uri;
     size_t root_uri_len;
 };
 typedef struct mqFilesystem mqFilesystem;
+struct mqFilesystemSearch {
+    int pos;
+    glob_t glob;
+};
+typedef struct mqFilesystemSearch mqFilesystemSearch;
 typedef FILE mqFilesystemFile;
 
 //=== info
@@ -43,7 +49,7 @@ bool mq_filesystem_initialize(mqFilesystem *fs, int fs_type);
 bool mq_filesystem_destroy(mqFilesystem **fs);
 bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname);
 
-//=== Wrapped POSIX functions ===
+//=== file functions ========================================================//
 
 mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
         char const *path, char const *mode);
@@ -62,6 +68,14 @@ u32 mq_filesystem_write(mqFilesystem *fs,
 
 int mq_filesystem_lseek(mqFilesystem *fs,
         mqFilesystemFile *file, int offset, int whence);
+
+//=== search functions ======================================================//
+
+mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
+        char const *pattern);
+
+bool mq_filesystem_search_close(mqFilesystem *fs,
+        mqFilesystemSearch **search);
 
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_FILESYSTEM_H */
