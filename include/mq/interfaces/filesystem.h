@@ -30,7 +30,7 @@ struct mqFilesystem {
 };
 typedef struct mqFilesystem mqFilesystem;
 struct mqFilesystemSearch {
-    int pos;
+    u32 pos;
     glob_t glob;
 };
 typedef struct mqFilesystemSearch mqFilesystemSearch;
@@ -73,6 +73,9 @@ int mq_filesystem_lseek(mqFilesystem *fs,
 
 mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
         char const *pattern);
+
+bool mq_filesystem_search_next(mqFilesystem *fs,
+        mqFilesystemSearch *search, char *buffer, size_t n);
 
 bool mq_filesystem_search_close(mqFilesystem *fs,
         mqFilesystemSearch **search);

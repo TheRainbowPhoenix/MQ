@@ -12,7 +12,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-//=== Helpers
+//=== path handling =========================================================//
 
 static bool _filesystem_gen_real_pathname(mqFilesystem *fs,
         char *output, char const *pathname, size_t n)
@@ -31,6 +31,26 @@ static bool _filesystem_gen_real_pathname(mqFilesystem *fs,
     }
     strncpy(&output[0], fs->root_uri, n);
     strncat(&output[fs->root_uri_len], pathname, n - fs->root_uri_len);
+    return true;
+}
+
+static bool _filesystem_gen_virt_pathname(mqFilesystem *fs,
+        char *output, char const *pathname, size_t n)
+{
+    if(!fs) {
+        mq_log(MQ_LOG_ERROR, "filesystem_virt_patname: internal error");
+        return false;
+    }
+    if(!fs->root_uri) {
+        mq_log(MQ_LOG_ERROR, "filesystem_virt_patname: no root URI");
+        return false;
+    }
+    char const*source = &(pathname[fs->root_uri_len]);
+    if(strlen(source) >= n) {
+        mq_log(MQ_LOG_ERROR, "filesystem_virt_patname: too short buffer");
+        return false;
+    }
+    strcpy(output, source);
     return true;
 }
 
@@ -213,12 +233,32 @@ mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
     rc = glob(real_pattern, 0, NULL, &(search->glob));
     printf("fs_search_open(): Searching %s: %zu results\n", real_pattern,
         (rc == GLOB_NOMATCH) ? 0 : search->glob.gl_pathc);
-
     if(rc == GLOB_NOMATCH) {
         free(search);
         return NULL;
     }
     return search;
+}
+
+bool mq_filesystem_search_next(mqFilesystem *fs,
+        mqFilesystemSearch *search, char *buffer, size_t n)
+{
+    if(!fs || !search) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_search_next: broken arguments");
+        return false;
+    }
+    if(search->pos >= search->glob.gl_pathc) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_search_next: invalid pos");
+        return false;
+    }
+    bool ok = _filesystem_gen_virt_pathname(fs,
+            buffer, search->glob.gl_pathv[search->pos], n);
+    if(!ok) {
+        mq_log(MQ_LOG_ERROR, "fs_search_next: gen virt path error");
+        return false;
+    }
+    search->pos += 1;
+    return true;
 }
 
 bool mq_filesystem_search_close(mqFilesystem *fs,

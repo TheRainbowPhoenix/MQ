@@ -46,6 +46,32 @@ static int _bfile_uri_conv8(mqMachine *mach,
     return -1;
 }
 
+/* convert the "internal" pathname into u16
+ * - convert `u16` (todo: support SHIFT-JS)
+ * - replace all "/" into "\"
+ * - add device information */
+static bool _bfile_uri_conv_set16(mqMachine *mach,
+        u32 outputAddr, char const *pathname)
+{
+    void *outputVirt = mq_memory_access(mach->memory, outputAddr);
+    if(!outputVirt)
+        return false;
+    mq_buffer_write16(outputVirt, 0, '\\');
+    mq_buffer_write16(outputVirt, 1, '\\');
+    mq_buffer_write16(outputVirt, 2, 'f');
+    mq_buffer_write16(outputVirt, 3, 'l');
+    mq_buffer_write16(outputVirt, 4, 's');
+    mq_buffer_write16(outputVirt, 5, '0');
+    mq_buffer_write16(outputVirt, 6, '\\');
+    int i = -1;
+    while(pathname[++i] != '\0') {
+        mq_buffer_write16(outputVirt, 7 + i,
+                (pathname[i] != '/') ? pathname[i] : '\\');
+    }
+    mq_buffer_write16(outputVirt, 7 + i, '\\');
+    return true;
+}
+
 //=== file/find descriptor table ============================================//
 
 static void **_bfile_fdtable_reserve(mqBfile *bfile,
@@ -455,36 +481,30 @@ int mq_bfile_FindFirst(mqMachine *mach,
 int mq_bfile_FindNext(mqMachine *mach,
         int fd, u32 foundAddr, u32 fileinfoAddr)
 {
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): fd == %d", fd);
-    (void)mach;
-    (void)fd;
-    (void)foundAddr;
-    (void)fileinfoAddr;
-    return -1;
-#if 0
-    int *pos = &search_table[fd].pos;
-    glob_t *glob = &search_table[fd].glob;
+    char buffer[1024];
 
-    if(*pos >= glob->gl_pathc)
-        return -16;
-
-    const char *name = glob->gl_pathv[*pos];
-    mq_bfile_StrToName_ncpy(found, name, strlen(name)+1);
-    (*pos)++;
-
-    mq_bfile_FileInfo *fileinfo = fileinfo0;
-    // TODO: More resonsable mq_bfile_FileInfo entries?
-    memset(fileinfo, 0, sizeof *fileinfo);
-
-    FILE *fp = fopen(name, "rb");
-    if(fp) {
-        fseek(fp, 0, SEEK_END);
-        fileinfo->fsize = ftell(fp);
-        fclose(fp);
+    if(!mach->bfile) {
+        mq_log(MQ_LOG_ERROR, "Bfile_WriteFile(): internal error");
+        return -1;
     }
-
-    return 0;
-#endif
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): fd == %d", fd);
+    void **fdtable = (void**)mach->bfile->table_search;
+    mqFilesystemSearch *search = (mqFilesystemSearch*)_bfile_fdtable_get(
+            mach->bfile, fdtable, fd);
+    if(!search) {
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to find the fd");
+        return -1;
+    }
+    if(!mq_filesystem_search_next(mach->fs, search, buffer, 1024)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to next()");
+        return -1;
+    }
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): found %s", buffer);
+    if(!_bfile_uri_conv_set16(mach, foundAddr, buffer)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): internal error");
+        return -1;
+    }
+    return mq_bfile_GetFileInfo(mach, foundAddr, fileinfoAddr);
 }
 
 int mq_bfile_FindClose(mqMachine *mach, int fd)
