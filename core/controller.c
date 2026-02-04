@@ -40,6 +40,7 @@ static void thread_syncFPS(mqController *controller)
     if(new_timePause > 0)
         mq_machine_internalPauseMilliseconds(mach, new_timePause / 1000000);
 
+    mach->newFrame.dirty = true;
     mach->newFrame.timeDelta = new_timeDelta;
     mach->newFrame.timeRef = new_timeRef;
     mach->newFrame.timePause = new_timePause;
