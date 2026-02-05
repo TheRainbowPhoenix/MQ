@@ -31,7 +31,7 @@ struct mqFilesystem {
 };
 typedef struct mqFilesystem mqFilesystem;
 struct mqFilesystemSearch {
-    u32 pos;
+    int pos;
     glob_t glob;
 };
 typedef struct mqFilesystemSearch mqFilesystemSearch;
@@ -54,6 +54,9 @@ bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname);
 
 bool mq_filesystem_create_file(mqFilesystem *fs,
         char const *path, bool is_dir);
+
+bool mq_filesystem_delete_file(mqFilesystem *fs,
+        char const *path);
 
 bool mq_filesystem_stat(mqFilesystem *fs,
         char const *path, struct stat *statbuf);

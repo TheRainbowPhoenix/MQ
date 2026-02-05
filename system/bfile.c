@@ -247,18 +247,20 @@ bool mq_bfile_destroy(mqBfile **bfile)
 
 //=== storage interface =====================================================//
 
-int mq_bfile_DeleteEntry(mqMachine *mach, u32 filenameAddr)
+int mq_bfile_DeleteEntry(mqMachine *mach, u32 pathnameAddr)
 {
-    (void)mach;
-    (void)filenameAddr;
-    return -1;
-#if 0
-    u16 const *filename_u16;
-    char filename_u8[1024];
-    mq_bfile_NameToStr_ncpy(filename_u8, filename_u16, 1024);
-    printf("Deleting %s (virtually)\n", filename_u8);
+    char pathname[1024];
+
+    if (_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024) < 0) {
+        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+        return -1;
+    }
+    mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry(): pathname == %s", pathname);
+    if(!mq_filesystem_delete_file(mach->fs, pathname)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry(): unable to fs_delete()");
+        return -1;
+    }
     return 0;
-#endif
 }
 
 int mq_bfile_CreateEntry(mqMachine *mach,
@@ -316,6 +318,7 @@ int mq_bfile_OpenFile(mqMachine *mach,
         mq_log(MQ_LOG_DEBUG, "unable to verify the path");
         return -1;
     }
+    mq_log(MQ_LOG_DEBUG, "Bfile_OpenFile(): %s - %d", filename, mode);
     if(mode == BFILE_MODE_READ || mode == BFILE_MODE_READ_SHARE)
         bits = "rb";
     else if(mode == BFILE_MODE_WRITE)
@@ -348,14 +351,20 @@ int mq_bfile_OpenFile(mqMachine *mach,
 
 int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
 {
-    (void)mach;
-    (void)fd;
-    (void)pos;
-    return -1;
-#if 0
-    fseek(file_table[fd], pos, SEEK_SET);
+    mq_log(MQ_LOG_DEBUG, "Bfile_SeekFile(): %d - %d", fd, pos);
+
+    void **fdtable = (void**)mach->bfile->table_file;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
+            mach->bfile, fdtable, fd);
+    if(!fp) {
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        return -1;
+    }
+    if(!mq_filesystem_lseek(mach->fs, fp, pos, SEEK_SET)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): seek error");
+        return -1;
+    }
     return 0;
-#endif
 }
 
 int mq_bfile_ReadFile(mqMachine *mach,
@@ -450,6 +459,7 @@ int mq_bfile_WriteFile(mqMachine *mach,
 
 int mq_bfile_GetFileSize(mqMachine *mach, int fd)
 {
+    mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize(): fd == %d -- unsupported", fd);
     (void)mach;
     (void)fd;
     return -1;
@@ -465,6 +475,7 @@ int mq_bfile_GetFileSize(mqMachine *mach, int fd)
 
 int mq_bfile_Filepos(mqMachine *mach, int fd)
 {
+    mq_log(MQ_LOG_ERROR, "Bfile_FilePos(): fd == %d -- unsupported", fd);
     (void)mach;
     (void)fd;
     return -1;
@@ -554,10 +565,12 @@ int mq_bfile_FindNext(mqMachine *mach,
         mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to next()");
         return -1;
     }
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): fs_next() == %s", filename);
     if(!mq_filesystem_search_stat(mach->fs, search, &statbuf)) {
         mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to stat()");
         return -1;
     }
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): post stat()", filename);
     mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): found %s", filename);
     if(!_bfile_uri_conv_set16(mach, foundAddr, filename, false)) {
         mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): internal error");

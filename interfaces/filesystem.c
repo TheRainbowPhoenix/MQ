@@ -50,6 +50,7 @@ static bool _filesystem_gen_virt_pathname(mqFilesystem *fs,
         mq_log(MQ_LOG_ERROR, "filesystem_virt_patname: too short buffer");
         return false;
     }
+    mq_log(MQ_LOG_DEBUG, "gen_virt_path: %s", source);
     strcpy(output, source);
     return true;
 }
@@ -138,6 +139,25 @@ bool mq_filesystem_create_file(mqFilesystem *fs,
         mq_log(MQ_LOG_ERROR,
                 "filesystem_create: unable to create the file %s",
                 real_pathname);
+        return false;
+    }
+    return true;
+}
+
+bool mq_filesystem_delete_file(mqFilesystem *fs,
+        char const *pathname)
+{
+    char real_pathname[1024];
+
+    if(!fs || !pathname) {
+        mq_log(MQ_LOG_ERROR, "fs_delete: broken arguments");
+        return false;
+    }
+    if(!_filesystem_gen_real_pathname(fs, real_pathname, pathname, 1024))
+        return false;
+    mq_log(MQ_LOG_DEBUG, "fs_delete(): path == %s", real_pathname);
+    if(remove(real_pathname) < 0) {
+        mq_log(MQ_LOG_ERROR, "fs_delete: unable to remove()");
         return false;
     }
     return true;
@@ -232,24 +252,18 @@ bool mq_filesystem_close(mqFilesystem *fs,
 bool mq_filesystem_search_stat(mqFilesystem *fs,
         mqFilesystemSearch *search, struct stat *statinfo)
 {
-    char pathname[1024];
-
-    if(!search || !statinfo) {
-        mq_log(MQ_LOG_ERROR, "filesystem_stat: broken arguments");
+    if(!fs || !search || !statinfo) {
+        mq_log(MQ_LOG_ERROR, "fs_search_stat: broken arguments");
         return false;
     }
-    if(search->pos <= 0 || search->pos >= search->glob.gl_pathc) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_search_next: invalid pos");
+    if(search->pos < 0 || search->pos >= (int)search->glob.gl_pathc) {
+        mq_log(MQ_LOG_ERROR, "fs_search_stat: invalid pos");
         return false;
     }
-    bool ok = _filesystem_gen_real_pathname(fs,
-            pathname, search->glob.gl_pathv[search->pos-1], 1024);
-    if(!ok) {
-        mq_log(MQ_LOG_ERROR, "filesystem_stat: unable to get filename");
-        return false;
-    }
+    char *pathname = search->glob.gl_pathv[search->pos];
+    mq_log(MQ_LOG_DEBUG, "fs_search_stat: filename == %s", pathname);
     if(stat(pathname, statinfo) < 0) {
-        mq_log(MQ_LOG_ERROR, "filesystem_stat: unable to stat()");
+        mq_log(MQ_LOG_ERROR, "fs_search_stat: unable to stat()");
         return false;
     }
     return true;
@@ -263,7 +277,7 @@ mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
     int rc;
 
     if(!pattern) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        mq_log(MQ_LOG_ERROR, "fs_search_open(): broken arguments");
         return NULL;
     }
     if(!_filesystem_gen_real_pathname(fs, real_pattern, pattern, 1024))
@@ -280,6 +294,7 @@ mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
         free(search);
         return NULL;
     }
+    search->pos = -1;
     return search;
 }
 
@@ -287,20 +302,21 @@ bool mq_filesystem_search_next(mqFilesystem *fs,
         mqFilesystemSearch *search, char *buffer, size_t n)
 {
     if(!fs || !search) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_search_next: broken arguments");
+        mq_log(MQ_LOG_ERROR, "fs_search_next: broken arguments");
         return false;
     }
-    if(search->pos >= search->glob.gl_pathc) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_search_next: invalid pos");
+    if(search->pos >= (int)search->glob.gl_pathc) {
+        mq_log(MQ_LOG_ERROR, "fs_search_next: invalid pos");
         return false;
     }
+    search->pos += 1;
     bool ok = _filesystem_gen_virt_pathname(fs,
             buffer, search->glob.gl_pathv[search->pos], n);
     if(!ok) {
         mq_log(MQ_LOG_ERROR, "fs_search_next: gen virt path error");
         return false;
     }
-    search->pos += 1;
+    mq_log(MQ_LOG_DEBUG, "fs_search_next: found == %s", buffer);
     return true;
 }
 
