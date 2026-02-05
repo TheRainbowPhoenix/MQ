@@ -8,6 +8,7 @@
 #include <mq/memory.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 //=== path manipulation =====================================================//
 
@@ -51,24 +52,82 @@ static int _bfile_uri_conv8(mqMachine *mach,
  * - replace all "/" into "\"
  * - add device information */
 static bool _bfile_uri_conv_set16(mqMachine *mach,
-        u32 outputAddr, char const *pathname)
+        u32 outputAddr, char const *pathname, bool storage_prefix)
 {
+    u32 idx;
     void *outputVirt = mq_memory_access(mach->memory, outputAddr);
     if(!outputVirt)
         return false;
-    mq_buffer_write16(outputVirt, 0, '\\');
-    mq_buffer_write16(outputVirt, 1, '\\');
-    mq_buffer_write16(outputVirt, 2, 'f');
-    mq_buffer_write16(outputVirt, 3, 'l');
-    mq_buffer_write16(outputVirt, 4, 's');
-    mq_buffer_write16(outputVirt, 5, '0');
-    mq_buffer_write16(outputVirt, 6, '\\');
+    idx = 0;
+    if(storage_prefix) {
+        mq_buffer_write16(outputVirt, 0*2, '\\');
+        mq_buffer_write16(outputVirt, 1*2, '\\');
+        mq_buffer_write16(outputVirt, 2*2, 'f');
+        mq_buffer_write16(outputVirt, 3*2, 'l');
+        mq_buffer_write16(outputVirt, 4*2, 's');
+        mq_buffer_write16(outputVirt, 5*2, '0');
+        mq_buffer_write16(outputVirt, 6*2, '\\');
+        idx = 7;
+    }
     int i = -1;
+    mq_log(MQ_LOG_DEBUG, "debug: %s", pathname);
     while(pathname[++i] != '\0') {
-        mq_buffer_write16(outputVirt, 7 + i,
+        mq_buffer_write16(outputVirt, (idx + i) * 2,
                 (pathname[i] != '/') ? pathname[i] : '\\');
     }
-    mq_buffer_write16(outputVirt, 7 + i, '\\');
+    mq_buffer_write16(outputVirt, (idx + i) * 2, 0x0000);
+    return true;
+}
+
+//=== file/find descriptor table ============================================//
+
+static bool _bfile_stat_set(mqMachine *mach,
+        u32 fileinfoAddr, char const *pathname, struct stat *statbuf)
+{
+    void *fileinfo = mq_memory_access(mach->memory, fileinfoAddr);
+    if(!fileinfo) {
+        mq_log(MQ_LOG_ERROR, "stat_set(): invalid fileinfoAddr");
+        return false;
+    }
+    mq_log(MQ_LOG_DEBUG, "stat_set(): filename == %s", pathname);
+    char const *filename = strrchr(pathname, '/');
+    if(!filename)
+        filename = pathname;
+    filename = &filename[(filename[0] == '/')];
+    if(filename[0] == '\0') {
+        mq_log(MQ_LOG_ERROR, "stat_set(): invalid filename");
+        return false;
+    }
+    mq_log(MQ_LOG_DEBUG, "stat_set(): filename2 == %s", filename);
+    int type = BFILE_TYPE_FILE;
+    int data_size = statbuf->st_size;
+    if(!strcmp(filename, "."))
+        type = BFILE_TYPE_DOT;
+    if(!strcmp(filename, ".."))
+        type = BFILE_TYPE_DOTDOT;
+    char const *ext = strrchr(filename, '.');
+    if(ext) {
+        if(!strcmp(ext, ".g1a") || !strcmp(ext, ".G1A")) {
+            type = BFILE_TYPE_ADDIN;
+            data_size -= 0x200;
+        }
+        if(!strcmp(ext, ".g3a") || !strcmp(ext, ".G3A")) {
+            type = BFILE_TYPE_ADDIN;
+            data_size -= 0x7000;
+        }
+    }
+    if(data_size < 0) {
+        type = BFILE_CREATEMODE_FILE;
+        data_size = statbuf->st_size;
+    }
+    if((statbuf->st_mode & S_IFMT) == S_IFDIR)
+        type = BFILE_TYPE_DIRECTORY;
+    mq_buffer_write16(fileinfo,  0, 0x00);
+    mq_buffer_write16(fileinfo,  2, type);
+    mq_buffer_write32(fileinfo,  4, statbuf->st_size);
+    mq_buffer_write32(fileinfo,  8, data_size);
+    mq_buffer_write32(fileinfo, 12, 0);
+    mq_buffer_write32(fileinfo, 16, 0x00000000);
     return true;
 }
 
@@ -186,7 +245,7 @@ bool mq_bfile_destroy(mqBfile **bfile)
     return true;
 }
 
-//=== bfile interface =======================================================//
+//=== storage interface =====================================================//
 
 int mq_bfile_DeleteEntry(mqMachine *mach, u32 filenameAddr)
 {
@@ -235,6 +294,17 @@ int mq_bfile_CreateEntry(mqMachine *mach,
     }
 }
 
+int mq_bfile_RenameEntry(mqMachine *mach,
+        u32 oldnameAddr, u32 newnameAddr)
+{
+    (void)mach;
+    (void)oldnameAddr;
+    (void)newnameAddr;
+    return -1;
+}
+
+//=== file interface ========================================================//
+
 int mq_bfile_OpenFile(mqMachine *mach,
         u32 filenameAddr, int mode)
 {
@@ -276,30 +346,6 @@ int mq_bfile_OpenFile(mqMachine *mach,
     return slot;
 }
 
-int mq_bfile_GetFileSize(mqMachine *mach, int fd)
-{
-    (void)mach;
-    (void)fd;
-    return -1;
-#if 0
-    FILE *fp = file_table[fd];
-    long pos = ftell(fp);
-    fseek(fp, 0, SEEK_END);
-    long size = ftell(fp);
-    fseek(fp, pos, SEEK_SET);
-    return size;
-#endif
-}
-
-int mq_bfile_GetFileInfo(mqMachine *mach,
-        u32 pathAddr, u32 fileinfoAddr)
-{
-    (void)mach;
-    (void)pathAddr;
-    (void)fileinfoAddr;
-    return -1;
-}
-
 int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
 {
     (void)mach;
@@ -310,13 +356,6 @@ int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
     fseek(file_table[fd], pos, SEEK_SET);
     return 0;
 #endif
-}
-
-int mq_bfile_Filepos(mqMachine *mach, int fd)
-{
-    (void)mach;
-    (void)fd;
-    return -1;
 }
 
 int mq_bfile_ReadFile(mqMachine *mach,
@@ -365,15 +404,6 @@ int mq_bfile_ReadFile(mqMachine *mach,
     return read_size;
 }
 
-int mq_bfile_RenameEntry(mqMachine *mach,
-        u32 oldnameAddr, u32 newnameAddr)
-{
-    (void)mach;
-    (void)oldnameAddr;
-    (void)newnameAddr;
-    return -1;
-}
-
 int mq_bfile_WriteFile(mqMachine *mach,
         int fd, u32 buffAddr, int size)
 {
@@ -418,6 +448,28 @@ int mq_bfile_WriteFile(mqMachine *mach,
     return write_size;
 }
 
+int mq_bfile_GetFileSize(mqMachine *mach, int fd)
+{
+    (void)mach;
+    (void)fd;
+    return -1;
+#if 0
+    FILE *fp = file_table[fd];
+    long pos = ftell(fp);
+    fseek(fp, 0, SEEK_END);
+    long size = ftell(fp);
+    fseek(fp, pos, SEEK_SET);
+    return size;
+#endif
+}
+
+int mq_bfile_Filepos(mqMachine *mach, int fd)
+{
+    (void)mach;
+    (void)fd;
+    return -1;
+}
+
 int mq_bfile_CloseFile(mqMachine *mach, int fd)
 {
     mq_log(MQ_LOG_DEBUG, "Bfile_CloseFile(): fd == %d", fd);
@@ -434,6 +486,8 @@ int mq_bfile_CloseFile(mqMachine *mach, int fd)
         mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): fd release error");
     return 0;
 }
+
+//=== search interface ======================================================//
 
 int mq_bfile_FindFirst(mqMachine *mach,
     u32 patternAddr, u32 fdAddr, u32 foundAddr, u32 fileinfoAddr)
@@ -481,7 +535,8 @@ int mq_bfile_FindFirst(mqMachine *mach,
 int mq_bfile_FindNext(mqMachine *mach,
         int fd, u32 foundAddr, u32 fileinfoAddr)
 {
-    char buffer[1024];
+    char filename[1024];
+    struct stat statbuf;
 
     if(!mach->bfile) {
         mq_log(MQ_LOG_ERROR, "Bfile_WriteFile(): internal error");
@@ -495,16 +550,20 @@ int mq_bfile_FindNext(mqMachine *mach,
         mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to find the fd");
         return -1;
     }
-    if(!mq_filesystem_search_next(mach->fs, search, buffer, 1024)) {
+    if(!mq_filesystem_search_next(mach->fs, search, filename, 1024)) {
         mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to next()");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): found %s", buffer);
-    if(!_bfile_uri_conv_set16(mach, foundAddr, buffer)) {
+    if(!mq_filesystem_search_stat(mach->fs, search, &statbuf)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to stat()");
+        return -1;
+    }
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): found %s", filename);
+    if(!_bfile_uri_conv_set16(mach, foundAddr, filename, false)) {
         mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): internal error");
         return -1;
     }
-    return mq_bfile_GetFileInfo(mach, foundAddr, fileinfoAddr);
+    return _bfile_stat_set(mach, fileinfoAddr, filename, &statbuf);
 }
 
 int mq_bfile_FindClose(mqMachine *mach, int fd)
@@ -522,4 +581,22 @@ int mq_bfile_FindClose(mqMachine *mach, int fd)
     if(!_bfile_fdtable_release(mach->bfile, fdtable, fd))
         mq_log(MQ_LOG_ERROR, "Bfile_FindClose(): fd release error");
     return 0;
+}
+
+int mq_bfile_GetFileInfo(mqMachine *mach,
+        u32 pathnameAddr, u32 fileinfoAddr)
+{
+    char pathname[1024];
+    struct stat statbuf;
+
+    if (_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024) < 0) {
+        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+        return -1;
+    }
+    mq_log(MQ_LOG_DEBUG, "GetFileInfo: pathname == %s", pathname);
+    if(!mq_filesystem_stat(mach->fs, pathname, &statbuf)) {
+        mq_log(MQ_LOG_ERROR, "GetFileInfo: unable to stat");
+        return -1;
+    }
+    return _bfile_stat_set(mach, fileinfoAddr, pathname, &statbuf);
 }

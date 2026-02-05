@@ -35,6 +35,21 @@ enum {
     BFILE_CREATEMODE_FOLDER     = 5,
 };
 
+enum {
+    BFILE_TYPE_DIRECTORY  = 0x0000,
+    BFILE_TYPE_FILE       = 0x0001,
+    BFILE_TYPE_ADDIN      = 0x0002,
+    BFILE_TYPE_EACT       = 0x0003,
+    BFILE_TYPE_LANGUAGE   = 0x0004,
+    BFILE_TYPE_BITMAP     = 0x0005,
+    BFILE_TYPE_MAINMEM    = 0x0006,
+    BFILE_TYPE_TEMP       = 0x0007,
+    BFILE_TYPE_DOT        = 0x0008,
+    BFILE_TYPE_DOTDOT     = 0x0009,
+    BFILE_TYPE_VOLUME     = 0x000a,
+    BFILE_TYPE_ARCHIVED   = 0x0041,
+};
+
 struct mqBfileFileinfo {
     int tmp;
 };

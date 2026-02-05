@@ -111,6 +111,57 @@ bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname)
 
 //=== POSIX interface =======================================================//
 
+bool mq_filesystem_create_file(mqFilesystem *fs,
+ char const *pathname, bool is_dir)
+{
+    char real_pathname[1024];
+    struct stat st;
+    int ret;
+
+    if(!pathname) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return false;
+    }
+    if(!_filesystem_gen_real_pathname(fs, real_pathname, pathname, 1024))
+        return false;
+    if(stat(real_pathname, &st) != -1) {
+        mq_log(MQ_LOG_ERROR,
+                "filesystem_create: file already exists %s", real_pathname);
+        return false;
+    }
+    if(is_dir) {
+        ret = mkdir(real_pathname, 0700);
+    } else {
+        ret = creat(real_pathname, 0644);
+    }
+    if(ret < 0) {
+        mq_log(MQ_LOG_ERROR,
+                "filesystem_create: unable to create the file %s",
+                real_pathname);
+        return false;
+    }
+    return true;
+}
+
+bool mq_filesystem_stat(mqFilesystem *fs,
+        char const *pathname, struct stat *statbuf)
+{
+    char real_pathname[1024];
+
+    if(!pathname) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
+        return false;
+    }
+    if(!_filesystem_gen_real_pathname(fs, real_pathname, pathname, 1024))
+        return false;
+    if(stat(real_pathname, statbuf) < 0) {
+        mq_log(MQ_LOG_ERROR,
+                "filesystem_stat: unable to stat() %s", real_pathname);
+        return false;
+    }
+    return true;
+}
+
 mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
         char const *pathname, char const *mode)
 {
@@ -130,40 +181,6 @@ mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
         return NULL;
     }
     return fp;
-}
-
-bool mq_filesystem_create_file(mqFilesystem *fs,
- char const *pathname, bool is_dir)
-{
-    char real_pathname[1024];
-    struct stat st;
-    int ret;
-
-    if(!pathname) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
-        return false;
-    }
-    if(!_filesystem_gen_real_pathname(fs, real_pathname, pathname, 1024))
-        return false;
-    ret = stat(real_pathname, &st);
-    if (ret != -1) {
-        mq_log(MQ_LOG_ERROR,
-                "filesystem_create: file already exists %s - %d",
-                real_pathname, ret);
-        return false;
-    }
-    if(is_dir) {
-        ret = mkdir(real_pathname, 0700);
-    } else {
-        ret = creat(real_pathname, 0644);
-    }
-    if(ret < 0) {
-        mq_log(MQ_LOG_ERROR,
-                "filesystem_create: unable to create the file %s",
-                real_pathname);
-        return false;
-    }
-    return true;
 }
 
 int mq_filesystem_lseek(mqFilesystem *fs,
@@ -211,6 +228,32 @@ bool mq_filesystem_close(mqFilesystem *fs,
 }
 
 //=== search functions ======================================================//
+
+bool mq_filesystem_search_stat(mqFilesystem *fs,
+        mqFilesystemSearch *search, struct stat *statinfo)
+{
+    char pathname[1024];
+
+    if(!search || !statinfo) {
+        mq_log(MQ_LOG_ERROR, "filesystem_stat: broken arguments");
+        return false;
+    }
+    if(search->pos <= 0 || search->pos >= search->glob.gl_pathc) {
+        mq_log(MQ_LOG_ERROR, "mq_filesystem_search_next: invalid pos");
+        return false;
+    }
+    bool ok = _filesystem_gen_real_pathname(fs,
+            pathname, search->glob.gl_pathv[search->pos-1], 1024);
+    if(!ok) {
+        mq_log(MQ_LOG_ERROR, "filesystem_stat: unable to get filename");
+        return false;
+    }
+    if(stat(pathname, statinfo) < 0) {
+        mq_log(MQ_LOG_ERROR, "filesystem_stat: unable to stat()");
+        return false;
+    }
+    return true;
+}
 
 mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
         char const *pattern)
