@@ -255,7 +255,7 @@ int mq_bfile_DeleteEntry(mqMachine *mach, u32 pathnameAddr)
         mq_log(MQ_LOG_DEBUG, "unable to verify the path");
         return -1;
     }
-    mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry(): pathname == %s", pathname);
+    mq_log(MQ_LOG_DEBUG, "Bfile_DeleteEntry(): pathname == %s", pathname);
     if(!mq_filesystem_delete_file(mach->fs, pathname)) {
         mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry(): unable to fs_delete()");
         return -1;
@@ -299,6 +299,7 @@ int mq_bfile_CreateEntry(mqMachine *mach,
 int mq_bfile_RenameEntry(mqMachine *mach,
         u32 oldnameAddr, u32 newnameAddr)
 {
+    mq_log(MQ_LOG_ERROR, "Bfile_RenameEntry(): unsupported");
     (void)mach;
     (void)oldnameAddr;
     (void)newnameAddr;
@@ -357,11 +358,11 @@ int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
     mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
             mach->bfile, fdtable, fd);
     if(!fp) {
-        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_SeekFile(): unable to find the fd");
         return -1;
     }
     if(!mq_filesystem_lseek(mach->fs, fp, pos, SEEK_SET)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): seek error");
+        mq_log(MQ_LOG_ERROR, "Bfile_SeekFile(): seek error");
         return -1;
     }
     return 0;
@@ -389,7 +390,7 @@ int mq_bfile_ReadFile(mqMachine *mach,
         mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): requested addr error");
         return 0;
     }
-    if(readpos < 0) {
+    if(readpos >= 0) {
         if(!mq_filesystem_lseek(mach->fs, fp, readpos, SEEK_SET)) {
             mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): seek error");
             return 0;
@@ -459,23 +460,27 @@ int mq_bfile_WriteFile(mqMachine *mach,
 
 int mq_bfile_GetFileSize(mqMachine *mach, int fd)
 {
-    mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize(): fd == %d -- unsupported", fd);
-    (void)mach;
-    (void)fd;
-    return -1;
-#if 0
-    FILE *fp = file_table[fd];
-    long pos = ftell(fp);
-    fseek(fp, 0, SEEK_END);
-    long size = ftell(fp);
-    fseek(fp, pos, SEEK_SET);
-    return size;
-#endif
+    struct stat statbuf;
+
+    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileSize(): fd == %d", fd);
+    void **fdtable = (void**)mach->bfile->table_file;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
+            mach->bfile, fdtable, fd);
+    if(!fp) {
+        mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize(): unable to find the fd");
+        return -1;
+    }
+    if(!mq_filesystem_fstat(mach->fs, fp, &statbuf)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize(): unnable to fs_fstat()");
+        return -1;
+    }
+    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileSize(): found == %d", statbuf.st_size);
+    return statbuf.st_size;
 }
 
-int mq_bfile_Filepos(mqMachine *mach, int fd)
+int mq_bfile_GetFilePos(mqMachine *mach, int fd)
 {
-    mq_log(MQ_LOG_ERROR, "Bfile_FilePos(): fd == %d -- unsupported", fd);
+    mq_log(MQ_LOG_ERROR, "Bfile_GetFilePos(): fd == %d -- unsupported", fd);
     (void)mach;
     (void)fd;
     return -1;

@@ -929,7 +929,7 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = mq_bfile_SeekFile(mach, cpu->r[4], cpu->r[5]);
         return;
     case 0x1dab: /* Bfile_FilePos() */
-        cpu->r[0] = mq_bfile_Filepos(mach, cpu->r[4]);
+        cpu->r[0] = mq_bfile_GetFilePos(mach, cpu->r[4]);
         return;
     case 0x1dac: /* Bfile_ReadFile_OS() */
         cpu->r[0] = mq_bfile_ReadFile(mach,

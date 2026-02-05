@@ -203,16 +203,6 @@ mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
     return fp;
 }
 
-int mq_filesystem_lseek(mqFilesystem *fs,
-        mqFilesystemFile *file, int offset, int whence)
-{
-    if(!fs || !file) {
-        mq_log(MQ_LOG_ERROR, "mq_filesystem_open: broken arguments");
-        return -1;
-    }
-    return fseek(file, offset, whence);
-}
-
 u32 mq_filesystem_read(mqFilesystem *fs,
         mqFilesystemFile *file, void *buff, u32 count)
 {
@@ -233,6 +223,41 @@ u32 mq_filesystem_write(mqFilesystem *fs,
     }
     mq_log(MQ_LOG_DEBUG, "fs_write(): count == %d", count);
     return fwrite(buff, sizeof(u8), count, file);
+}
+
+bool mq_filesystem_lseek(mqFilesystem *fs,
+        mqFilesystemFile *file, int offset, int whence)
+{
+    if(!fs || !file) {
+        mq_log(MQ_LOG_ERROR, "fs_lseek: broken arguments");
+        return false;
+    }
+    mq_log(MQ_LOG_DEBUG,
+            "fs_lseek: offset==%d && whence==%d", offset, whence);
+    if(fseek(file, offset, whence) < 0) {
+        mq_log(MQ_LOG_ERROR, "fs_lseek: unable to fseek()");
+        return false;
+    }
+    return true;
+}
+
+bool mq_filesystem_fstat(mqFilesystem *fs,
+        mqFilesystemFile *file, struct stat *statbuf)
+{
+    if(!fs || !file || !statbuf) {
+        mq_log(MQ_LOG_ERROR, "fs_fstat(): broken arguments");
+        return false;
+    }
+    int fd = fileno(file);
+    if(fd < 0) {
+        mq_log(MQ_LOG_ERROR, "fs_fstat(): unable to fileno()");
+        return false;
+    }
+    if(fstat(fd, statbuf) < 0) {
+        mq_log(MQ_LOG_ERROR, "fs_fstat(): unable to fstat()");
+        return false;
+    }
+    return true;
 }
 
 bool mq_filesystem_close(mqFilesystem *fs,
