@@ -72,9 +72,9 @@ static void write_t6k11_data(mqMachine *mach, u32 value)
                 value <<= 1;
             }
             T6K11->col++;
-            mq_display_setDirty(mach->display, true);
+            mq_display_setPixelsChanged(mach->display, true);
             if(T6K11->col >= 16 && T6K11->row == 63)
-                mach->newFrame.blocked = true;
+                mq_display_setFrameChanged(mach->display, true);
             break;
 
         default: {

@@ -18,7 +18,8 @@ void mq_display_reset(mqDisplay *d)
 {
     free(d->data);
     memset(d, 0, sizeof *d);
-    d->dirty = true;
+    d->pixelsChanged = true;
+    d->frameChanged = true;
 }
 
 void mq_display_destroy(mqDisplay *d)
@@ -63,11 +64,17 @@ bool mq_display_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h)
     d->width = w;
     d->height = h;
     d->data = newData;
-    mq_display_setDirty(d, true);
+    mq_display_setPixelsChanged(d, true);
+    mq_display_setFrameChanged(d, false);
     return true;
 }
 
-void mq_display_setDirty(mqDisplay *d, bool dirty)
+void mq_display_setPixelsChanged(mqDisplay *d, bool changed)
 {
-    d->dirty = dirty;
+    d->pixelsChanged = changed;
+}
+
+void mq_display_setFrameChanged(mqDisplay *d, bool changed)
+{
+    d->frameChanged = changed;
 }

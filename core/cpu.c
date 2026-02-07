@@ -339,8 +339,8 @@ MQ_INLINE void mq_cpu_cycle_aux(mqMachine *mach, mqCpu *cpu)
         if(MQ_UNLIKELY(ins == 0x002b /* rte */) && cpu->excMask)
             mq_cpu_handleException(mach, cpu);
 
-        /* Handle execution break request */
-        if(mach->newFrame.blocked)
+        /* Break upon a new frame to allow the FPS limiter to run. */
+        if(mach->display && mach->display->frameChanged)
             mq_machine_breakExecution(mach);
     }
     else {

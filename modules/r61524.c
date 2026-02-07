@@ -71,16 +71,14 @@ void mq_r61524_writePixels(mqMachine *mach, void *ptr, int size)
         R61524->HADDR -= w;
         R61524->VADDR++;
         if(R61524->VADDR >= h) {
-            // Full Frame: set dirty only now?
             mq_logn(MQ_LOG_R61524_FULL_FRAME,
                 "r61524: Finished full frame (direct access)");
             R61524->VADDR = 0;
-            // request a throttle sync
-            mach->newFrame.blocked = true;
+            mq_display_setFrameChanged(display, true);
         }
     }
 
-    display->dirty = true;
+    mq_display_setPixelsChanged(display, true);
 }
 
 static u32 read_r61524(mqMMIO *io, u32 addr, int size)
@@ -164,11 +162,10 @@ static void write_r61524(mqMMIO *io, u32 addr, u32 value, int size)
                 mq_logn(MQ_LOG_R61524_FULL_FRAME,
                     "r61524: Finished full frame (register access)");
                 R61524->VADDR = 0;
-                // request a throttle sync
-                mach->newFrame.blocked = true;
+                mq_display_setFrameChanged(display, true);
             }
         }
-        display->dirty = true;
+        mq_display_setPixelsChanged(display, true);
         break;
     case 0x210: /* HSA */
         R61524->rHEA = 395 - value;

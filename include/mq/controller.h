@@ -36,6 +36,38 @@ struct mqController
        pointer is never accessed by the emulation thread. */
     // TODO: make omach const in mqController to enforce observer semantics
     mqMachine *omach;
+
+    // TODO: Not happy about the fact that new frames are notified through
+    // controller but new pixels are still through mqDisplay.
+
+    /* Data about frame timing.
+
+       |=== Frame #n ===|== Frame #n+1 ==|
+       +--------+-------+--------+-------+
+       | Calcul | Pause | Calcul | Pause |
+       +--------+-------+--------+-------+
+                ^<-----><------->^
+                | pause   delta  |
+               ref              ref */
+    struct {
+        /* Set when the controller detects a new frame; cleared by GUI. */
+        bool dirty;
+
+        u64 timeRef; // when the frame was emitted
+        u64 timeDelta; // how long we spent computing it
+        u64 timePause; // how long we're gonna wait for FPS limiting
+
+        u64 previousTimeRef; // when the previous frame was emitted
+    } lastFrame;
+
+    u64 requestFps;
+
+    /* FPS limiter; enabled if > 0. This is the required minimum delay between
+       two frames (in nanoseconds). If a new frame is completed and less that
+       this time has elapsed since the previous frame completed, the machine
+       will be paused until the time target is reached. */
+    // TODO: Use frameTimeTarget instead of requestFps
+    // u64 frameTimeTarget;
 };
 
 typedef struct mqController mqController;

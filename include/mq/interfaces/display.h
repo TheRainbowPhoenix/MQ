@@ -30,9 +30,14 @@ struct mqDisplay {
     uint width, height;
     /* Pointer to raw pixel values in row-major, left-to-right order */
     void *data;
-    /* Tracker for whether the display has changed since some UI/consumer-
-       directed event. This can be set to false by users. */
-    bool dirty;
+    /* Tracker set whenever the pixels of the surface change. Can be cleared by
+       users. */
+    bool pixelsChanged;
+    /* Tracker set whenever a full frame is finished. The notion of full frame
+       is difficult to define; emulated displays have heuristics (based on the
+       window settings/cursors) but programs *could* avoid it. So this tracker
+       is best-effort. Can be cleared by users. */
+    bool frameChanged;
 };
 
 typedef struct mqDisplay mqDisplay;
@@ -54,10 +59,13 @@ uint mq_display_framebufferSize(mqDisplay const *display);
    contents are still cleared. Returns false on allocation failure. */
 bool mq_display_setFormat(mqDisplay *d, mqDisplay_format fmt, uint w, uint h);
 
-/* Set the display's dirty bit. This is intended to be used in emulation code
-   to set the bit (when the display is modified) and in UI code to clear the
-   bit (once screen textures have been updated). */
-void mq_display_setDirty(mqDisplay *d, bool dirty);
+/* Mark the display as having pixels changed. This is both for setting the flag
+   (from display emulation code) and clearing it (from UI code). */
+void mq_display_setPixelsChanged(mqDisplay *d, bool changed);
+
+/* Mark the display as having a new frame. This is both for setting the flag
+   (from display emulation code) and clearing it (from UI code). */
+void mq_display_setFrameChanged(mqDisplay *d, bool changed);
 
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_DISPLAY_H */

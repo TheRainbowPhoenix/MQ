@@ -62,7 +62,8 @@ static void find_cwd_programs(
 
 //============================================================================//
 
-void update_machine(mqMachine *mach, bool startRunning);
+void update_machine(
+    mqController *controller, mqMachine *mach, bool startRunning);
 
 static void handle_log(enum mq_log_priority priority, char *str)
 {
@@ -184,7 +185,7 @@ static void open_program(std::string const &path, void *data, long size)
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
         //todo: move me ?
-        gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_25FPS;
+        // gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_25FPS;
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         gui.ResetState();
@@ -192,7 +193,7 @@ static void open_program(std::string const &path, void *data, long size)
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(emu0->mach, data, size);
-        gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_60FPS;
+        // gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_60FPS;
     }
     else {
         azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
@@ -299,7 +300,7 @@ static int update(void)
     // printf("[Main] Locking machine for update\n");
     mq_machine_lock(emu0->mach);
     // printf("[Main] Locked machine for update\n");
-    update_machine(emu0->mach, startRunning);
+    update_machine(emu0, emu0->mach, startRunning);
     // printf("[Main] Unlocking machine after update\n");
     mq_machine_unlock(emu0->mach);
     // printf("[Main] Unlocked machine after update\n");
@@ -349,7 +350,8 @@ static int update(void)
 }
 
 /* The machine is locked during this function. */
-void update_machine(mqMachine *mach, bool startRunning)
+void update_machine(
+    mqController *controller, mqMachine *mach, bool startRunning)
 {
     bool may_enable_watch = false;
 
@@ -396,51 +398,58 @@ void update_machine(mqMachine *mach, bool startRunning)
 
     /* Make a copy of the current frame (after resetting the machine in case of
        a reset, so we don't grab a frame with the wrong format) */
-    if(mach->display && mach->display->dirty) {
+    if(mach->display && mach->display->pixelsChanged) {
         mqDisplay *d = mach->display;
         gui.lastDisplayFrame.format = d->format;
         gui.lastDisplayFrame.width  = d->width;
         gui.lastDisplayFrame.height = d->height;
         gui.lastDisplayFrame.data =
             memdup(d->data, mq_display_framebufferSize(d));
+        /* NOTE: New "frames" are counted for the recorder whenever any pixels
+           change. This is not the same notion of "frame" as the one exposed by
+           the display and controller. */
         /* The frame is new for the recorder */
-        gui.lastDisplayFrame.dirty = true;
+        gui.lastDisplayFrame.pixelsChanged = true;
         /* The frame is new for the GUI */
         gui.lastDisplayFrameNew = true;
 
-        /* fetch throttle statistics */
-        if(mach->newFrame.dirty) {
-            if(mach->newFrame.timeDelta > 0) {
-                int idx = gui.perfThrottleStatsIdx;
-                int pause = mach->newFrame.timePause;
-                int raw = (1000 * 1000000) / (mach->newFrame.timeDelta);
-                int fps = (1000 * 1000000) / (mach->newFrame.timeDelta + pause);
-                if(pause < 0) {
-                    fps = raw;
-                    pause = 0;
-                }
-                gui.perfThrottleStatsPause[idx] = pause / 1000000;
-                gui.perfThrottleStatsRaw[idx] = raw;
-                gui.perfThrottleStatsFps[idx] = fps;
-                gui.perfThrottleStatsIdx = (idx + 1) % (5 * 60);
-                gui.perfThrottleLastPause = pause / 1000000;
-                gui.perfThrottleLastFps = fps;
-                gui.perfThrottleLastRaw = raw;
-            }
-            if(mach->framesPending > 0) {
-                if(--mach->framesPending <= 0)
-                    mach->cyclesPending = 0;
-            }
-            mach->newFrame.dirty = false;
-        }
-        /* force-update the throttle request */
-        mach->newFrame.requestFps = gui.perfThrottleRequestFps;
-        if(mach->newFrame.requestFps == 0) {
-            mq_log(MQ_LOG_ERROR, "throttle.requestFps == 0!!");
-            mach->newFrame.requestFps = 60;
-        }
+        mq_display_setPixelsChanged(d, false);
+    }
 
-        mq_display_setDirty(d, false);
+    /* fetch throttle statistics */
+    if(controller->lastFrame.dirty) {
+        if(controller->lastFrame.timeDelta > 0) {
+            int idx = gui.perfThrottleStatsIdx;
+            int pause = controller->lastFrame.timePause;
+            int raw = (1000 * 1000000) / (controller->lastFrame.timeDelta);
+            int fps =
+                (1000 * 1000000) /
+                (controller->lastFrame.timeRef -
+                 controller->lastFrame.previousTimeRef);
+            if(pause < 0) {
+                fps = raw;
+                pause = 0;
+            }
+            gui.perfThrottleStatsPause[idx] = pause / 1000000;
+            gui.perfThrottleStatsRaw[idx] = raw;
+            gui.perfThrottleStatsFps[idx] = fps;
+            gui.perfThrottleStatsIdx = (idx + 1) % (5 * 60);
+            gui.perfThrottleLastPause = pause / 1000000;
+            gui.perfThrottleLastFps = fps;
+            gui.perfThrottleLastRaw = raw;
+        }
+        if(mach->framesPending > 0) {
+            if(--mach->framesPending <= 0)
+                mach->cyclesPending = 0;
+        }
+        controller->lastFrame.dirty = false;
+    }
+
+    /* force-update the throttle request */
+    controller->requestFps = gui.perfThrottleRequestFps;
+    if(controller->requestFps == 0) {
+        mq_log(MQ_LOG_ERROR, "throttle.requestFps == 0!!");
+        controller->requestFps = 60;
     }
 
     if(gui.actions.machineGenerateMonoFrame && mach->display) {

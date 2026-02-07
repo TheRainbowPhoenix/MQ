@@ -184,7 +184,8 @@ bool generateMonoFrame(mqDisplay *display)
         ((u8 *)display->data)[display->width * (display->height-1) + x] = 0xff;
     }
 
-    mq_display_setDirty(display, true);
+    mq_display_setPixelsChanged(display, true);
+    mq_display_setFrameChanged(display, true);
     return true;
 }
 
@@ -228,7 +229,8 @@ bool generateRGBFrame(mqDisplay *display)
         ((u16 *)display->data)[display->width * (display->height-1) + x] = 0xffff;
     }
 
-    mq_display_setDirty(display, true);
+    mq_display_setPixelsChanged(display, true);
+    mq_display_setFrameChanged(display, true);
     return true;
 }
 

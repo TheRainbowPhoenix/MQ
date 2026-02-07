@@ -353,7 +353,7 @@ void ControlWindow::renderContents(mqMachine *omach)
 #endif
 
     if(omach->initialized) {
-        ImGui::Text("Cycle:");
+        ImGui::Text("Run for cycles:");
         ImGui::SameLine();
         if(ImGui::Button("1"))
             gui.actions.machineSetPendingCycles = 1;
@@ -369,8 +369,17 @@ void ControlWindow::renderContents(mqMachine *omach)
         ImGui::SameLine();
         if(ImGui::Button("10k"))
             gui.actions.machineSetPendingCycles = 10000;
-        if(ImGui::Button("1Frame"))
+
+        ImGui::Text("Run for frames:");
+        ImGui::SameLine();
+        if(ImGui::Button("1##1f"))
             gui.actions.machineSetPendingFrames = 1;
+        ImGui::SameLine();
+        if(ImGui::Button("10##10f"))
+            gui.actions.machineSetPendingFrames = 10;
+        ImGui::SameLine();
+        if(ImGui::Button("100##100f"))
+            gui.actions.machineSetPendingFrames = 100;
     }
     else {
         ImGui::Text("Machine is not initialized.");

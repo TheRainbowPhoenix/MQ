@@ -193,7 +193,7 @@ struct GUI
     /* Use custom FPS request */
     bool perfThrottleUseCustomFps = false;
     int perfThrottleCustomFps = -1;
-    int perfThrottleProfile = GUI_THROTTLE_PROFILE_25FPS;
+    int perfThrottleProfile = GUI_THROTTLE_PROFILE_UNLIMITED;
     /* last recorded information */
     int perfThrottleLastPause = 0;
     int perfThrottleLastFps = 0;

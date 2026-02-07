@@ -17,34 +17,39 @@ static void thread_syncFPS(mqController *controller)
     u64 new_timeRef = mq_timer_getCurrentSystemTime();
     u64 new_timeDelta = 0;
     i64 new_timePause = 0;
-    if(mach->newFrame.timeRef > 0 && mach->newFrame.requestFps > 0) {
-        new_timeDelta = new_timeRef - mach->newFrame.timeRef;
-        new_timePause =
-            ((1000 * 1000000) / mach->newFrame.requestFps) - new_timeDelta;
+    if(controller->lastFrame.timeRef > 0 && controller->requestFps > 0) {
+        new_timeDelta = new_timeRef -
+            (controller->lastFrame.timeRef + controller->lastFrame.timePause);
+        new_timePause = ((1000 * 1000000) / controller->requestFps)
+                        - new_timeDelta;
         /* Sadly, we can't rewind time if the frame is longer than desired. */
         if(new_timePause < 0)
             new_timePause = 0;
 
         /* mq_log(MQ_LOG_DEBUG,
             "new frame!\n"
-            "bef: ref=%lld - delta=%lld\n"
-            "new: ref=%lld - delta=%lld - pause=%lld",
-            mach->newFrame.timeRef, mach->newFrame.timeDelta,
+            "bef: ref=%lld (delta=%lld) +  pause=%lld\n"
+            "new: ref=%lld (delta=%lld) -> pause=%lld",
+            controller->lastFrame.timeRef, controller->lastFrame.timeDelta,
+            controller->lastFrame.timePause,
             new_timeRef, new_timeDelta, new_timePause);
         mq_log(MQ_LOG_DEBUG,
-            "FPS=%lld (raw: %lld)",
-            ((1000 * 1000000) / (new_timeDelta + new_timePause)),
-            ((1000 * 1000000) / new_timeDelta)); */
+            "FPS=%lld (raw: %lld) (target: %llu)",
+            1000 * 1000000 / (new_timeRef - controller->lastFrame.timeRef),
+            1000 * 1000000 / new_timeDelta,
+            controller->requestFps); */
     }
 
     if(new_timePause > 0)
         mq_machine_internalPauseMilliseconds(mach, new_timePause / 1000000);
 
-    mach->newFrame.dirty = true;
-    mach->newFrame.timeDelta = new_timeDelta;
-    mach->newFrame.timeRef = new_timeRef;
-    mach->newFrame.timePause = new_timePause;
-    mach->newFrame.blocked = false;
+    controller->lastFrame.dirty = true;
+    controller->lastFrame.previousTimeRef = controller->lastFrame.timeRef;
+    controller->lastFrame.timeDelta = new_timeDelta;
+    controller->lastFrame.timeRef = new_timeRef;
+    controller->lastFrame.timePause = new_timePause;
+
+    mq_display_setFrameChanged(mach->display, false);
 }
 
 static void *thread_run(void *userdata)
@@ -73,6 +78,14 @@ static void *thread_run(void *userdata)
             /* If we longjmp out, this call never finishes */
         }
         mq_timer_freeze();
+        mq_machine_clearBreakJumpBuffer(mach);
+#else
+        TracyCZoneN(_ctxA, "cycles", true);
+        mq_timer_unfreeze();
+        mq_machine_cycle(mach, cycles);
+        mq_timer_freeze();
+        TracyCZoneEnd(_ctxA);
+#endif
 
         /* There was an execution break and now the machine is blocked from
            running more instructions. It's either waiting for a background
@@ -81,22 +94,8 @@ static void *thread_run(void *userdata)
             mq_log(MQ_LOG_WARNING, "machine is stuck!");
             mach->cyclesPending = 0;
         }
-        else if(mach->newFrame.blocked)
+        else if(mach->display && mach->display->frameChanged)
             thread_syncFPS(controller);
-
-        mq_machine_clearBreakJumpBuffer(mach);
-#else
-        TracyCZoneN(_ctxA, "cycles", true);
-        mq_machine_cycle(mach, cycles);
-        TracyCZoneEnd(_ctxA);
-
-        if(mach->stuck) {
-            mq_log(MQ_LOG_WARNING, "machine is stuck!");
-            mach->cyclesPending = 0;
-        }
-        else if(mach->newFrame.blocked)
-            thread_syncFPS(controller);
-#endif
 
         // printf("[Emu] Unlocking machine and waiting for work\n");
         TracyCZoneN(_ctxB, "wait", true);

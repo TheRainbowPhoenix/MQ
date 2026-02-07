@@ -492,7 +492,8 @@ static bool writeTShapePixelInfo(
            mq_memory_write(mach, mem, address + 12, 4, info->dash_counter);
 }
 
-static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
+static void syscall_fx(
+    mqMachine *mach, mqCpu *cpu, u32 syscallID, bool *shouldBreak)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
     u32 r4 = cpu->r[4], r5 = cpu->r[5], r6 = cpu->r[6], r7 = cpu->r[7];
@@ -655,6 +656,7 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
 
     case 0x0420: /* OS_InnerSleep_ms() */
         mq_machine_internalPauseMilliseconds(mach, cpu->r[4]);
+        *shouldBreak = true;
         return;
 
     case 0x042c: /* Bfile_OpenFile() */
@@ -757,9 +759,11 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     mq_machine_setStuck(mach);
 }
 
-static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
+static void syscall_cg(
+    mqMachine *mach, mqCpu *cpu, u32 syscallID, bool *shouldBreak)
 {
     mqCasiowin *Casiowin = mq_casiowin_get(mach);
+    (void)shouldBreak;
     // TODO: Check syscall API version
 
     switch(syscallID) {
@@ -788,8 +792,8 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
                     dst[x] = *(u16 *)((uintptr_t)(src++) ^ 2);
                 dst += mach->display->width;
             }
-            mq_display_setDirty(mach->display, true);
-            mach->newFrame.blocked = true;
+            mq_display_setPixelsChanged(mach->display, true);
+            mq_display_setFrameChanged(mach->display, true);
         }
         return;
 
@@ -1004,17 +1008,19 @@ void mq_casiowin_syscall(mqMachine *mach)
     if(!Casiowin)
         return;
 
+    bool shouldBreak = false;
+
     switch(Casiowin->version) {
     case MQ_CASIOWIN_FX205:
-        syscall_fx(mach, &mach->cpu, mach->cpu.r[0]);
+        syscall_fx(mach, &mach->cpu, mach->cpu.r[0], &shouldBreak);
         mach->cpu.pc = mach->cpu.spRegs[SH_PR];
         break;
     case MQ_CASIOWIN_CG380:
-        syscall_cg(mach, &mach->cpu, mach->cpu.r[0]);
+        syscall_cg(mach, &mach->cpu, mach->cpu.r[0], &shouldBreak);
         mach->cpu.pc = mach->cpu.spRegs[SH_PR];
         break;
     }
 
-    if(Casiowin->bgsyscall)
+    if(shouldBreak || Casiowin->bgsyscall)
         mq_machine_breakExecution(mach);
 }

@@ -51,20 +51,11 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
-    /* A new frame has been generated */
-    struct {
-        bool blocked;
-        u64 timeRef;
-        u64 timeDelta;
-        u64 timePause;
-        u64 requestFps;
-        bool dirty;
-    } newFrame;
     /* Jump buffer to jump to when the execution gets broken. This is used to
        exit. The jump buffer may or may not
        be present. */
-   bool hasBreakJumpBuffer;
-   jmp_buf breakJumpBuffer;
+    bool hasBreakJumpBuffer;
+    jmp_buf breakJumpBuffer;
 
     /* Machine is internally paused for a limited time. This is a high-level
        emulation of sleep functions. While internally paused, the machine still
@@ -75,8 +66,9 @@ struct mqMachine
     bool internallyPaused;
     mqTimer internalPauseTimer;
     int internalPauseTicksRemaining;
+
     /* Machine is internally blocked for a high-level reason, e.g. a blocking
-       syscall, or stuck. Unlike internal pausing, this status does not expire
+       syscall, a timed pause, or stuck. This status does not expire
        automatically. */
     bool internallyBlocked;
 

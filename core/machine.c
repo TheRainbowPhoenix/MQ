@@ -350,13 +350,19 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     // TODO[machine]: Host system sleep for long high-level internal pauses
     // TODO[machine]: Not counting cycles during sleep hampers determinism
     if(mach->internallyPaused) {
-        int ticks = mq_timer_update(&mach->internalPauseTimer);
+        int ticks = 0;
+        /* Make sure we spend at least *some* time here, otherwise the hot loop
+           alternates between here and the controller and timers are frozen
+           most of time, incorrectly extending sleeps. */
+        do ticks += mq_timer_update(&mach->internalPauseTimer);
+        while(ticks < 1);
 
         /* Stop the internal timer when reaching the end of the sleep period */
-        if(ticks >= 0 && (mach->internalPauseTicksRemaining -= ticks) <= 0) {
+        if((mach->internalPauseTicksRemaining -= ticks) <= 0) {
             mach->internallyPaused = false;
             mq_timer_reset(&mach->internalPauseTimer, 0);
             mach->internalPauseTicksRemaining = 0;
+            mach->internallyBlocked = false;
         }
         /* Otherwise, run background processes and leave */
         else {
@@ -442,6 +448,10 @@ void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
 {
     if(delay_ms <= 0)
         return;
+
+    if(mach->internallyPaused)
+        mq_log(MQ_LOG_ERROR, "paused machine (%d ms) pauses further (%d ms)?!",
+        mach->internalPauseTicksRemaining, delay_ms);
 
     mach->internallyPaused = true;
     mq_timer_reset(&mach->internalPauseTimer, 1000000 /* 1 ms */);
