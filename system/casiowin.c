@@ -682,10 +682,10 @@ static void syscall_fx(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = mq_bfile_WriteFile(mach,
                 cpu->r[4], cpu->r[5], cpu->r[6]);
         return;
-    case 0x0438: /* Bfile_RenameEntry() */
-        cpu->r[0] = mq_bfile_RenameEntry(mach,
-                cpu->r[4], cpu->r[5]);
-        return;
+    // case 0x0438: /* Bfile_RenameEntry() */
+    //     cpu->r[0] = mq_bfile_RenameEntry(mach,
+    //             cpu->r[4], cpu->r[5]);
+    //     return;
     case 0x0439: /* Bfile_DeleteEntry() */
         cpu->r[0] = mq_bfile_DeleteEntry(mach, cpu->r[4]);
         return;
@@ -928,9 +928,9 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
     case 0x1da9: /* Bfile_SeekFile_OS() */
         cpu->r[0] = mq_bfile_SeekFile(mach, cpu->r[4], cpu->r[5]);
         return;
-    case 0x1dab: /* Bfile_FilePos() */
-        cpu->r[0] = mq_bfile_GetFilePos(mach, cpu->r[4]);
-        return;
+    // case 0x1dab: /* Bfile_FilePos() */
+    //     cpu->r[0] = mq_bfile_GetFilePos(mach, cpu->r[4]);
+    //     return;
     case 0x1dac: /* Bfile_ReadFile_OS() */
         cpu->r[0] = mq_bfile_ReadFile(mach,
                 cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]);
@@ -943,10 +943,10 @@ static void syscall_cg(mqMachine *mach, mqCpu *cpu, u32 syscallID)
         cpu->r[0] = mq_bfile_WriteFile(mach,
                 cpu->r[4], cpu->r[5], cpu->r[6]);
         return;
-    case 0x1db3: /* Bfile_RenameEntry() */
-        cpu->r[0] = mq_bfile_RenameEntry(mach,
-                cpu->r[4], cpu->r[5]);
-        return;
+    // case 0x1db3: /* Bfile_RenameEntry() */
+    //     cpu->r[0] = mq_bfile_RenameEntry(mach,
+    //             cpu->r[4], cpu->r[5]);
+    //     return;
     case 0x1db4: /* Bfile_DeleteEntry() */
         cpu->r[0] = mq_bfile_DeleteEntry(mach, cpu->r[4]);
         return;

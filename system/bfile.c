@@ -16,49 +16,54 @@
  * - convert to `char` (todo: support SHIFT-JIS)
  * - skip device information (only fls0)
  * - replace all "\" into "/" */
-static int _bfile_uri_conv8(mqMachine *mach,
+static bool _bfile_uri_conv8(mqMachine *mach,
         char *buffer, u32 sourceAddr, size_t n)
 {
-    void *src = mq_memory_access(mach->memory, sourceAddr);
     size_t i = 0;
     size_t j = 0;
     u16 curr;
 
-    if (!src)
-        return -1;
+    void *src = mq_memory_access(mach->memory, sourceAddr);
+    if (!src) {
+        mq_log(MQ_LOG_ERROR, "_uri_conv8: invalid sourceAddr");
+        return false;
+    }
     while (i < n) {
         curr = mq_buffer_read16(src, j);
-        buffer[i++] = (curr >> 0) & 0xff;
+        buffer[i] = (curr >> 0) & 0xff;
+        buffer[i] = (buffer[i] == '\\') ? '/' : buffer[i];
         if(curr > 0x7f)
-            buffer[i++] = (curr >> 8) & 0xff;
+            buffer[++i] = (curr >> 8) & 0xff;
         if(curr == 0x0000 || curr == 0xffff)
             break;
+        i += 1;
         j += 2;
     }
-    //todo: error when crd0
-    //todo: replace \ with /
-    if(!memcmp(buffer, "\\\\fls0\\", 7)) {
-        memcpy(&buffer[0], &buffer[7], i - 7);
-        mq_log(MQ_LOG_DEBUG, "conv8: %s - %d", buffer, i - 7);
-        return i - 7;
+    if(!memcmp(buffer, "//crd0/", 7)) {
+        mq_log(MQ_LOG_ERROR, "_bfile_uri_conv8: unsupported crd0");
+        return false;
     }
-    mq_log(MQ_LOG_DEBUG,
-            "_fs_uri_conv8: unable to verify the path `%s`<%d>", buffer, i);
-    return -1;
+    if(!memcmp(buffer, "//fls0/", 7)) {
+        memcpy(&buffer[0], &buffer[7], i - 7);
+        return true;
+    }
+    mq_log(MQ_LOG_DEBUG, "_bfile_uri_conv8: unsupported path `%s`", buffer);
+    return false;
 }
 
 /* convert the "internal" pathname into u16
  * - convert `u16` (todo: support SHIFT-JS)
  * - replace all "/" into "\"
- * - add device information */
+ * - add device information if requested */
 static bool _bfile_uri_conv_set16(mqMachine *mach,
         u32 outputAddr, char const *pathname, bool storage_prefix)
 {
-    u32 idx;
     void *outputVirt = mq_memory_access(mach->memory, outputAddr);
-    if(!outputVirt)
+    if(!outputVirt) {
+        mq_log(MQ_LOG_ERROR, "_bfile_uri_set16: invalid memory");
         return false;
-    idx = 0;
+    }
+    u32 idx = 0;
     if(storage_prefix) {
         mq_buffer_write16(outputVirt, 0*2, '\\');
         mq_buffer_write16(outputVirt, 1*2, '\\');
@@ -70,7 +75,6 @@ static bool _bfile_uri_conv_set16(mqMachine *mach,
         idx = 7;
     }
     int i = -1;
-    mq_log(MQ_LOG_DEBUG, "debug: %s", pathname);
     while(pathname[++i] != '\0') {
         mq_buffer_write16(outputVirt, (idx + i) * 2,
                 (pathname[i] != '/') ? pathname[i] : '\\');
@@ -79,26 +83,24 @@ static bool _bfile_uri_conv_set16(mqMachine *mach,
     return true;
 }
 
-//=== file/find descriptor table ============================================//
+//=== shared utilities ======================================================//
 
 static bool _bfile_stat_set(mqMachine *mach,
         u32 fileinfoAddr, char const *pathname, struct stat *statbuf)
 {
     void *fileinfo = mq_memory_access(mach->memory, fileinfoAddr);
     if(!fileinfo) {
-        mq_log(MQ_LOG_ERROR, "stat_set(): invalid fileinfoAddr");
+        mq_log(MQ_LOG_ERROR, "_bfile_stat_set: invalid fileinfoAddr");
         return false;
     }
-    mq_log(MQ_LOG_DEBUG, "stat_set(): filename == %s", pathname);
     char const *filename = strrchr(pathname, '/');
     if(!filename)
         filename = pathname;
     filename = &filename[(filename[0] == '/')];
     if(filename[0] == '\0') {
-        mq_log(MQ_LOG_ERROR, "stat_set(): invalid filename");
+        mq_log(MQ_LOG_ERROR, "_bfile_stat_set: invalid filename");
         return false;
     }
-    mq_log(MQ_LOG_DEBUG, "stat_set(): filename2 == %s", filename);
     int type = BFILE_TYPE_FILE;
     int data_size = statbuf->st_size;
     if(!strcmp(filename, "."))
@@ -133,113 +135,111 @@ static bool _bfile_stat_set(mqMachine *mach,
 
 //=== file/find descriptor table ============================================//
 
-static void **_bfile_fdtable_reserve(mqBfile *bfile,
-        void **fdtable, int *slot)
+static void **_bfile_dtable_reserve(mqBfile *bfile,
+        void **dtable, int *slot)
 {
-    if(!fdtable || !slot) {
-        mq_log(MQ_LOG_ERROR, "Bfile_desctable_reserve: internal error");
+    if(!dtable || !slot) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_reserve: internal error");
         return NULL;
     }
-    for(int i = 0 ; i < bfile->fdtable_nb_slot ; i++) {
-        if(fdtable[i] != NULL)
+    for(int i = 0 ; i < bfile->dtable_nb_slot ; i++) {
+        if(dtable[i] != NULL)
             continue;
-        fdtable[i] = (mqFilesystemFile*)-1;
-        mq_log(MQ_LOG_DEBUG, "Bfile_desctable_reserv: reserved slot %d", i);
+        dtable[i] = (mqFilesystemFile*)-1;
         *slot = i;
-        return &(fdtable[i]);
+        return &(dtable[i]);
     }
     return NULL;
 }
 
-static bool _bfile_fdtable_release(mqBfile *bfile, void **fdtable, int slot)
+static bool _bfile_dtable_release(mqBfile *bfile,
+        void **dtable, int slot)
 {
-    if(!bfile || !fdtable) {
-        mq_log(MQ_LOG_ERROR, "fdtable_reserve: internal error");
+    if(!bfile || !dtable) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_release: internal error");
         return false;
     }
-    if(slot < 0 || slot >= bfile->fdtable_nb_slot) {
-        mq_log(MQ_LOG_ERROR, "fdtable_release: invalid slot");
+    if(slot < 0 || slot >= bfile->dtable_nb_slot) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_release: invalid slot");
         return false;
     }
-    if(fdtable[slot] == NULL) {
-        mq_log(MQ_LOG_ERROR, "fdtable_release: slot not used %d", slot);
+    if(dtable[slot] == NULL) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_release: slot not used %d", slot);
         return false;
     }
-    fdtable[slot] = NULL;
-    mq_log(MQ_LOG_DEBUG, "Bfile_fdtable: released slot %d", slot);
+    dtable[slot] = NULL;
     return true;
 }
 
-static void *_bfile_fdtable_get(mqBfile *bfile, void **fdtable, int slot)
+static void *_bfile_dtable_get(mqBfile *bfile,
+        void **dtable, int slot)
 {
-    if(!bfile || !fdtable) {
-        mq_log(MQ_LOG_ERROR, "fdtable_get: internal error");
+    if(!bfile || !dtable) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_get: internal error");
         return NULL;
     }
-    if(slot < 0 || slot >= bfile->fdtable_nb_slot) {
-        mq_log(MQ_LOG_ERROR, "fdtable_get: invalid slot");
+    if(slot < 0 || slot >= bfile->dtable_nb_slot) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_get: invalid slot");
         return NULL;
     }
-    if(fdtable[slot] == NULL) {
-        mq_log(MQ_LOG_ERROR, "fdtable_get: slot in used %d", slot);
+    if(dtable[slot] == NULL) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_get: slot in used %d", slot);
         return NULL;
     }
-    if(fdtable[slot] == (mqFilesystemFile*)-1) {
-        mq_log(MQ_LOG_ERROR, "fdtable_get: slot not prepared %d", slot);
+    if(dtable[slot] == (void*)-1) {
+        mq_log(MQ_LOG_ERROR, "_bfile_dtable_get: slot not prepared %d", slot);
         return NULL;
     }
-    mq_log(MQ_LOG_DEBUG,
-            "Bfile_fdtable: find slot %d - %p", slot, fdtable[slot]);
-    return fdtable[slot];
+    return dtable[slot];
 }
 
 //=== system interface ======================================================//
 
-mqBfile *mq_bfile_create(void)
+mqBfile *mq_bfile_interface_create(void)
 {
     mqBfile *bfile = (mqBfile*)calloc(1, sizeof(mqBfile));
     if(!bfile) {
-        mq_log(MQ_LOG_ERROR, "Bfile_Create: calloc() fails");
+        mq_log(MQ_LOG_ERROR, "bfile_interface_create: calloc() fails");
         return NULL;
     }
     return bfile;
 }
 
-bool mq_bfile_initialize(mqBfile *bfile, int fdtable_nb_slot)
+bool mq_bfile_interface_initialize(mqBfile *bfile, int dtable_nb_slot)
 {
-    if(!bfile) {
-        mq_log(MQ_LOG_ERROR, "bfile_initialize: broken arguments");
+    if(!bfile || dtable_nb_slot <= 0) {
+        mq_log(MQ_LOG_ERROR, "bfile_interface_init: broken arguments");
         return false;
     }
-    bfile->fdtable_nb_slot = 0;
-    bfile->table_file = (mqFilesystemFile **)calloc(
-            fdtable_nb_slot, sizeof(mqFilesystemFile *));
-    if(!bfile->table_file) {
-        mq_log(MQ_LOG_ERROR, "bfile_initialize: unable to alloc() file");
+    bfile->dtable_nb_slot = 0;
+    bfile->file_dtable = (mqFilesystemFile **)calloc(
+            dtable_nb_slot, sizeof(mqFilesystemFile *));
+    if(!bfile->file_dtable) {
+        mq_log(MQ_LOG_ERROR, "bfile_interface_init: unable to alloc() file");
         return false;
     }
-    bfile->table_search = (mqFilesystemSearch **)calloc(
-            fdtable_nb_slot, sizeof(mqFilesystemSearch *));
-    if(!bfile->table_search) {
-        mq_log(MQ_LOG_ERROR, "bfile_initialize: unable to alloc() search");
-        free(bfile->table_file);
-        bfile->table_file = NULL;
+    bfile->search_dtable = (mqFilesystemSearch **)calloc(
+            dtable_nb_slot, sizeof(mqFilesystemSearch *));
+    if(!bfile->search_dtable) {
+        mq_log(MQ_LOG_ERROR, "bfile_interface_init: unable to alloc() search");
+        free(bfile->file_dtable);
+        bfile->file_dtable = NULL;
         return false;
     }
-    bfile->fdtable_nb_slot = fdtable_nb_slot;
+    bfile->dtable_nb_slot = dtable_nb_slot;
     return true;
 }
 
-bool mq_bfile_destroy(mqBfile **bfile)
+bool mq_bfile_interface_destroy(mqBfile **bfile)
 {
     if(!bfile || (*bfile == NULL)) {
         mq_log(MQ_LOG_ERROR, "bfile_destroy: broken arguments");
         return false;
     }
-    if(!(*bfile)->table_file)
-        free((*bfile)->table_file);
-    if(!(*bfile)->table_search)
-        free((*bfile)->table_search);
+    if(!(*bfile)->file_dtable)
+        free((*bfile)->file_dtable);
+    if(!(*bfile)->search_dtable)
+        free((*bfile)->search_dtable);
     free(*bfile);
     *bfile = NULL;
     return true;
@@ -251,100 +251,80 @@ int mq_bfile_DeleteEntry(mqMachine *mach, u32 pathnameAddr)
 {
     char pathname[1024];
 
-    if (_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024) < 0) {
-        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+    if(!_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry: unable to verify the path");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_DeleteEntry(): pathname == %s", pathname);
-    if(!mq_filesystem_delete_file(mach->fs, pathname)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry(): unable to fs_delete()");
+    mq_log(MQ_LOG_DEBUG, "Bfile_DeleteEntry: pathname == %s", pathname);
+    if(!mq_filesystem_file_delete(mach->fs, pathname)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_DeleteEntry: unable to fs_delete()");
         return -1;
     }
     return 0;
 }
 
 int mq_bfile_CreateEntry(mqMachine *mach,
-        u32 filenameAddr, int mode, u32 sizeAddr)
+        u32 pathnameAddr, int mode, u32 sizeAddr)
 {
-    char filename[1024];
-    size_t size;
+    char pathname[1024];
 
-    if (_bfile_uri_conv8(mach, filename, filenameAddr, 1024) < 0) {
-        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+    (void)sizeAddr;
+    if(!_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_CreateEntry: unable to verify the path");
         return -1;
     }
-    size = mq_buffer_read32(mq_memory_access(mach->memory, sizeAddr), 0);
     if(mode == BFILE_CREATEMODE_FILE) {
-        mq_log(MQ_LOG_DEBUG,
-                "Bfile_Create: Creating file %s with size %zu (virtually)",
-                filename, size);
-        if (!mq_filesystem_create_file(mach->fs, filename, false))
+        mq_log(MQ_LOG_DEBUG, "Bfile_CreateEntry: Creating file %s", pathname);
+        if (!mq_filesystem_file_create(mach->fs, pathname, false))
             return -1;
         return 0;
     }
     else if(mode == BFILE_CREATEMODE_FOLDER) {
-        mq_log(MQ_LOG_DEBUG,
-                "Bfile_Create: Creating dir %s with size %zu (virtually)",
-                filename, size);
-        if (!mq_filesystem_create_file(mach->fs, filename, true))
+        mq_log(MQ_LOG_DEBUG, "Bfile_CreateEntry: Creating dir %s", pathname);
+        if (!mq_filesystem_file_create(mach->fs, pathname, true))
             return -1;
         return 0;
     }
     else {
-        mq_log(MQ_LOG_ERROR, "Bfile_Create: Invalid mode %d", mode);
+        mq_log(MQ_LOG_ERROR, "Bfile_CreateEntry: Invalid mode %d", mode);
         return -1;
     }
-}
-
-int mq_bfile_RenameEntry(mqMachine *mach,
-        u32 oldnameAddr, u32 newnameAddr)
-{
-    mq_log(MQ_LOG_ERROR, "Bfile_RenameEntry(): unsupported");
-    (void)mach;
-    (void)oldnameAddr;
-    (void)newnameAddr;
-    return -1;
 }
 
 //=== file interface ========================================================//
 
 int mq_bfile_OpenFile(mqMachine *mach,
-        u32 filenameAddr, int mode)
+        u32 pathnameAddr, int mode)
 {
-    char filename[1024];
+    char pathname[1024];
     char const *bits;
     int slot;
 
-    if (_bfile_uri_conv8(mach, filename, filenameAddr, 1024) < 0) {
-        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+    if(!_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_OpenFile: unable to verify the path");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_OpenFile(): %s - %d", filename, mode);
+    mq_log(MQ_LOG_DEBUG, "Bfile_OpenFile: %s - %d", pathname, mode);
     if(mode == BFILE_MODE_READ || mode == BFILE_MODE_READ_SHARE)
         bits = "rb";
     else if(mode == BFILE_MODE_WRITE)
         bits = "wb";
     else if(mode == BFILE_MODE_READWRITE || mode == BFILE_MODE_READWRITE_SHARE)
-        bits = "w+b";
+        bits = "r+b";
     else {
-        mq_log(MQ_LOG_DEBUG,
-                "mq_bfile_OpenFile(): invalid mode %d for %s\n",
-                mode, filename);
+        mq_log(MQ_LOG_ERROR, "Bfile_OpenFile: invalid mode");
         return -1;
     }
-    void **fdtable = (void**)mach->bfile->table_file;
-    void **fp = _bfile_fdtable_reserve(mach->bfile, fdtable, &slot);
+    void **dtable = (void**)mach->bfile->file_dtable;
+    void **fp = _bfile_dtable_reserve(mach->bfile, dtable, &slot);
     if(!fp || slot < 0) {
-        mq_log(MQ_LOG_ERROR,
-                "mq_bfile_OpenFile(): cannot open %s, table is full",
-                filename);
+        mq_log(MQ_LOG_ERROR, "Bfile_OpenFile: descritor table is full");
         return -1;
     }
-    *fp = mq_filesystem_open(mach->fs, filename, bits);
+    *fp = mq_filesystem_file_open(mach->fs, pathname, bits);
     if((*fp) == NULL) {
-        mq_log(MQ_LOG_ERROR,
-                "OpenFile: cannot open `%s` - %s", filename, bits);
-        _bfile_fdtable_release(mach->bfile, fdtable, slot);
+        mq_log(MQ_LOG_ERROR, "Bfile_OpenFile: unable to fs_open()");
+        _bfile_dtable_release(mach->bfile, dtable, slot);
         return -1;
     }
     return slot;
@@ -352,17 +332,16 @@ int mq_bfile_OpenFile(mqMachine *mach,
 
 int mq_bfile_SeekFile(mqMachine *mach, int fd, int pos)
 {
-    mq_log(MQ_LOG_DEBUG, "Bfile_SeekFile(): %d - %d", fd, pos);
-
-    void **fdtable = (void**)mach->bfile->table_file;
-    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+    mq_log(MQ_LOG_DEBUG, "Bfile_SeekFile: %d - %d", fd, pos);
+    void **dtable = (void**)mach->bfile->file_dtable;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!fp) {
-        mq_log(MQ_LOG_ERROR, "Bfile_SeekFile(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_SeekFile: unable to find the fd");
         return -1;
     }
-    if(!mq_filesystem_lseek(mach->fs, fp, pos, SEEK_SET)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_SeekFile(): seek error");
+    if(!mq_filesystem_file_lseek(mach->fs, fp, pos, SEEK_SET)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_SeekFile: seek error");
         return -1;
     }
     return 0;
@@ -377,34 +356,35 @@ int mq_bfile_ReadFile(mqMachine *mach,
     u32 try_size;
 
     mq_log(MQ_LOG_DEBUG,
-            "Bfile_ReadFile(): size=%d && seek=%d", size, readpos);
-    void **fdtable = (void**)mach->bfile->table_file;
-    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+            "Bfile_ReadFile: fd=%d && size=%d && seek=%d",
+            fd, size, readpos);
+    void **dtable = (void**)mach->bfile->file_dtable;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!fp) {
-        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile: unable to find fd");
         return 0;
     }
     void *buffVirt = mq_memory_access(mach->memory, buffAddr);
     if(!buffVirt) {
-        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): requested addr error");
+        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile: invalid buffer address");
         return 0;
     }
     if(readpos >= 0) {
-        if(!mq_filesystem_lseek(mach->fs, fp, readpos, SEEK_SET)) {
-            mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): seek error");
+        if(!mq_filesystem_file_lseek(mach->fs, fp, readpos, SEEK_SET)) {
+            mq_log(MQ_LOG_ERROR, "Bfile_ReadFile: unable to fs_lseek()");
             return 0;
         }
     }
     read_size = 0;
     while(size > 0) {
         need_size = (size > 1024) ? 1024 : size;
-        try_size = mq_filesystem_read(mach->fs, fp, buffer, need_size);
-        for(u32 j = 0 ; j < need_size ; j++)
-            mq_buffer_write8(buffVirt, j, buffer[j]);
+        try_size = mq_filesystem_file_read(mach->fs, fp, buffer, need_size);
+        for(u32 j = 0 ; j < try_size ; j++)
+            mq_buffer_write8(buffVirt, read_size + j, buffer[j]);
         if(try_size != need_size) {
             mq_log(MQ_LOG_ERROR,
-                    "Bfile_WriteFile(): need(%d) != try(%d)",
+                    "Bfile_ReadFile: need(%d) != try(%d)",
                     need_size, try_size);
             return read_size + try_size;
         }
@@ -423,32 +403,32 @@ int mq_bfile_WriteFile(mqMachine *mach,
     u32 try_size;
 
     if(!mach->bfile) {
-        mq_log(MQ_LOG_ERROR, "Bfile_WriteFile(): internal error");
+        mq_log(MQ_LOG_ERROR, "Bfile_WriteFile: internal error");
         return -1;
     }
     mq_log(MQ_LOG_DEBUG,
-            "Bfile_WriteFile(): size=%d", size);
-    void **fdtable = (void**)mach->bfile->table_file;
-    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+            "Bfile_WriteFile: fd=%d && size=%d", fd, size);
+    void **dtable = (void**)mach->bfile->file_dtable;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!fp) {
-        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_WriteFile: unable to find fd");
         return 0;
     }
     void *buffVirt = mq_memory_access(mach->memory, buffAddr);
     if(!buffVirt) {
-        mq_log(MQ_LOG_ERROR, "Bfile_ReadFile(): requested addr error");
+        mq_log(MQ_LOG_ERROR, "Bfile_WriteFile: invalid buffer address");
         return 0;
     }
     write_size = 0;
     while(size > 0) {
         need_size = (size > 1024) ? 1024 : size;
         for(u32 j = 0 ; j < need_size ; j++)
-            buffer[j] = mq_buffer_read8(buffVirt, j);
-        try_size = mq_filesystem_write(mach->fs, fp, buffer, need_size);
+            buffer[j] = mq_buffer_read8(buffVirt, write_size + j);
+        try_size = mq_filesystem_file_write(mach->fs, fp, buffer, need_size);
         if(try_size != need_size) {
             mq_log(MQ_LOG_ERROR,
-                    "Bfile_WriteFile(): need(%d) != try(%d)",
+                    "Bfile_WriteFile: need(%d) != try(%d)",
                     need_size, try_size);
             return write_size + try_size;
         }
@@ -462,44 +442,36 @@ int mq_bfile_GetFileSize(mqMachine *mach, int fd)
 {
     struct stat statbuf;
 
-    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileSize(): fd == %d", fd);
-    void **fdtable = (void**)mach->bfile->table_file;
-    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileSize: fd == %d", fd);
+    void **dtable = (void**)mach->bfile->file_dtable;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!fp) {
-        mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize: unable to find the fd");
         return -1;
     }
-    if(!mq_filesystem_fstat(mach->fs, fp, &statbuf)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize(): unnable to fs_fstat()");
+    if(!mq_filesystem_file_fstat(mach->fs, fp, &statbuf)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_GetFileSize: unnable to fs_fstat()");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileSize(): found == %d", statbuf.st_size);
+    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileSize: found == %d", statbuf.st_size);
     return statbuf.st_size;
-}
-
-int mq_bfile_GetFilePos(mqMachine *mach, int fd)
-{
-    mq_log(MQ_LOG_ERROR, "Bfile_GetFilePos(): fd == %d -- unsupported", fd);
-    (void)mach;
-    (void)fd;
-    return -1;
 }
 
 int mq_bfile_CloseFile(mqMachine *mach, int fd)
 {
-    mq_log(MQ_LOG_DEBUG, "Bfile_CloseFile(): fd == %d", fd);
-    void **fdtable = (void**)mach->bfile->table_file;
-    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+    mq_log(MQ_LOG_DEBUG, "Bfile_CloseFile: fd == %d", fd);
+    void **dtable = (void**)mach->bfile->file_dtable;
+    mqFilesystemFile *fp = (mqFilesystemFile*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!fp) {
-        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile: unable to find the fd");
         return -1;
     }
-    if(!mq_filesystem_close(mach->fs, &fp))
-        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): filesystem error");
-    if(!_bfile_fdtable_release(mach->bfile, fdtable, fd))
-        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile(): fd release error");
+    if(!mq_filesystem_file_close(mach->fs, &fp))
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile: filesystem error");
+    if(!_bfile_dtable_release(mach->bfile, dtable, fd))
+        mq_log(MQ_LOG_ERROR, "Bfile_CloseFile: fd release error");
     return 0;
 }
 
@@ -514,36 +486,36 @@ int mq_bfile_FindFirst(mqMachine *mach,
 
     void *fdVirt = mq_memory_access(mach->memory, fdAddr);
     if(!fdVirt) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst(): invalid fdAddr");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst: invalid fdAddr");
         return -1;
     }
     mq_buffer_write32(fdVirt, 0, -1);
-    if (_bfile_uri_conv8(mach, pattern, patternAddr, 1024) < 0) {
-        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+    if(!_bfile_uri_conv8(mach, pattern, patternAddr, 1024)) {
+        mq_log(MQ_LOG_DEBUG, "Bfile_FindFirst: unable to verify the path");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindFirst(): pattern=%s", pattern);
-    void **fdtable = (void**)mach->bfile->table_search;
-    void **find = _bfile_fdtable_reserve(mach->bfile, fdtable, &slot);
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindFirst: pattern=%s", pattern);
+    void **dtable = (void**)mach->bfile->search_dtable;
+    void **find = _bfile_dtable_reserve(mach->bfile, dtable, &slot);
     if(!find || slot < 0) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst(): unable to reserve slot");
-        return -16;
+        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst: unable to reserve slot");
+        return -1;
     }
     *find = mq_filesystem_search_open(mach->fs, pattern);
     if((*find) == NULL) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst(): unable to glob_open()");
-        if(!_bfile_fdtable_release(mach->bfile, fdtable, slot))
-            mq_log(MQ_LOG_ERROR, "Bfile_FindFirst(): slot release error");
-        return -16;
+        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst: unable to fs_search_open()");
+        if(!_bfile_dtable_release(mach->bfile, dtable, slot))
+            mq_log(MQ_LOG_ERROR, "Bfile_FindFirst: slot release error");
+        return -1;
     }
     mq_buffer_write32(fdVirt, 0, slot);
     rc = mq_bfile_FindNext(mach, slot, foundAddr, fileinfoAddr);
     if (rc < 0) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst(): unable to FindNext()");
-        if(!_bfile_fdtable_release(mach->bfile, fdtable, slot))
-            mq_log(MQ_LOG_ERROR, "Bfile_FindFirst(): slot release error");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindFirst: unable to FindNext()");
+        if(!_bfile_dtable_release(mach->bfile, dtable, slot))
+            mq_log(MQ_LOG_ERROR, "Bfile_FindFirst: slot release error");
         mq_buffer_write32(fdVirt, 0, -1);
-        return -16;
+        return -1;
     }
     return rc;
 }
@@ -551,53 +523,52 @@ int mq_bfile_FindFirst(mqMachine *mach,
 int mq_bfile_FindNext(mqMachine *mach,
         int fd, u32 foundAddr, u32 fileinfoAddr)
 {
-    char filename[1024];
+    char pathname[1024];
     struct stat statbuf;
 
     if(!mach->bfile) {
-        mq_log(MQ_LOG_ERROR, "Bfile_WriteFile(): internal error");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext: internal error");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): fd == %d", fd);
-    void **fdtable = (void**)mach->bfile->table_search;
-    mqFilesystemSearch *search = (mqFilesystemSearch*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext: fd == %d", fd);
+    void **dtable = (void**)mach->bfile->search_dtable;
+    mqFilesystemSearch *search = (mqFilesystemSearch*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!search) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext: unable to find fd");
         return -1;
     }
-    if(!mq_filesystem_search_next(mach->fs, search, filename, 1024)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to next()");
+    if(!mq_filesystem_search_next(mach->fs, search, pathname, 1024)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext: unable to fs_serach_next()");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): fs_next() == %s", filename);
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext: fs_next() == %s", pathname);
     if(!mq_filesystem_search_stat(mach->fs, search, &statbuf)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): unable to stat()");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext: unable to stat()");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): post stat()", filename);
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext(): found %s", filename);
-    if(!_bfile_uri_conv_set16(mach, foundAddr, filename, false)) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindNext(): internal error");
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindNext: fs_stat() == %d", statbuf.st_size);
+    if(!_bfile_uri_conv_set16(mach, foundAddr, pathname, false)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_FindNext: unable to uri_conv_set16()");
         return -1;
     }
-    return _bfile_stat_set(mach, fileinfoAddr, filename, &statbuf);
+    return _bfile_stat_set(mach, fileinfoAddr, pathname, &statbuf);
 }
 
 int mq_bfile_FindClose(mqMachine *mach, int fd)
 {
-    mq_log(MQ_LOG_DEBUG, "Bfile_FindClose(): fd == %d", fd);
-    void **fdtable = (void**)mach->bfile->table_search;
-    mqFilesystemSearch *search = (mqFilesystemSearch*)_bfile_fdtable_get(
-            mach->bfile, fdtable, fd);
+    mq_log(MQ_LOG_DEBUG, "Bfile_FindClose: fd == %d", fd);
+    void **dtable = (void**)mach->bfile->search_dtable;
+    mqFilesystemSearch *search = (mqFilesystemSearch*)_bfile_dtable_get(
+            mach->bfile, dtable, fd);
     if(!search) {
-        mq_log(MQ_LOG_ERROR, "Bfile_FindClose(): unable to find the fd");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindClose: unable to find fd");
         return -1;
     }
     if(!mq_filesystem_search_close(mach->fs, &search))
-        mq_log(MQ_LOG_ERROR, "Bfile_FindClose(): filesystem error");
-    if(!_bfile_fdtable_release(mach->bfile, fdtable, fd))
-        mq_log(MQ_LOG_ERROR, "Bfile_FindClose(): fd release error");
+        mq_log(MQ_LOG_ERROR, "Bfile_FindClose: unable to fs_search_close()");
+    if(!_bfile_dtable_release(mach->bfile, dtable, fd))
+        mq_log(MQ_LOG_ERROR, "Bfile_FindClose: fd release error");
     return 0;
 }
 
@@ -607,13 +578,13 @@ int mq_bfile_GetFileInfo(mqMachine *mach,
     char pathname[1024];
     struct stat statbuf;
 
-    if (_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024) < 0) {
-        mq_log(MQ_LOG_DEBUG, "unable to verify the path");
+    if(!_bfile_uri_conv8(mach, pathname, pathnameAddr, 1024)) {
+        mq_log(MQ_LOG_DEBUG, "Bfile_GetFileInfo: unable to verify the path");
         return -1;
     }
-    mq_log(MQ_LOG_DEBUG, "GetFileInfo: pathname == %s", pathname);
-    if(!mq_filesystem_stat(mach->fs, pathname, &statbuf)) {
-        mq_log(MQ_LOG_ERROR, "GetFileInfo: unable to stat");
+    mq_log(MQ_LOG_DEBUG, "Bfile_GetFileInfo: pathname == %s", pathname);
+    if(!mq_filesystem_file_stat(mach->fs, pathname, &statbuf)) {
+        mq_log(MQ_LOG_ERROR, "Bfile_GetFileInfo: unable to fs_file_stat()");
         return -1;
     }
     return _bfile_stat_set(mach, fileinfoAddr, pathname, &statbuf);

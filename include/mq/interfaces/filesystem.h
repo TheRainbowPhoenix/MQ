@@ -24,6 +24,8 @@ MQ_START_DEFS
 #include <stdio.h>
 #include <sys/stat.h>
 
+//=== system interface ======================================================//
+
 struct mqFilesystem {
     /* current root path */
     char  *root_uri;
@@ -37,46 +39,44 @@ struct mqFilesystemSearch {
 typedef struct mqFilesystemSearch mqFilesystemSearch;
 typedef FILE mqFilesystemFile;
 
-//=== info
-
 enum {
     MQ_FILESYSTEM_TYPE_FUGUE_FAT12,
     MQ_FILESYSTEM_TYPE_FUGUE_FAT16,
     //MQ_FILESYSTEM_TYPE_CASIOWIN,
 };
 
-mqFilesystem *mq_filesystem_create(void);
-bool mq_filesystem_initialize(mqFilesystem *fs, int fs_type);
-bool mq_filesystem_destroy(mqFilesystem **fs);
-bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *pathname);
+mqFilesystem *mq_filesystem_interface_create(void);
+bool mq_filesystem_interface_initialize(mqFilesystem *fs, int fs_type);
+bool mq_filesystem_interface_set_root_uri(mqFilesystem *fs, char const *uri);
+bool mq_filesystem_interface_destroy(mqFilesystem **fs);
 
 //=== file functions ========================================================//
 
-bool mq_filesystem_create_file(mqFilesystem *fs,
-        char const *path, bool is_dir);
+bool mq_filesystem_file_create(mqFilesystem *fs,
+        char const *virt_pathname, bool is_dir);
 
-bool mq_filesystem_delete_file(mqFilesystem *fs,
-        char const *path);
+bool mq_filesystem_file_delete(mqFilesystem *fs,
+        char const *virt_pathname);
 
-bool mq_filesystem_stat(mqFilesystem *fs,
-        char const *path, struct stat *statbuf);
+bool mq_filesystem_file_stat(mqFilesystem *fs,
+        char const *virt_pathname, struct stat *statbuf);
 
-mqFilesystemFile *mq_filesystem_open(mqFilesystem *fs,
-        char const *path, char const *mode);
+mqFilesystemFile *mq_filesystem_file_open(mqFilesystem *fs,
+        char const *virt_pathname, char const *mode);
 
-u32 mq_filesystem_read(mqFilesystem *fs,
+u32 mq_filesystem_file_read(mqFilesystem *fs,
         mqFilesystemFile *file, void *buf, u32 count);
 
-u32 mq_filesystem_write(mqFilesystem *fs,
+u32 mq_filesystem_file_write(mqFilesystem *fs,
         mqFilesystemFile *file, void *buf, u32 count);
 
-bool mq_filesystem_lseek(mqFilesystem *fs,
+bool mq_filesystem_file_lseek(mqFilesystem *fs,
         mqFilesystemFile *file, int offset, int whence);
 
-bool mq_filesystem_fstat(mqFilesystem *fs,
+bool mq_filesystem_file_fstat(mqFilesystem *fs,
         mqFilesystemFile *file, struct stat *statbuf);
 
-bool mq_filesystem_close(mqFilesystem *fs,
+bool mq_filesystem_file_close(mqFilesystem *fs,
         mqFilesystemFile **file);
 
 //=== search functions ======================================================//
@@ -89,7 +89,6 @@ bool mq_filesystem_search_next(mqFilesystem *fs,
 
 bool mq_filesystem_search_stat(mqFilesystem *fs,
         mqFilesystemSearch *search, struct stat *statbuf);
-
 
 bool mq_filesystem_search_close(mqFilesystem *fs,
         mqFilesystemSearch **search);
