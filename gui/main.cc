@@ -198,6 +198,9 @@ static void open_program(std::string const &path, void *data, long size)
     else {
         azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
     }
+
+    //todo: move me?
+    mq_machine_setFilesystemRoot(emu0->mach, gui.programFolderPrefix.c_str());
 }
 
 static int update(void)
@@ -366,6 +369,10 @@ void update_machine(
         mq_machine_setCyclesPending(mach, *c);
     if(auto c = gui.actions.machineSetPendingFrames)
         mq_machine_setFramesPending(mach, *c);
+
+    /* Intentional re-check for folder prefix switch request */
+    if(gui.actions.programFolderPrefixUpdate)
+        mq_machine_setFilesystemRoot(mach, gui.programFolderPrefix.c_str());
 
     /* Intentional re-check */
     if(gui.programFileInfo.data) {

@@ -6,6 +6,7 @@
 
 #include <mq/system/casiowin.h>
 #include <mq/system/heap.h>
+#include <mq/system/bfile.h>
 #include <mq/modules/mmu.h>
 #include <mq/modules/rtc.h>
 #include <mq/modules/intc.h>
@@ -660,26 +661,48 @@ static void syscall_fx(
         return;
 
     case 0x042c: /* Bfile_OpenFile() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_OpenFile(mach, cpu->r[4], cpu->r[5]);
         return;
     case 0x042d: /* Bfile_CloseFile() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_CloseFile(mach, cpu->r[4]);
+        return;
+    case 0x042f: /* Bfile_GetFileSize_OS() */
+        cpu->r[0] = mq_bfile_GetFileSize(mach, cpu->r[4]);
+        return;
+    case 0x0431: /* Bfile_SeekFile_OS() */
+        cpu->r[0] = mq_bfile_SeekFile(mach, cpu->r[4], cpu->r[5]);
         return;
     case 0x0432: /* Bfile_ReadFile() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_ReadFile(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]);
         return;
     case 0x0434: /* Bfile_CreateEntry() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_CreateEntry(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6]);
         return;
     case 0x0435: /* Bfile_WriteFile() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_WriteFile(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6]);
         return;
+    // case 0x0438: /* Bfile_RenameEntry() */
+    //     cpu->r[0] = mq_bfile_RenameEntry(mach,
+    //             cpu->r[4], cpu->r[5]);
+    //     return;
     case 0x0439: /* Bfile_DeleteEntry() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_DeleteEntry(mach, cpu->r[4]);
         return;
     case 0x043b: /* Bfile_FindFirst */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_FindFirst(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]);
         return;
+    case 0x043c: /* Bfile_FindNext() */
+        cpu->r[0] = mq_bfile_FindNext(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6]);
+        return;
+    case 0x043d: /* Bfile_FindClose() */
+        cpu->r[0] = mq_bfile_FindClose(mach, cpu->r[4]);
+        return;
+
 
     case 0x0494: /* SetQuitHandler() */
         // TODO: SetQuitHandler() syscall (for saves)
@@ -895,26 +918,53 @@ static void syscall_cg(
         return;
 
     case 0x1da3: /* Bfile_OpenFile() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_OpenFile(mach, cpu->r[4], cpu->r[5]);
         return;
     case 0x1da4: /* Bfile_CloseFile() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_CloseFile(mach, cpu->r[4]);
         return;
+    case 0x1da6: /* Bfile_GetFileSize_OS() */
+        cpu->r[0] = mq_bfile_GetFileSize(mach, cpu->r[4]);
+        return;
+    case 0x1da7: /* Bfile_GetFileInfo() */
+        cpu->r[0] = mq_bfile_GetFileInfo(mach, cpu->r[4], cpu->r[5]);
+        return;
+    case 0x1da9: /* Bfile_SeekFile_OS() */
+        cpu->r[0] = mq_bfile_SeekFile(mach, cpu->r[4], cpu->r[5]);
+        return;
+    // case 0x1dab: /* Bfile_FilePos() */
+    //     cpu->r[0] = mq_bfile_GetFilePos(mach, cpu->r[4]);
+    //     return;
+    case 0x1dac: /* Bfile_ReadFile_OS() */
+        cpu->r[0] = mq_bfile_ReadFile(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]);
+        return;
+    case 0x01dae: /* Bfile_CreateEntry() */
+        cpu->r[0] = mq_bfile_CreateEntry(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6]);
+        return;
+    case 0x1daf: /* Bfile_WriteFile_OS() */
+        cpu->r[0] = mq_bfile_WriteFile(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6]);
+        return;
+    // case 0x1db3: /* Bfile_RenameEntry() */
+    //     cpu->r[0] = mq_bfile_RenameEntry(mach,
+    //             cpu->r[4], cpu->r[5]);
+    //     return;
     case 0x1db4: /* Bfile_DeleteEntry() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_DeleteEntry(mach, cpu->r[4]);
         return;
     case 0x1db6: /* Bfile_FindFirst_FAT() */
     case 0x1db7: /* Bfile_FindFirst() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_FindFirst(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6], cpu->r[7]);
+        return;
+    case 0x1db8: /* Bfile_FindNext() */
+        cpu->r[0] = mq_bfile_FindNext(mach,
+                cpu->r[4], cpu->r[5], cpu->r[6]);
         return;
     case 0x1dba: /* Bfile_FindClose() */
-        cpu->r[0] = -1;
-        return;
-    case 0x01dae: /* Bfile_CreateEntry() */
-        cpu->r[0] = -1;
-        return;
-    case 0x01daf: /* Bfile_WriteFIle() */
-        cpu->r[0] = -1;
+        cpu->r[0] = mq_bfile_FindClose(mach, cpu->r[4]);
         return;
 
     case 0x1dd0: { /* memcpy() */
