@@ -17,57 +17,51 @@
 static bool _filesystem_gen_phys_pathname(mqFilesystem *fs,
         char *output, char const *pathname, size_t n)
 {
-    if(!fs) {
-        mq_log(MQ_LOG_ERROR, "_fs_gen_phys_patname: internal error");
-        return false;
-    }
     if(!fs->root_uri) {
         mq_log(MQ_LOG_ERROR, "_fs_gen_phys_patname: no root URI");
         return false;
     }
-    if(n < fs->root_uri_len) {
-        mq_log(MQ_LOG_ERROR, "_fs_gen_phys_patname: too short buffer");
+    int rc = snprintf(output, n, "%s%s", fs->root_uri, pathname);
+
+    if(rc >= (int)n) {
+        mq_log(MQ_LOG_ERROR, "_fs_gen_phys_patname: buffer too short");
         return false;
     }
-    strncpy(&output[0], fs->root_uri, n);
-    strncat(&output[fs->root_uri_len], pathname, n - fs->root_uri_len);
+
     return true;
 }
 
 static bool _filesystem_gen_virt_pathname(mqFilesystem *fs,
         char *output, char const *pathname, size_t n)
 {
-    if(!fs) {
-        mq_log(MQ_LOG_ERROR, "_fs_gen_virt_patname: internal error");
+    if(!fs->root_uri) {
+        mq_log(MQ_LOG_ERROR, "_fs_gen_virt_pathname: no root URI");
         return false;
     }
-    if(!fs->root_uri) {
-        mq_log(MQ_LOG_ERROR, "_fs_gen_virt_patname: no root URI");
+    if(memcmp(pathname, fs->root_uri, fs->root_uri_len)) {
+        mq_log(MQ_LOG_ERROR, "_fs_gen_virt_pathname: '%s' doesn't have "
+            "expected prefix '%s'", pathname, fs->root_uri);
         return false;
     }
     char const*source = &(pathname[fs->root_uri_len]);
     if(strlen(source) >= n) {
-        mq_log(MQ_LOG_ERROR, "_fs_gen_virt_patname: too short buffer");
+        mq_log(MQ_LOG_ERROR, "_fs_gen_virt_pathname: too short buffer");
         return false;
     }
-    mq_log(MQ_LOG_DEBUG, "_fs_gen_virt_patname: generated -> %s", source);
+    mq_log(MQ_LOG_DEBUG, "_fs_gen_virt_pathname: generated -> %s", source);
     strcpy(output, source);
     return true;
 }
 
 //=== system interface ======================================================//
 
-mqFilesystem *mq_filesystem_interface_create(void)
+mqFilesystem *mq_filesystem_create(void)
 {
-    mqFilesystem *fs = (mqFilesystem *)calloc(1, sizeof(mqFilesystem));
-    if (!fs) {
-        mq_log(MQ_LOG_ERROR, "fs_interface_create: calloc() fail");
-        return NULL;
-    }
+    mqFilesystem *fs = calloc(1, sizeof(mqFilesystem));
     return fs;
 }
 
-bool mq_filesystem_interface_initialize(mqFilesystem *fs, int fs_type)
+bool mq_filesystem_initialize(mqFilesystem *fs, int fs_type)
 {
     if(!fs) {
         mq_log(MQ_LOG_ERROR, "fs_interface_destroy: broken arguments");
@@ -78,35 +72,27 @@ bool mq_filesystem_interface_initialize(mqFilesystem *fs, int fs_type)
     return true;
 }
 
-bool mq_filesystem_interface_destroy(mqFilesystem **fs)
+void mq_filesystem_destroy(mqFilesystem *fs)
 {
-    if(!fs || *fs == NULL) {
-        mq_log(MQ_LOG_ERROR, "fs_interface_destroy: broken arguments");
-        return false;
-    }
-    free(*fs);
-    *fs = NULL;
-    return true;
+    free(fs);
 }
 
-bool mq_filesystem_interface_set_root_uri(mqFilesystem *fs,
+bool mq_filesystem_set_root_uri(mqFilesystem *fs,
         char const *pathname)
 {
-    if(!fs || !pathname) {
-        mq_log(MQ_LOG_ERROR, "fs_interface_set_uri: broken arguments");
+    if(!pathname)
         return false;
-    }
     if(fs->root_uri)
         free(fs->root_uri);
-    fs->root_uri_len = strlen(pathname) + 1;
-    fs->root_uri = (char*)calloc(1, fs->root_uri_len + 1);
-    if(!fs->root_uri) {
+
+    int rc = asprintf(&fs->root_uri, "%s/", pathname);
+    if(rc < 0) {
         mq_log(MQ_LOG_ERROR, "fs_interface_set_uri: unable to strdup()");
-        fs->root_uri_len = 0;
+        fs->root_uri = NULL;
         return false;
     }
-    strcpy(fs->root_uri, pathname);
-    strcat(fs->root_uri, "/");
+
+    fs->root_uri_len = rc;
     mq_log(MQ_LOG_DEBUG,
             "fs_interface_set_root_uri: switch root for %s", fs->root_uri);
     return true;
@@ -121,10 +107,9 @@ bool mq_filesystem_file_create(mqFilesystem *fs,
     struct stat st;
     int ret;
 
-    if(!fs || !virt_pathname) {
-        mq_log(MQ_LOG_ERROR, "fs_file_create: broken arguments");
+    if(!virt_pathname)
         return false;
-    }
+
     if(!_filesystem_gen_phys_pathname(fs, phys_pathname, virt_pathname, 1024))
         return false;
     if(stat(phys_pathname, &st) != -1) {
@@ -137,8 +122,9 @@ bool mq_filesystem_file_create(mqFilesystem *fs,
     } else {
         ret = creat(phys_pathname, 0644);
     }
+    // TODO: Check EEXIST after the call instead of stat() before
     if(ret < 0) {
-        mq_log(MQ_LOG_ERROR, "fs_file_create: unable mkdir() or creat()");
+        mq_log(MQ_LOG_ERROR, "fs_file_create: unable to mkdir() or creat()");
         return false;
     }
     return true;
@@ -149,10 +135,8 @@ bool mq_filesystem_file_delete(mqFilesystem *fs,
 {
     char phys_pathname[1024];
 
-    if(!fs || !virt_pathname) {
-        mq_log(MQ_LOG_ERROR, "fs_file_delete: broken arguments");
+    if(!virt_pathname)
         return false;
-    }
     if(!_filesystem_gen_phys_pathname(fs, phys_pathname, virt_pathname, 1024))
         return false;
     if(remove(phys_pathname) < 0) {
@@ -167,10 +151,8 @@ bool mq_filesystem_file_stat(mqFilesystem *fs,
 {
     char phys_pathname[1024];
 
-    if(!fs || !virt_pathname || !statbuf) {
-        mq_log(MQ_LOG_ERROR, "fs_file_stat: broken arguments");
+    if(!virt_pathname || !statbuf)
         return false;
-    }
     if(!_filesystem_gen_phys_pathname(fs, phys_pathname, virt_pathname, 1024))
         return false;
     if(stat(phys_pathname, statbuf) < 0) {
@@ -185,10 +167,8 @@ mqFilesystemFile *mq_filesystem_file_open(mqFilesystem *fs,
 {
     char phys_pathname[1024];
 
-    if(!fs || !virt_pathname || !mode) {
-        mq_log(MQ_LOG_ERROR, "fs_file_open: broken arguments");
+    if(!virt_pathname || !mode)
         return NULL;
-    }
     if(!_filesystem_gen_phys_pathname(fs, phys_pathname, virt_pathname, 1024))
         return NULL;
     FILE *fp = fopen(phys_pathname, mode);
@@ -202,10 +182,9 @@ mqFilesystemFile *mq_filesystem_file_open(mqFilesystem *fs,
 u32 mq_filesystem_file_read(mqFilesystem *fs,
         mqFilesystemFile *file, void *buff, u32 count)
 {
-    if(!fs || !file || !buff) {
-        mq_log(MQ_LOG_ERROR, "fs_file_read: broken arguments");
+    (void)fs;
+    if(!file || !buff)
         return 0;
-    }
     int rc = fread(buff, sizeof(u8), count, file);
     if(rc <= 0) {
         mq_log(MQ_LOG_ERROR, "fs_file_read: unable to fread()");
@@ -217,10 +196,9 @@ u32 mq_filesystem_file_read(mqFilesystem *fs,
 u32 mq_filesystem_file_write(mqFilesystem *fs,
         mqFilesystemFile *file, void *buff, u32 count)
 {
-    if(!fs || !file || !buff) {
-        mq_log(MQ_LOG_ERROR, "fs_file_write: broken arguments");
+    (void)fs;
+    if(!file || !buff)
         return -1;
-    }
     int rc = fwrite(buff, sizeof(u8), count, file);
     if(rc <= 0) {
         mq_log(MQ_LOG_ERROR, "fs_file_write: unable to fwrite()");
@@ -237,10 +215,9 @@ u32 mq_filesystem_file_write(mqFilesystem *fs,
 bool mq_filesystem_file_lseek(mqFilesystem *fs,
         mqFilesystemFile *file, int offset, int whence)
 {
-    if(!fs || !file) {
-        mq_log(MQ_LOG_ERROR, "fs_file_lseek: broken arguments");
+    (void)fs;
+    if(!file)
         return false;
-    }
     if(fseek(file, offset, whence) < 0) {
         mq_log(MQ_LOG_ERROR, "fs_file_lseek: unable to fseek()");
         return false;
@@ -251,10 +228,9 @@ bool mq_filesystem_file_lseek(mqFilesystem *fs,
 bool mq_filesystem_file_fstat(mqFilesystem *fs,
         mqFilesystemFile *file, struct stat *statbuf)
 {
-    if(!fs || !file || !statbuf) {
-        mq_log(MQ_LOG_ERROR, "fs_file_fstat: broken arguments");
+    (void)fs;
+    if(!file || !statbuf)
         return false;
-    }
     int fd = fileno(file);
     if(fd < 0) {
         mq_log(MQ_LOG_ERROR, "fs_file_fstat: unable to fileno()");
@@ -267,19 +243,10 @@ bool mq_filesystem_file_fstat(mqFilesystem *fs,
     return true;
 }
 
-bool mq_filesystem_file_close(mqFilesystem *fs,
-        mqFilesystemFile **file)
+void mq_filesystem_file_close(mqFilesystem *fs, mqFilesystemFile *file)
 {
-    if(!fs || !file || (*file == NULL)) {
-        mq_log(MQ_LOG_ERROR, "fs_file_close: broken arguments");
-        return false;
-    }
-    if (fclose(*file) != 0) {
-        mq_log(MQ_LOG_ERROR, "fs_file_close: unable to fclose()");
-        return false;
-    }
-    *file = NULL;
-    return true;
+    (void)fs;
+    fclose(file);
 }
 
 //=== search interface ======================================================//
@@ -287,10 +254,9 @@ bool mq_filesystem_file_close(mqFilesystem *fs,
 bool mq_filesystem_search_stat(mqFilesystem *fs,
         mqFilesystemSearch *search, struct stat *statinfo)
 {
-    if(!fs || !search || !statinfo) {
-        mq_log(MQ_LOG_ERROR, "fs_search_stat: broken arguments");
+    if(!statinfo)
         return false;
-    }
+
     if(search->pos < 0 || search->pos >= (int)search->glob.gl_pathc) {
         mq_log(MQ_LOG_ERROR, "fs_search_stat: invalid pos");
         return false;
@@ -320,23 +286,23 @@ mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
         mq_log(MQ_LOG_ERROR, "fs_search_open: unable to calloc()");
         return NULL;
     }
+    // TODO: glob probably doesn't return . and .. when iterating over a folder
     if(glob(phys_pattern, 0, NULL, &(search->glob)) == GLOB_NOMATCH) {
         mq_log(MQ_LOG_ERROR, "fs_search_open: unable to glob()");
         free(search);
         return NULL;
     }
     search->pos = -1;
+    // TODO: Make it start at 0 like any self-respecting array index
     return search;
 }
 
 bool mq_filesystem_search_next(mqFilesystem *fs,
         mqFilesystemSearch *search, char *buffer, size_t n)
 {
-    if(!fs || !search || !buffer) {
-        mq_log(MQ_LOG_ERROR, "fs_search_next: broken arguments");
+    if(!buffer)
         return false;
-    }
-    if(search->pos >= (int)search->glob.gl_pathc) {
+    if(search->pos + 1 >= (int)search->glob.gl_pathc) {
         mq_log(MQ_LOG_ERROR, "fs_search_next: invalid pos");
         return false;
     }
@@ -350,14 +316,8 @@ bool mq_filesystem_search_next(mqFilesystem *fs,
     return true;
 }
 
-bool mq_filesystem_search_close(mqFilesystem *fs,
-        mqFilesystemSearch **search)
+void mq_filesystem_search_close(mqFilesystem *fs, mqFilesystemSearch *search)
 {
-    if(!fs || !search || (*search == NULL)) {
-        mq_log(MQ_LOG_ERROR, "fs_search_close: broken arguments");
-        return false;
-    }
-    globfree(&((*search)->glob));
-    *search = NULL;
-    return true;
+    (void)fs;
+    globfree(&search->glob);
 }

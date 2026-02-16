@@ -74,11 +74,11 @@ void mq_machine_reset(mqMachine *mach)
     mach->keyboard = NULL;
 
     if(mach->fs)
-        mq_filesystem_interface_destroy(&mach->fs);
+        mq_filesystem_destroy(mach->fs);
     mach->fs = NULL;
 
     if(mach->bfile)
-        mq_bfile_interface_destroy(&mach->bfile);
+        mq_bfile_destroy(mach->bfile);
     mach->bfile = NULL;
 }
 
@@ -269,7 +269,6 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
     mach->processFrequency = 64;
     mach->processTimer = mach->processFrequency;
 
-
     if(hardwareKind == MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX) {
         mq_cpu_setup(&mach->cpu, mach->memory);
         mq_mmu_setup(mach);
@@ -282,12 +281,11 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        mach->fs = mq_filesystem_interface_create();
-        mq_filesystem_interface_initialize(mach->fs,
+        mach->fs = mq_filesystem_create();
+        mq_filesystem_initialize(mach->fs,
                 MQ_FILESYSTEM_TYPE_FUGUE_FAT12);
 
-        mach->bfile = mq_bfile_interface_create();
-        mq_bfile_interface_initialize(mach->bfile, 8);
+        mach->bfile = mq_bfile_create(8);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
 
@@ -311,12 +309,11 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        mach->fs = mq_filesystem_interface_create();
-        mq_filesystem_interface_initialize(mach->fs,
+        mach->fs = mq_filesystem_create();
+        mq_filesystem_initialize(mach->fs,
                 MQ_FILESYSTEM_TYPE_FUGUE_FAT16);
 
-        mach->bfile = mq_bfile_interface_create();
-        mq_bfile_interface_initialize(mach->bfile, 8);
+        mach->bfile = mq_bfile_create(8);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
 
@@ -486,5 +483,5 @@ void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
 
 bool mq_machine_setFilesystemRoot(mqMachine *mach, char const *pathname)
 {
-    return mq_filesystem_interface_set_root_uri(mach->fs, pathname);
+    return mq_filesystem_set_root_uri(mach->fs, pathname);
 }

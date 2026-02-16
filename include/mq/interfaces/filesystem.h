@@ -45,10 +45,10 @@ enum {
     //MQ_FILESYSTEM_TYPE_CASIOWIN,
 };
 
-mqFilesystem *mq_filesystem_interface_create(void);
-bool mq_filesystem_interface_initialize(mqFilesystem *fs, int fs_type);
-bool mq_filesystem_interface_set_root_uri(mqFilesystem *fs, char const *uri);
-bool mq_filesystem_interface_destroy(mqFilesystem **fs);
+mqFilesystem *mq_filesystem_create(void);
+bool mq_filesystem_initialize(mqFilesystem *fs, int fs_type);
+bool mq_filesystem_set_root_uri(mqFilesystem *fs, char const *uri);
+void mq_filesystem_destroy(mqFilesystem *fs);
 
 //=== file functions ========================================================//
 
@@ -64,9 +64,11 @@ bool mq_filesystem_file_stat(mqFilesystem *fs,
 mqFilesystemFile *mq_filesystem_file_open(mqFilesystem *fs,
         char const *virt_pathname, char const *mode);
 
+// TODO: Use POSIX API convention
 u32 mq_filesystem_file_read(mqFilesystem *fs,
         mqFilesystemFile *file, void *buf, u32 count);
 
+// TODO: Use POSIX API convention
 u32 mq_filesystem_file_write(mqFilesystem *fs,
         mqFilesystemFile *file, void *buf, u32 count);
 
@@ -76,22 +78,23 @@ bool mq_filesystem_file_lseek(mqFilesystem *fs,
 bool mq_filesystem_file_fstat(mqFilesystem *fs,
         mqFilesystemFile *file, struct stat *statbuf);
 
-bool mq_filesystem_file_close(mqFilesystem *fs,
-        mqFilesystemFile **file);
+void mq_filesystem_file_close(mqFilesystem *fs,
+        mqFilesystemFile *file);
 
 //=== search functions ======================================================//
 
 mqFilesystemSearch *mq_filesystem_search_open(mqFilesystem *fs,
         char const *pattern);
 
+// TODO: Merge next and stat
 bool mq_filesystem_search_next(mqFilesystem *fs,
         mqFilesystemSearch *search, char *buffer, size_t n);
 
 bool mq_filesystem_search_stat(mqFilesystem *fs,
         mqFilesystemSearch *search, struct stat *statbuf);
 
-bool mq_filesystem_search_close(mqFilesystem *fs,
-        mqFilesystemSearch **search);
+void mq_filesystem_search_close(mqFilesystem *fs,
+        mqFilesystemSearch *search);
 
 MQ_END_DEFS
 #endif /* MQ_INTERFACES_FILESYSTEM_H */

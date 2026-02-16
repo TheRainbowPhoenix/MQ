@@ -371,7 +371,7 @@ void update_machine(
         mq_machine_setFramesPending(mach, *c);
 
     /* Intentional re-check for folder prefix switch request */
-    if(gui.actions.programFolderPrefixUpdate)
+    if(gui.actions.programFolderPrefixUpdate && mach->fs)
         mq_machine_setFilesystemRoot(mach, gui.programFolderPrefix.c_str());
 
     /* Intentional re-check */

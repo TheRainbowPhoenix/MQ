@@ -339,32 +339,34 @@ bool mq_memory_copyBuffersInPage(
 
 //=== Memory access functions ================================================//
 
-/* Inlined functions for accessing raw buffers. */
+/* Inlined functions for accessing raw buffers. This can be used both with
+   original pointers from mq_memory_getBuffer() as well as offset pointers
+   obtained by mq_memory_access(). */
 
 MQ_INLINE u8 mq_buffer_read8(void const *buffer, u32 offset)
 {
-   return *((u8 *)buffer + (offset ^ 3));
+   return *(u8 *)(((uintptr_t)buffer + offset) ^ 3);
 }
 MQ_INLINE u16 mq_buffer_read16(void const *buffer, u32 offset)
 {
-   return *(u16 *)((u8 *)buffer + (offset ^ 2));
+   return *(u16 *)(((uintptr_t)buffer + offset) ^ 2);
 }
 MQ_INLINE u32 mq_buffer_read32(void const *buffer, u32 offset)
 {
-   return *(u32 *)((u8 *)buffer + offset);
+   return *(u32 *)((uintptr_t)buffer + offset);
 }
 
 MQ_INLINE void mq_buffer_write8(void const *buffer, u32 offset, u8 value)
 {
-   *((u8 *)buffer + (offset ^ 3)) = value;
+   *(u8 *)(((uintptr_t)buffer + offset) ^ 3) = value;
 }
 MQ_INLINE void mq_buffer_write16(void const *buffer, u32 offset, u16 value)
 {
-   *(u16 *)((u8 *)buffer + (offset ^ 2)) = value;
+   *(u16 *)(((uintptr_t)buffer + offset) ^ 2) = value;
 }
 MQ_INLINE void mq_buffer_write32(void const *buffer, u32 offset, u32 value)
 {
-   *(u32 *)((u8 *)buffer + offset) = value;
+   *(u32 *)((uintptr_t)buffer + offset) = value;
 }
 
 /* Main memory access functions. */

@@ -18,13 +18,12 @@ MQ_START_DEFS
 struct mqBfile {
     mqFilesystemFile **file_dtable;
     mqFilesystemSearch **search_dtable;
-    int dtable_nb_slot;
+    uint dtable_nb_slot;
 };
 typedef struct mqBfile mqBfile;
 
-mqBfile *mq_bfile_interface_create(void);
-bool mq_bfile_interface_initialize(mqBfile *bfile, int fdtable_nb_slot);
-bool mq_bfile_interface_destroy(mqBfile **bfile);
+mqBfile *mq_bfile_create(int fdtable_nb_slot);
+void mq_bfile_destroy(mqBfile *bfile);
 
 //=== BFile types ===========================================================//
 
