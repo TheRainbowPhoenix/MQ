@@ -16,7 +16,7 @@ MQ_START_DEFS
 //=== system interface ======================================================//
 
 struct mqBfile {
-    mqFilesystemFile **file_dtable;
+    int *file_dtable;
     mqFilesystemSearch **search_dtable;
     uint dtable_nb_slot;
 };
@@ -53,6 +53,52 @@ enum {
     BFILE_TYPE_ARCHIVED   = 0x0041,
 };
 
+enum {
+    BFILE_ERROR_ENTRYNOTFOUND     = -1,
+    BFILE_ERROR_ILLEGALPARAM      = -2,
+    BFILE_ERROR_ILLEGALPATH       = -3,
+    BFILE_ERROR_DEVICEFULL        = -4,
+    BFILE_ERROR_ILLEGALDEVICE     = -5,
+    BFILE_ERROR_ILLEGALFILESYSTEM = -6,
+    BFILE_ERROR_ILLEGALSYSTEM     = -7,
+    BFILE_ERROR_ACCESSDENIED      = -8,
+    BFILE_ERROR_ALREADYLOCKED     = -9,
+    BFILE_ERROR_ILLEGALTASKID     = -10,
+    BFILE_ERROR_PERMISSIONERROR   = -11,
+    BFILE_ERROR_ENTRYFULL         = -12,
+    BFILE_ERROR_ALREADYEXISTS     = -13,
+    BFILE_ERROR_READONLYFILE      = -14,
+    BFILE_ERROR_ILLEGALFILTER     = -15,
+    BFILE_ERROR_ENUMERATEEND      = -16,
+    BFILE_ERROR_DEVICECHANGED     = -17,
+    BFILE_ERROR_NOTRECORDFILE     = -18, // NOT USED
+    BFILE_ERROR_ILLEGALSEEKPOS    = -19,
+    BFILE_ERROR_ILLEGALBLOCKFILE  = -20,
+    BFILE_ERROR_NOSUCHDEVICE      = -21, // NOT USED
+    BFILE_ERROR_ENDOFFILE         = -22, // NOT USED
+    BFILE_ERROR_NOTMOUNTDEVICE    = -23,
+    BFILE_ERROR_NOTUNMOUNTDEVICE  = -24,
+    BFILE_ERROR_CANNOTLOCKSYSTEM  = -25,
+    BFILE_ERROR_RECORDNOTFOUND    = -26,
+    BFILE_ERROR_NOTDUALRECORDFILE = -27, // NOT USED
+    BFILE_ERROR_NOALARMSUPPORT    = -28,
+    BFILE_ERROR_CANNOTADDALARM    = -29,
+    BFILE_ERROR_FILEFINDUSED      = -30,
+    BFILE_ERROR_DEVICEERROR       = -31,
+    BFILE_ERROR_SYSTEMNOTLOCKED   = -32,
+    BFILE_ERROR_DEVICENOTFOUND    = -33,
+    BFILE_ERROR_FILETYPEMISMATCH  = -34,
+    BFILE_ERROR_NOTEMPTY          = -35,
+    BFILE_ERROR_BROKENSYSTEMDATA  = -36,
+    BFILE_ERROR_MEDIANOTREADY     = -37,
+    BFILE_ERROR_TOOMANYALARMS     = -38,
+    BFILE_ERROR_SAMEALARMEXISTS   = -39,
+    BFILE_ERROR_ACCESSSWAPAREA    = -40,
+    BFILE_ERROR_MULTIMEDIACARD    = -41,
+    BFILE_ERROR_COPYPROTECTION    = -42,
+    BFILE_ERROR_ILLEGALFILEDATA   = -43,
+};
+
 //=== storage interface =====================================================//
 
 int mq_bfile_CreateEntry(mqMachine *mach,
@@ -67,15 +113,17 @@ int mq_bfile_GetFileInfo(mqMachine *mach,
 int mq_bfile_OpenFile(mqMachine *mach,
         u32 pathAddr, int mode);
 int mq_bfile_SeekFile(mqMachine *mach,
-        int fd, int pos);
+        int handle, int pos);
 int mq_bfile_ReadFile(mqMachine *mach,
-        int fd, u32 bufAddr, int size, int readpos);
+        int handle, u32 bufAddr, int size, int readpos);
 int mq_bfile_WriteFile(mqMachine *mach,
-        int fd, u32 bufAddr, int size);
+        int handle, u32 bufAddr, int size);
 int mq_bfile_CloseFile(mqMachine *mach,
-        int fd);
+        int handle);
 int mq_bfile_GetFileSize(mqMachine *mach,
-        int fd);
+        int handle);
+int mq_bfile_GetFilePos(mqMachine *mach,
+        int handle);
 
 //=== search interface ======================================================//
 

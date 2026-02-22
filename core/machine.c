@@ -281,10 +281,7 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        mach->fs = mq_filesystem_create();
-        mq_filesystem_initialize(mach->fs,
-                MQ_FILESYSTEM_TYPE_FUGUE_FAT12);
-
+        mach->fs = mq_filesystem_posix_create(".");
         mach->bfile = mq_bfile_create(8);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
@@ -309,10 +306,7 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
         mach->keyboard = mq_keyboard_create();
         mq_keyboard_initialize(mach->keyboard, MQ_KEYBOARD_STANDARD_LAYOUT_FX);
 
-        mach->fs = mq_filesystem_create();
-        mq_filesystem_initialize(mach->fs,
-                MQ_FILESYSTEM_TYPE_FUGUE_FAT16);
-
+        mach->fs = mq_filesystem_posix_create(".");
         mach->bfile = mq_bfile_create(8);
 
         mq_machine_setupPeripheralModules_sh7305(mach);
@@ -483,5 +477,5 @@ void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
 
 bool mq_machine_setFilesystemRoot(mqMachine *mach, char const *pathname)
 {
-    return mq_filesystem_set_root_uri(mach->fs, pathname);
+    return mq_filesystem_posix_setRoot(mach->fs, pathname);
 }
