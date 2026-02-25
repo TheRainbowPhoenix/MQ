@@ -49,11 +49,11 @@ void mq_machine_reset(mqMachine *mach)
     mach->initialized = false;
     mach->stuck = false;
 
-    mach->internallyPaused = false;
     mq_timer_reset(&mach->internalPauseTimer, 0);
     mach->internalPauseTicksRemaining = 0;
 
-    mach->internallyBlocked = false;
+    mach->breakFlag = false;
+    mach->cpuState = MQ_MACHINE_CPU_RUNNING;
 
     if(mach->modules) {
         mq_callhook_module_cleanup(mach);
@@ -141,7 +141,7 @@ void mq_machine_setStuck(mqMachine *mach)
 
 void mq_machine_breakExecution(mqMachine *mach)
 {
-    mach->internallyBlocked = true;
+    mach->breakFlag = true;
     if(mach->hasBreakJumpBuffer)
         longjmp(mach->breakJumpBuffer, 1);
 }
@@ -317,6 +317,8 @@ void mq_machine_setupHardware(mqMachine *mach, int hardwareKind)
 
     mach->initialized = true;
     mach->stuck = false;
+    mach->breakFlag = false;
+    mach->cpuState = MQ_MACHINE_CPU_RUNNING;
 }
 
 void mq_machine_initialize(mqMachine *mach, int initializeKind)
@@ -346,9 +348,9 @@ bool mq_machine_load_g3a(mqMachine *mach, void *data, long size)
 }
 
 #if MQ_CONTROLLER_SETJMP
-# define CHECK_BLOCKED() (void)0
+# define CHECK_BREAK() (void)0
 #else
-# define CHECK_BLOCKED() if(mach->internallyBlocked) goto endRun
+# define CHECK_BREAK() if(mach->breakFlag) goto endRun
 #endif
 
 int mq_machine_cycle(mqMachine *mach, int cycles)
@@ -365,7 +367,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
     // TODO[machine]: Host system sleep for long high-level internal pauses
     // TODO[machine]: Not counting cycles during sleep hampers determinism
-    if(mach->internallyPaused) {
+    if(mach->cpuState == MQ_MACHINE_CPU_TIMED_SLEEP) {
         int ticks = 0;
         /* Make sure we spend at least *some* time here, otherwise the hot loop
            alternates between here and the controller and timers are frozen
@@ -375,10 +377,9 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
         /* Stop the internal timer when reaching the end of the sleep period */
         if((mach->internalPauseTicksRemaining -= ticks) <= 0) {
-            mach->internallyPaused = false;
             mq_timer_reset(&mach->internalPauseTimer, 0);
             mach->internalPauseTicksRemaining = 0;
-            mach->internallyBlocked = false;
+            mach->cpuState = MQ_MACHINE_CPU_RUNNING;
         }
         /* Otherwise, run background processes and leave */
         else {
@@ -389,12 +390,13 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     }
 
     /* While blocked, just run background processes */
-    while(mach->internallyBlocked && cyclesRemaining >= mach->processTimer) {
+    while(mach->cpuState != MQ_MACHINE_CPU_RUNNING
+          && cyclesRemaining >= mach->processTimer) {
         cyclesRemaining -= mach->processTimer;
         mach->processTimer = 0;
         mq_machine_runProcesses(mach, mach->processFrequency);
     }
-    if(mach->internallyBlocked)
+    if(mach->cpuState != MQ_MACHINE_CPU_RUNNING)
         goto endRun;
 
     /* Unroll a bit for speed, but only if the process timers are aligned,
@@ -403,13 +405,13 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
     if(mach->processTimer % 4 == 0 && mach->processFrequency % 4 == 0) {
         while(cyclesRemaining > 4) {
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_BLOCKED();
+            CHECK_BREAK();
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_BLOCKED();
+            CHECK_BREAK();
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_BLOCKED();
+            CHECK_BREAK();
             mq_cpu_cycle(mach, &mach->cpu);
-            CHECK_BLOCKED();
+            CHECK_BREAK();
 
             if((mach->processTimer -= 4) <= 0)
                 mq_machine_runProcesses(mach, mach->processFrequency);
@@ -424,7 +426,7 @@ int mq_machine_cycle(mqMachine *mach, int cycles)
 
     while(cyclesRemaining > 0) {
         mq_cpu_cycle(mach, &mach->cpu);
-        CHECK_BLOCKED();
+        CHECK_BREAK();
 
         if(--mach->processTimer == 0)
             mq_machine_runProcesses(mach, mach->processFrequency);
@@ -465,11 +467,11 @@ void mq_machine_internalPauseMilliseconds(mqMachine *mach, int delay_ms)
     if(delay_ms <= 0)
         return;
 
-    if(mach->internallyPaused)
+    if(mach->cpuState == MQ_MACHINE_CPU_TIMED_SLEEP)
         mq_log(MQ_LOG_ERROR, "paused machine (%d ms) pauses further (%d ms)?!",
         mach->internalPauseTicksRemaining, delay_ms);
 
-    mach->internallyPaused = true;
+    mach->cpuState = MQ_MACHINE_CPU_TIMED_SLEEP;
     mq_timer_reset(&mach->internalPauseTimer, 1000000 /* 1 ms */);
     mq_timer_start(&mach->internalPauseTimer);
     mach->internalPauseTicksRemaining = delay_ms;

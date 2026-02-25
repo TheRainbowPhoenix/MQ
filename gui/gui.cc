@@ -387,13 +387,13 @@ void ControlWindow::renderContents(mqMachine *omach)
 
     if(omach->stuck)
         ImGui::Text("Machine is stuck!");
-    else if(omach->internallyBlocked)
-        ImGui::Text("Machine is internally blocked");
-    else if(omach->internallyPaused)
-        ImGui::Text("Machine is paused for %d ms",
+    else if(omach->cpuState == MQ_MACHINE_CPU_HLE)
+        ImGui::Text("CPU is emulating a high-level routine");
+    else if(omach->cpuState == MQ_MACHINE_CPU_TIMED_SLEEP)
+        ImGui::Text("CPU is paused for %d ms",
             omach->internalPauseTicksRemaining);
     else
-        ImGui::Text("Machine is ready");
+        ImGui::Text("CPU is executing instructions");
 
     if(omach->cyclesPending > 0)
         ImGui::Text("Cycles pending: %d", omach->cyclesPending);

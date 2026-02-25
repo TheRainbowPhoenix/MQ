@@ -25,6 +25,17 @@ struct mqBfile;
    TODO: Provide background process hooks with more precising timing info */
 typedef void mq_process_t(struct mqMachine *mach, int cyclesElapsed);
 
+/* CPU running modes. */
+enum {
+   /* CPU is running normally alongside background processes. */
+   MQ_MACHINE_CPU_RUNNING,
+   /* CPU is sleeping for a set amount of time. Background processes run. */
+   MQ_MACHINE_CPU_TIMED_SLEEP,
+   /* CPU is occupied by a high-level emulation routine. This state will be
+      cleared explicitly by the code that handles said routine. */
+   MQ_MACHINE_CPU_HLE,
+};
+
 // TODO
 struct mqMachine
 {
@@ -53,26 +64,25 @@ struct mqMachine
     bool initialized;
     /* Machine is stuck and cannot execute any further. */
     bool stuck;
-    /* Jump buffer to jump to when the execution gets broken. This is used to
-       exit. The jump buffer may or may not
-       be present. */
+
+    /* Execution break flag. This flag is set when "chunked" emulation code
+       (like a mq_machine_cycle which runs for many cycles) wants to break out
+       of the loop early. Depending on the configuration and the location of
+       the break either this flag is checked regularly or a long jump is
+       performed to the break buffer. Break buffer is optional. */
+    bool breakFlag;
     bool hasBreakJumpBuffer;
     jmp_buf breakJumpBuffer;
 
-    /* Machine is internally paused for a limited time. This is a high-level
-       emulation of sleep functions. While internally paused, the machine still
-       runs background processes but no CPU instructions, and counts ticks from
-       `internalPauseTimer`. When `internalPauseTicksRemaining` reaches 0 the
-       internal pause ends automatically. */
-    // TODO: Host system sleeps for long high-level sleeps (... but timers?)
-    bool internallyPaused;
+    /* Current CPU state (MQ_MACHINE_CPU_*) */
+    int cpuState;
+
+    /* [MQ_MACHINE_CPU_TIMED_SLEEP]
+       Timer for how long the timed sleed lasts. Ticks are counted from the
+       `internalPauseTimer` and when `internalPauseTicksRemaining` reaches 0
+       the pause ends automatically. */
     mqTimer internalPauseTimer;
     int internalPauseTicksRemaining;
-
-    /* Machine is internally blocked for a high-level reason, e.g. a blocking
-       syscall, a timed pause, or stuck. This status does not expire
-       automatically. */
-    bool internallyBlocked;
 
     /* Number of cycles that the machine is scheduled to work for.
        mq_machine_cycle() runs for up to that amount and subtracts it. */
@@ -130,14 +140,14 @@ void mq_machine_setStuck(mqMachine *mach);
    instructions, either because the code is blocking (e.g. waiting for a
    background syscall to end) or because the machine is fully stuck.
 
-   This function sets the machine's internallyBlocked flag which breaks the
-   fetch-decode-execute loop in one of three ways:
+   This function sets the machine's brearFlag which breaks the fetch-decode-
+   execute loop in one of three ways:
 
    * If we're not executing instructions, there's nothing to break. Otherwise:
    * In builds where MQ_CONTROLLER_SETJMP is enabled, a break buffer is set up
      when executing instructions, and breaking longjmps back to it.
-   * In other builds, internallyBlocked is checked after each instruction and
-     control returns to the controller through a series of function returns.
+   * In other builds, breakFlag is checked after each instruction and control
+     returns to the controller through a series of function returns.
 
    Because in some builds this function doesn't return, it should always be
    used as a tail call. It can only be used in functions whose caller are fine

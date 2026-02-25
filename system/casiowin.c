@@ -1048,7 +1048,8 @@ static void mq_casiowin_process_bgsyscall(mqMachine *mach, int cyclesElapsed)
     if(done) {
         Casiowin->bgsyscall = NULL;
         mach->processes[processID_bgsyscall] = NULL;
-        mach->internallyBlocked = false;
+        /* Switch state back to running the CPU normally */
+        mach->cpuState = MQ_MACHINE_CPU_RUNNING;
     }
 }
 
@@ -1065,7 +1066,8 @@ bool mq_casiowin_runBackgroundSyscall(
 
     Casiowin->bgsyscall = bgsyscall;
     mach->processes[processID_bgsyscall] = mq_casiowin_process_bgsyscall;
-    mach->internallyBlocked = true;
+    /* Switch CPU mode to high-level emulation routine until syscall returns */
+    mach->cpuState = MQ_MACHINE_CPU_HLE;
     return true;
 }
 

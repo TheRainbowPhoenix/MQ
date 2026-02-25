@@ -13,13 +13,6 @@ static void thread_syncFPS(mqController *controller)
 {
     mqMachine *mach = controller->mach;
 
-    /* BIG HACK: This flag means way too many things. Unblock the machine if
-       it was blocked to signal a new frame, but not it there's a background
-       syscall running. */
-    mqCasiowin *Casiowin = mq_casiowin_get(controller->mach);
-    if(!(Casiowin && Casiowin->bgsyscall))
-        mach->internallyBlocked = false;
-
     u64 new_timeRef = mq_timer_getCurrentSystemTime();
     u64 new_timeDelta = 0;
     i64 new_timePause = 0;
@@ -92,6 +85,8 @@ static void *thread_run(void *userdata)
         mq_timer_freeze();
         TracyCZoneEnd(_ctxA);
 #endif
+
+        mach->breakFlag = false;
 
         /* There was an execution break and now the machine is blocked from
            running more instructions. It's either waiting for a background
