@@ -5,6 +5,7 @@
 //-- `---/101 ---------------------------------------------------------------//
 
 #include <mq/controller.h>
+#include <mq/system/casiowin.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,7 +13,12 @@ static void thread_syncFPS(mqController *controller)
 {
     mqMachine *mach = controller->mach;
 
-    mach->internallyBlocked = false;
+    /* BIG HACK: This flag means way too many things. Unblock the machine if
+       it was blocked to signal a new frame, but not it there's a background
+       syscall running. */
+    mqCasiowin *Casiowin = mq_casiowin_get(controller->mach);
+    if(!(Casiowin && Casiowin->bgsyscall))
+        mach->internallyBlocked = false;
 
     u64 new_timeRef = mq_timer_getCurrentSystemTime();
     u64 new_timeDelta = 0;
