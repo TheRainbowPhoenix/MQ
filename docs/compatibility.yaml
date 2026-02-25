@@ -2,7 +2,7 @@ addins:
   - name: gintctl
     author: Lephe
     status: usable
-    updated: 2025-08-21
+    updated: 2026-02-21
     model: fxcg50
     urls:
       - https://git.planet-casio.com/Lephenixnoir/gintctl
@@ -13,40 +13,40 @@ addins:
   - name: Gravity Duck
     author: PierrotLL
     status: complete
-    updated: 2025-09-03
+    updated: 2026-02-21
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1856-1-gravityduck-pierrotll-jeux-add-ins.html
     remarks:
-      - No save
+      - Graphical animation bug
       - Lots of NULL accesses; some are bugs from original program.
       - Syscall-based
 
   - name: Duet
     author: Yatis and Lephe
-    status: usable
-    updated: 2025-08-21
+    status: complete
+    updated: 2026-02-21
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4173-1-duet-yatis-lephe-jeux-add-ins.html
     remarks:
-      - No save
-      - more slow than circuit10's emulator.
+      - the emulator doesn't support screen rotation
+      - miss automatic arrows key bind with `KEY_0` and `KEY_7`
 
   - name: Mario Kart
     author: Circuit10
     status: complete
-    updated: 2025-08-21
+    updated: 2026-02-21
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/forums/topic17121-1-mario-kart-game-work-in-progress.html
     remarks:
-      - Playable
+      - Pefect?!
 
   - name: HorlogeSH4
     author: Lephe
     status: usable
-    updated: 2025-09-03
+    updated: 2026-02-21
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2606-1-horloge-sh4-lephenixnoir-utilitaires-add-ins.html
@@ -57,34 +57,33 @@ addins:
   - name: Cube Field
     author: PierrotLL
     status: complete
-    updated: 2025-09-03
+    updated: 2026-02-21
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1906-1-cubefield-pierrotll-jeux-add-ins.html
     remarks:
-      - Perfect
+      - Perfect?!
 
   - name: OutRun
     author: SlyvTT
-    updated: 2025-08-21
-    status: usable
+    updated: 2026-02-21
+    status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4225-1-outrun-for-graph-90e-slyvtt-jeux-actionsport.html
     remarks:
-      - seem work?
+      - Perfect?!
 
   - name: Demineur winXP
     author: Smashmaster
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: frame
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2377-last-demineur-winxp-smashmaster-jeux-add-ins.html
     remarks:
       - fxcg50 port
-      - Slow(?)
-      - First game work, but second crash
+      - First game work, but second game (first click) crash (double fault)
 
   - name: Sudoku solver
     author: Lancelot
@@ -99,18 +98,18 @@ addins:
 
   - name: Flappy bird color
     author: Lancelot
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: nothing
     model: fxcg20
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2428-last-flappy-bird-color-lancelot-jeux-add-ins.html
     remarks:
-      - Prizm
-      - missing `%d39` syscall support
+      - version fxcg50 (Lephenixoir)
+      - missing `%d39 KeyBoard_PRGM_GetKey()` syscall support
 
   - name: Cgsnake
     author: Eiyeron
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: nothing
     model: fxcg20
     urls:
@@ -121,14 +120,14 @@ addins:
 
   - name: Sonic
     author: Smashmaster
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1904-last-sonic-smashmaster-jeux-add-ins.html
     remarks:
-      - fxcg50 port
-      - Too fast
+      - Lephenixnoir's fxcg50 port
+      - require the throtle to be playable, too fast othewise
 
   - name: Falldown colors
     author: Dodormeur
@@ -142,26 +141,26 @@ addins:
 
   - name: Obliterate
     author: planetcasio
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: nothing
     model: fxcg20
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2341-last-obliterate-kermmartian-jeux-add-ins.html
     remarks:
       - Prizm
-      - missing support of `%12b` syscall
+      - missing support of `%12b FKey_map()` syscall
 
   - name: Meta Ball
     author: Lancelot
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: usable
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2344-last-meta-ball-lancelot-jeux-add-ins.html
     remarks:
-      - fxcg50 port
+      - Lephenixnoir's fxcg50 port
       - Too slow.
-      - Invalid write sometime
+      - Invalid write sometime (`0xaeffffc2`)
 
   - name: Life game cg-20
     author: Smashmaster
@@ -177,17 +176,18 @@ addins:
 
   - name: After Burner
     author: Lephe
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4238-last-after-burner-lephenixnoir-jeux-add-ins.html
     remarks:
-      - Perfect!
+      - Perfect?!
+      - Throttle doesn't work?
 
   - name: AST3 C
     author: Tituya
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: usable
     model: fxcg50
     urls:
@@ -195,40 +195,41 @@ addins:
     remarks:
       - Broken first menu which not display frame entierly
       - Rest of the game is playable
+      - a lot of broken frame in the level selection
 
   - name: Super Mario 3D
     author: Farhi
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4343-last-super-mario-3d-farhi-jeux-add-ins.html
     remarks:
-      - Perfect!
+      - Perfect?!
 
   - name: Maverick Bird
     author: Lephe
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4268-last-maverick-bird-lephenixnoir-jeux-add-ins.html
     remarks:
-      - Perfect!
+      - Perfect?!
 
   - name: Mario 3D
     author: Games
-    updated: 2025-08-21
-    status: usable
+    updated: 2026-02-21
+    status: complete
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4411-last-mario-3d-games-jeux-add-ins.html
     remarks:
-      - Maybe graphical glitch in middle of the screen(?)
+      - Perfect?!
 
   - name: Tetrizm
     author: Planetcasio
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: nothing
     model: fxcg50
     urls:
@@ -239,16 +240,17 @@ addins:
 
   - name: OpenJazz
     author: Programmern
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: nothing
     model: fxcg50
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2390-last-openjazz-jackrabbit-programmern-jeux-add-ins.html
     remarks:
       - fxcg50 official port(?)
-      - missing syscall `%921 EnableColor()` syscall to boot
-      - missing syscall `%2a3 FrameColor()` syscall to boot
-      - missing syscall `%18f9 PrintXY()` syscall to boot
+      - missing syscall `%1b0b GetVRAMWorkBuffer()` to boot
+      - missing syscall `%921 EnableColor()` to boot
+      - missing syscall `%2a3 FrameColor()` to boot
+      - missing syscall `%18f9 PrintXY()` to boot
 
   - name: Frozen Frenzy
     author: Massena
@@ -258,11 +260,11 @@ addins:
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme4192-last-frozen-frenzy-massena-jeux-add-ins.html
     remarks:
-      - too fast
+      - require throttle to be playable, too fast otherwise
 
   - name: Dumb Clicker Goto Edition
     author: Kikoodx
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: complete
     model: fxcg50
     urls:
@@ -272,17 +274,17 @@ addins:
 
   - name: Momento
     author: Kikoodx
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: complete
     model: fxcg50
     urls:
       - https://git.sr.ht/~kikoodx/momento
     remarks:
-      - Perfect(?)
+      - Perfect?!
 
   - name: Teh Moon Show
     author: Massena
-    updated: 2025-08-21
+    updated: 2026-02-21
     status: complete
     model: fxcg50
     urls:
@@ -293,34 +295,33 @@ addins:
 
   - name: Chaos Drop
     author: Lephe
-    updated: 2025-08-21
-    status: usable
+    updated: 2026-02-21
+    status: complete
     model: fxcg50
     urls:
       - https://git.planet-casio.com/Lephenixnoir/chaos-drop
     remarks:
       - too many NULL page write warning
-      - too slow
 
   - name: Geometry Dash
     author: Fife86
-    updated: 2025-09-03
+    updated: 2026-02-21
     status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme3115-last-geometry-dash-fife86-jeux-add-ins.html
     remarks:
-      - Perfect
+      - Perfect?!
 
   - name: FlappyBird
     author: Dark storm
-    updated: 2025-08-27
+    updated: 2026-02-21
     status: nothing
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2424-last-flappy-bird-dark-storm-jeux-add-ins.html
     remarks:
-      - missing %90F GetKey()
+      - missing `%d39 GetKey()` syscall support
 
   - name: Angry Bird
     author: LouLoux
@@ -334,7 +335,7 @@ addins:
 
   - name: Mario land ce
     author: Bebe-vador
-    updated: 2025-08-27
+    updated: 2026-02-21
     status: frame
     model: fx9860g_sh3
     urls:
@@ -345,7 +346,7 @@ addins:
 
   - name: Doodle jump
     author: Kevkevvtt
-    updated: 2025-08-27
+    updated: 2026-02-21
     status: nothing
     model: fx9860g_sh3
     urls:
@@ -356,24 +357,23 @@ addins:
 
   - name: Evasion
     author: Dodormeur
-    updated: 2025-09-03
+    updated: 2026-02-21
     status: usable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2082-last-evasion-surv-dodormeur-jeux-add-ins.html
     remarks:
-      - missing syscall `%8FE PopupWin`
-      - version Graph35+EII display nothing
+      - missing syscall `%462 GetAppName()`
 
   - name: Gravity Duck
     author: PierrotLL
-    updated: 2025-08-28
+    updated: 2026-02-21
     status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1795-last-gravity-duck-pierrotll-jeux-add-ins.html
     remarks:
-      - incorrect black pixel lines at bottom right of screen
+      - Perfect?!
 
   - name: 2048 delux
     author: Kirafi
@@ -383,41 +383,41 @@ addins:
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2597-last-2048-delux-kirafi-jeux-add-ins.html
     remarks:
-      - Perfect
+      - save file loading is broken
 
   - name: Mipjabok
     author: Louloux
-    updated: 2025-08-28
-    status: usable
+    updated: 2026-02-21
+    status: complete
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2303-last-mipjabok-louloux-jeux-add-ins.html
     remarks:
-      - too fast
+      - Perfect?!
 
   - name: OrtonSH4
     author: PierrotLL
-    updated: 2025-08-28
-    status: nothing
+    updated: 2026-02-21
+    status: frame
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1455-1-orton-pierrotll-jeux-add-ins.html
     remarks:
-      - missing syscall `%90F GetKey()` support to boot
+      - stuck with the splash-screen
 
   - name: Hard game
     author: PierrotLL
     updated: 2025-08-28
-    status: nothing
+    status: frame
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme1456-1-hard-game-pierrotll-jeux-add-ins.html
     remarks:
-      - missing syscall `%030 Bdisp_DrawLineVRAM()`
+      - stuck with the splash-screen
 
   - name: Ball game
     author: PierrotLL
-    updated: 2025-08-28
+    updated: 2026-02-21
     status: nothing
     model: fx9860g_sh3
     urls:
@@ -428,7 +428,7 @@ addins:
 
   - name: gintctl
     author: Lephe
-    updated: 2025-08-29
+    updated: 2026-02-21
     status: usable
     model: fx9860g_sh4
     urls:
@@ -440,12 +440,12 @@ addins:
   - name: Destiny
     author: Dodormeur
     updated: 2025-09-03
-    status: complete
+    status: usable
     model: fx9860g_sh4
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2684-last-destiny-dodormeur-jeux-add-ins.html
     remarks:
-      - not 100% tested
+      - missing `%118 Timer_Install` support
 
   - name: Bomberman
     author: Dodormeur
@@ -455,4 +455,167 @@ addins:
     urls:
       - https://www.planet-casio.com/Fr/programmes/programme2242-1-bomberman-dodormeur-jeux-add-ins.html
     remarks:
-      - seem fully playable(?)
+      - Perfect?!
+
+  - name: EditeurHexa
+    author: Lephenixnoir
+    updated: 2026-02-21
+    status: usable
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4267-1-editeur-hexadecimal-lephenixnoir-utilitaires-add-ins.html
+    remarks:
+      - missing support to `Bfile_GetPos()`
+      - weird behaviour with empty folder
+
+  - name: FxLibcTest
+    author: Lephenixnoir
+    updated: 2026-02-21
+    status: complete
+    model: fxcg50
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/FxLibcTest
+    remarks:
+      - Perfect?!
+
+  - name: Arena
+    author: Lephenixnoir
+    updated: 2026-02-21
+    status: complete
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme3152-1-arena-lephenixnoir-jeux-add-ins.html
+    remarks:
+      - Perfect?!
+
+  - name: Atlantis
+    author: Lephenixnoir
+    updated: 2026-02-21
+    status: nothing
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme3024-1-atlantis-lephenixnoir-jeux-add-ins.html
+    remarks:
+      - missing `%840 MCSGetDlen2()` syscall support
+
+  - name: Azuray
+    author: Lephenixnoir
+    updated: 2026-02-21
+    status: complete
+    model: fxcg50
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/azuray
+    remarks:
+      - Perfect?!
+      - too many unhandled read/write `e500deb8`
+
+  - name: BosonX
+    author: Lephenixnoir
+    updated: 2026-02-21
+    status: complete
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4566-1-boson-x-yatis-lephe-jeux-add-ins.html
+    remarks:
+      - Perfect?!
+
+  - name: CG Demo
+    author: Slyvtt
+    updated: 2026-02-21
+    status: complete
+    model: fxcg50
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme4234-1-ccjdemo-slyvtt-jeux-concours-casio.html
+    remarks:
+      - Perfect?!
+
+  - name: DarkLaby
+    author: LouLoux
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    status: frame
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2158-last-dark-laby-louloux-jeux-add-ins.html
+    remarks:
+      - missing support for `%118 Timer_Install()`
+
+  - name: FruitNinja
+    author: Dark Storm
+    status: frame
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2146-last-fruit-ninja-dark-storm-jeux-add-ins.html
+    remarks:
+      - freeze after save loading
+
+  - name: IpodSpike
+    author: Kirafi
+    status: complete
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2634-1-ipod-spikebird-kirafi-jeux-add-ins.html
+    remarks:
+      - Perfect?!
+
+  - name: IpodDextris
+    author: Kirafi
+    status: usable
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2574-1-ipod-dextris-kirafi-jeux-add-ins.html
+    remarks:
+      - too fast, use the throttle with 120FPS
+
+  - name: IpodGraviton
+    author: Kirafi
+    status: complete
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2594-1-ipod-graviton-kirafi-jeux-add-ins.html
+    remarks:
+      - Perfect?!
+
+  - name: SeaRush
+    author: Kirafi
+    status: complete
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme3026-1-searush-kirafi-jeux-add-ins.html
+    remarks:
+      - Perfect?!
+
+  - name: IpodSpin
+    author: Kirafi
+    status: complete
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme3053-1-ipod-spin-kirafi-jeux-add-ins.html
+    remarks:
+      - Perfect?!
+
+  - name: IpodFall
+    author: Kirafi
+    status: nothing
+    updated: 2026-02-21
+    model: fx9860g_sh4
+    urls:
+      - https://www.planet-casio.com/Fr/programmes/programme2819-1-ipod-fallblocs-kirafi-jeux-add-ins.html
+    remarks:
+      - Instant crash after many invalid read
+      - any version of the addin crash
+
+  - name: PythonExtra
+    author: Lephenixnoix
+    status: complete
+    updated: 2026-02-21
+    model: fxcg50
+    urls:
+      - https://git.planet-casio.com/Lephenixnoir/PythonExtra/releases
+    remarks:
+      - Perfect?!

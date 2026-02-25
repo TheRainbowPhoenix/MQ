@@ -703,6 +703,23 @@ static void syscall_fx(
         cpu->r[0] = mq_bfile_FindClose(mach, cpu->r[4]);
         return;
 
+    case 0x0462: /* GetAppName() */
+        void *dst = mq_memory_access(mach->memory, cpu->r[4]);
+        if (!dst) {
+            mq_log(MQ_LOG_ERROR,
+                    "GetAppName: invalid dest buffer %x", cpu->r[4]);
+            cpu->r[0] = 0x00000000;
+            return;
+        }
+        void *src = mq_memory_access(mach->memory, 0x00300020);
+        mq_log(MQ_LOG_DEBUG, "GetAppName: %p - %p", dst, src);
+        for (int i = 0 ; i < 9 ; i++) {
+            u8 n = mq_buffer_read8(src, i);
+            mq_log(MQ_LOG_DEBUG, "GetAppName: [%d] %c", i, n);
+            mq_buffer_write8(dst, i, n);
+        }
+        cpu->r[0] = cpu->r[4];
+        return;
 
     case 0x0494: /* SetQuitHandler() */
         // TODO: SetQuitHandler() syscall (for saves)

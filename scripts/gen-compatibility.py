@@ -121,7 +121,7 @@ def _compat_load(root: Path) -> CompatInfo:
             compat.stats[addin['model']] += 1
             compat.total += 1
         except KeyError as err:
-            bad += f"yaml: [{i}] `{addin.get('name')}`: missing key {err}\n"
+            bad += f"yaml: [{i}]: {addin.get('name')}: missing key {err}\n"
     if bad:
         _error(bad)
     return compat
