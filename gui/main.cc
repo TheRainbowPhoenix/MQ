@@ -180,20 +180,17 @@ static void open_program(std::string const &path, void *data, long size)
 {
     if(path.ends_with(".g1a") || path.ends_with(".G1A")) {
         gui.ResetState();
-        watch_quit(&gui.programFolderWatcherInfo);
+        watch_quit(&gui.programFileWatchInfo);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_FX);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g1a(emu0->mach, data, size);
-        //todo: move me ?
-        // gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_25FPS;
     }
     else if(path.ends_with(".g3a") || path.ends_with(".G3A")) {
         gui.ResetState();
-        watch_quit(&gui.programFolderWatcherInfo);
+        watch_quit(&gui.programFileWatchInfo);
         mq_machine_setupHardware(emu0->mach, MQ_MACHINE_HARDWARE_VIRT_ADDIN_CG);
         mq_machine_initialize(emu0->mach, MQ_MACHINE_INITIALIZE_ADDIN);
         mq_machine_load_g3a(emu0->mach, data, size);
-        // gui.perfThrottleProfile = gui.GUI_THROTTLE_PROFILE_60FPS;
     }
     else {
         azlog(ERROR, "unrecognized add-in type for %s", path.c_str());
@@ -696,6 +693,8 @@ int main(int argc, char **argv)
     gui.recorder.stop(&gui.lastDisplayFrame);
 #endif
     watch_quit(&gui.programFileWatchInfo);
+    if(!gui.programFolderPrefix.empty())
+        watch_quit(&gui.programFolderWatcherInfo);
 
     azur_quit();
     mq_controller_destroy(emu0);
