@@ -1,0 +1,72 @@
+name: Linux Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake ninja-build build-essential nasm \
+          libsdl2-dev libglm-dev libglew-dev libvulkan-dev \
+          ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+
+    - name: Install Azur
+      run: |
+        git clone --recursive https://git.planet-casio.com/Lephenixnoir/Azur.git
+        cd Azur
+
+        # Build and install 3rdparty libraries first
+        cmake -B build-3rdparty -S 3rdparty -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local -DAZUR_PLATFORM=linux
+        cmake --build build-3rdparty
+        cmake --install build-3rdparty
+
+        # Build and install Azur
+        export AZUR_PATH_linux="$HOME/.local"
+        cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local -DAZUR_PLATFORM=linux
+        cmake --build build
+        cmake --install build
+
+    - name: Build MQ
+      run: |
+        export AZUR_PATH_linux="$HOME/.local"
+        cmake -B build-linux -G Ninja -DAZUR_PLATFORM=linux -DCMAKE_BUILD_TYPE=Release
+        cmake --build build-linux
+
+    - name: Check Headless
+      run: |
+        ./build-linux/mq-headless --help
+
+    - name: Download Test Program (lines.g3a)
+      run: |
+        # Download 'lines.g3a' from Azur repo as a reliable test file
+        curl -L -o lines.g3a https://git.planet-casio.com/Lephenixnoir/Azur/raw/branch/master/demos/lines/lines.g3a
+        file lines.g3a
+
+    - name: Run Headless Test with Video Capture
+      run: |
+        # Run for 3600 frames (approx 60s at 60fps)
+        ./build-linux/mq-headless --frames 3600 --record test_lines.mp4 lines.g3a > test_lines.log 2>&1 || true
+        ls -lh test_lines.mp4 test_lines.log
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-artifacts
+        path: |
+          build-linux/mq
+          build-linux/mq-headless
+          test_lines.mp4
+          test_lines.log

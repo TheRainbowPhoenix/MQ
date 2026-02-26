@@ -45,20 +45,24 @@ const struct mqFFmpegInterface *mqFFmpeg::loadSystemLibraries(bool force)
     char *error = NULL;
     bool has_error = false;
 
-    dynload.libavutil = dlopen("libavutil.so.60", RTLD_LAZY);
-    if((error = dlerror())) {
+    // Try to load system libraries. Versions are matched to Ubuntu 24.04 (FFmpeg 6.1).
+    dynload.libavutil = dlopen("libavutil.so.58", RTLD_LAZY);
+    if (!dynload.libavutil) dynload.libavutil = dlopen("libavutil.so", RTLD_LAZY);
+    if((error = dlerror()) && !dynload.libavutil) {
         mq_log(MQ_LOG_ERROR, "%s\n", error);
         goto error;
     }
 
-    dynload.libavformat = dlopen("libavformat.so.62", RTLD_LAZY);
-    if((error = dlerror())) {
+    dynload.libavformat = dlopen("libavformat.so.60", RTLD_LAZY);
+    if (!dynload.libavformat) dynload.libavformat = dlopen("libavformat.so", RTLD_LAZY);
+    if((error = dlerror()) && !dynload.libavformat) {
         mq_log(MQ_LOG_ERROR, "%s\n", error);
         goto error;
     }
 
-    dynload.libavcodec = dlopen("libavcodec.so.62", RTLD_LAZY);
-    if((error = dlerror())) {
+    dynload.libavcodec = dlopen("libavcodec.so.60", RTLD_LAZY);
+    if (!dynload.libavcodec) dynload.libavcodec = dlopen("libavcodec.so", RTLD_LAZY);
+    if((error = dlerror()) && !dynload.libavcodec) {
         mq_log(MQ_LOG_ERROR, "%s\n", error);
         goto error;
     }

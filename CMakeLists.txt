@@ -45,6 +45,11 @@ else()
   # In Release mode, optimizations are enabled and LTO is too
   set(MQ_OPT_CC -O3 -flto=auto)
   set(MQ_OPT_LD -flto=auto)
+  if(AZUR_PLATFORM STREQUAL emscripten)
+    # LTO causes issues with system libraries on Emscripten when linking
+    list(REMOVE_ITEM MQ_OPT_LD -flto=auto)
+    list(REMOVE_ITEM MQ_OPT_CC -flto=auto)
+  endif()
 endif()
 
 # Adjust options based on availability
@@ -205,4 +210,39 @@ if(AZUR_PLATFORM STREQUAL emscripten)
   set_target_properties(mq PROPERTIES LINK_DEPENDS "${ASSETS_ABSOLUTE}")
 
   azur_generate_html_template("${CMAKE_CURRENT_BINARY_DIR}/index.html" "mq.js")
+endif()
+
+#=== Headless executable ======================================================#
+
+set(HEADLESS_SOURCES
+  headless/main.cc
+)
+
+if(MQ_VIDEO_FFMPEG)
+  list(APPEND HEADLESS_SOURCES gui/record.cc gui/ffmpeg.cc)
+endif()
+
+add_executable(mq-headless ${LIB_SOURCES} ${HEADLESS_SOURCES})
+target_compile_options(mq-headless PRIVATE
+  ${MQ_OPT_CC} -g -Wall -Wextra -Wno-pointer-arith -pthread)
+target_include_directories(mq-headless PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/include"
+  "${CMAKE_CURRENT_BINARY_DIR}" # for auto-generated source fragments
+  "${CMAKE_CURRENT_BINARY_DIR}/autogen" # for auto-generated headers
+  "${CMAKE_CURRENT_SOURCE_DIR}/gui" # For record.h/ffmpeg.h
+  "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
+target_link_options(mq-headless PRIVATE ${MQ_OPT_LD} -pthread)
+target_link_libraries(mq-headless PRIVATE Azur::Azur)
+
+# TODO: Use Tracy's CMake integration just to make things a bit cleaner.
+if(MQ_PROFILING_TRACY)
+  target_sources(mq-headless PRIVATE 3rdparty/tracy/public/TracyClient.cpp)
+  target_compile_options(mq-headless PRIVATE -pthread)
+  target_link_options(mq-headless PRIVATE -pthread)
+  target_link_libraries(mq-headless PRIVATE -ldl)
+endif()
+
+if(MQ_VIDEO_FFMPEG)
+  target_link_libraries(mq-headless PRIVATE Azur::ffmpeg)
+  target_link_options(mq-headless PRIVATE -Wl,--gc-sections -Wl,-Map=mq-headless.map)
 endif()

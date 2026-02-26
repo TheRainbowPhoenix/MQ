@@ -1,0 +1,64 @@
+name: Emscripten Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Emscripten
+      uses: mymindstorm/setup-emsdk@v14
+      with:
+        version: 3.1.64
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build build-essential
+
+    - name: Build Azur for Emscripten
+      run: |
+        git clone --recursive https://git.planet-casio.com/Lephenixnoir/Azur.git
+        cd Azur
+
+        # Patch libnum to avoid operator overloading conflict with ImGui on Emscripten
+        # Renaming the operators to avoid overload resolution participation
+        sed -i 's/inline constexpr T operator+(int n, T const &x)/inline constexpr T operator_disabled_plus(int n, T const \&x)/' libnum/include/num/num.h
+        sed -i 's/inline constexpr bool operator<(T const &x, double const &y)/inline constexpr bool operator_disabled_less(T const \&x, double const \&y)/' libnum/include/num/num.h
+
+        # Build and install 3rdparty libraries first
+        emcmake cmake -B build-3rdparty -S 3rdparty -G Ninja -DAZUR_PLATFORM=emscripten -DCMAKE_INSTALL_PREFIX=$HOME/.prefix-emscripten
+        cmake --build build-3rdparty
+        cmake --install build-3rdparty
+
+        # Build and install Azur
+        export AZUR_PATH_emscripten="$HOME/.prefix-emscripten"
+        emcmake cmake -B build-emscripten -G Ninja -DAZUR_PLATFORM=emscripten -DCMAKE_INSTALL_PREFIX=$HOME/.prefix-emscripten
+        cmake --build build-emscripten
+        cmake --install build-emscripten
+
+    - name: Build MQ for Emscripten
+      run: |
+        export AZUR_PATH_emscripten="$HOME/.prefix-emscripten"
+        emcmake cmake -B build-emscripten -G Ninja -DAZUR_PLATFORM=emscripten
+        cmake --build build-emscripten
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mq-emscripten
+        path: |
+            build-emscripten/mq.html
+            build-emscripten/mq.js
+            build-emscripten/mq.wasm
+            build-emscripten/mq.worker.js
+            build-emscripten/mq.data
