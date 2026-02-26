@@ -16,7 +16,7 @@ jobs:
         submodules: recursive
 
     - name: Setup Emscripten
-      uses: emscripten-core/setup-emsdk@v14
+      uses: mymindstorm/setup-emsdk@v14
       with:
         version: 3.1.64
 
@@ -27,7 +27,7 @@ jobs:
 
     - name: Build Azur for Emscripten
       run: |
-        git clone https://git.planet-casio.com/Lephenixnoir/Azur.git
+        git clone --recursive https://git.planet-casio.com/Lephenixnoir/Azur.git
         cd Azur
         emcmake cmake -B build-emscripten -G Ninja -DAZUR_PLATFORM=emscripten -DCMAKE_INSTALL_PREFIX=$HOME/.prefix-emscripten
         cmake --build build-emscripten

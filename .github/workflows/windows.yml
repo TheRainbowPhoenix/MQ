@@ -36,7 +36,7 @@ jobs:
 
     - name: Build Azur
       run: |
-        git clone https://git.planet-casio.com/Lephenixnoir/Azur.git
+        git clone --recursive https://git.planet-casio.com/Lephenixnoir/Azur.git
         cd Azur
         cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local
         cmake --build build
