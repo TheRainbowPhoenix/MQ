@@ -27,7 +27,15 @@ jobs:
       run: |
         git clone --recursive https://git.planet-casio.com/Lephenixnoir/Azur.git
         cd Azur
-        cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local
+
+        # Build and install 3rdparty libraries first
+        cmake -B build-3rdparty -S 3rdparty -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local -DAZUR_PLATFORM=linux
+        cmake --build build-3rdparty
+        cmake --install build-3rdparty
+
+        # Build and install Azur
+        export AZUR_PATH_linux="$HOME/.local"
+        cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local -DAZUR_PLATFORM=linux
         cmake --build build
         cmake --install build
 
