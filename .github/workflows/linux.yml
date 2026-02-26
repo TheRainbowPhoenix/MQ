@@ -48,3 +48,23 @@ jobs:
     - name: Check Headless
       run: |
         ./build-linux/mq-headless --help
+
+    - name: Download Gravity Duck
+      run: |
+        curl -L -c cookies.txt -o GravityDuck.g1a "https://www.planet-casio.com/Fr/programmes/dl.php?id=1795&num=2"
+
+    - name: Run Headless Test with Video Capture
+      run: |
+        # Run for 3600 frames (approx 60s at 60fps)
+        ./build-linux/mq-headless --frames 3600 --record test_gravity_duck.mp4 GravityDuck.g1a > gravity_duck.log 2>&1 || true
+        ls -lh test_gravity_duck.mp4 gravity_duck.log
+
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-artifacts
+        path: |
+          build-linux/mq
+          build-linux/mq-headless
+          test_gravity_duck.mp4
+          gravity_duck.log
