@@ -19,7 +19,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          cmake ninja-build build-essential \
+          cmake ninja-build build-essential nasm \
           libsdl2-dev libglm-dev libglew-dev libvulkan-dev \
           ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
 
