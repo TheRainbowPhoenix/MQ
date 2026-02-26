@@ -1,0 +1,55 @@
+name: Windows MinGW Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - uses: msys2/setup-msys2@v2
+      with:
+        msystem: MINGW64
+        update: true
+        install: >-
+          git
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-SDL2
+          mingw-w64-x86_64-glm
+          mingw-w64-x86_64-glew
+          mingw-w64-x86_64-vulkan-loader
+          mingw-w64-x86_64-ffmpeg
+
+    - name: Build Azur
+      run: |
+        git clone https://git.planet-casio.com/Lephenixnoir/Azur.git
+        cd Azur
+        cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local
+        cmake --build build
+        cmake --install build
+
+    - name: Build MQ
+      run: |
+        export AZUR_PATH_linux="$HOME/.local"
+        cmake -B build-mingw -G Ninja -DAZUR_PLATFORM=linux -DCMAKE_BUILD_TYPE=Release
+        cmake --build build-mingw
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mq-windows
+        path: build-mingw/mq.exe

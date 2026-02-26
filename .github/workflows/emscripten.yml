@@ -1,0 +1,51 @@
+name: Emscripten Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Emscripten
+      uses: emscripten-core/setup-emsdk@v14
+      with:
+        version: 3.1.64
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake ninja-build build-essential
+
+    - name: Build Azur for Emscripten
+      run: |
+        git clone https://git.planet-casio.com/Lephenixnoir/Azur.git
+        cd Azur
+        emcmake cmake -B build-emscripten -G Ninja -DAZUR_PLATFORM=emscripten -DCMAKE_INSTALL_PREFIX=$HOME/.prefix-emscripten
+        cmake --build build-emscripten
+        cmake --install build-emscripten
+
+    - name: Build MQ for Emscripten
+      run: |
+        export AZUR_PATH_emscripten="$HOME/.prefix-emscripten"
+        emcmake cmake -B build-emscripten -G Ninja -DAZUR_PLATFORM=emscripten
+        cmake --build build-emscripten
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: mq-emscripten
+        path: |
+            build-emscripten/mq.html
+            build-emscripten/mq.js
+            build-emscripten/mq.wasm
+            build-emscripten/mq.worker.js
+            build-emscripten/mq.data

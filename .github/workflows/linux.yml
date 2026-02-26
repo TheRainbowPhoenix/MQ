@@ -1,0 +1,42 @@
+name: Linux Build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          cmake ninja-build build-essential \
+          libsdl2-dev libglm-dev libglew-dev libvulkan-dev \
+          ffmpeg libavcodec-dev libavformat-dev libavutil-dev libswscale-dev
+
+    - name: Install Azur
+      run: |
+        git clone https://git.planet-casio.com/Lephenixnoir/Azur.git
+        cd Azur
+        cmake -B build -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local
+        cmake --build build
+        cmake --install build
+
+    - name: Build MQ
+      run: |
+        export AZUR_PATH_linux="$HOME/.local"
+        cmake -B build-linux -G Ninja -DAZUR_PLATFORM=linux -DCMAKE_BUILD_TYPE=Release
+        cmake --build build-linux
+
+    - name: Check Headless
+      run: |
+        ./build-linux/mq-headless --help
