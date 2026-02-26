@@ -227,6 +227,7 @@ target_include_directories(mq-headless PRIVATE
   "${CMAKE_CURRENT_SOURCE_DIR}/gui" # For record.h/ffmpeg.h
   "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/tracy/public")
 target_link_options(mq-headless PRIVATE ${MQ_OPT_LD} -pthread)
+target_link_libraries(mq-headless PRIVATE Azur::Azur)
 
 # TODO: Use Tracy's CMake integration just to make things a bit cleaner.
 if(MQ_PROFILING_TRACY)
