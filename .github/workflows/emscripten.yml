@@ -31,8 +31,9 @@ jobs:
         cd Azur
 
         # Patch libnum to avoid operator overloading conflict with ImGui on Emscripten
-        sed -i 's/inline constexpr T operator+(int n, T const &x)/template <typename = void> inline constexpr T operator+(int n, T const \&x)/' libnum/include/num/num.h
-        sed -i 's/inline constexpr bool operator<(T const &x, double const &y)/template <typename = void> inline constexpr bool operator<(T const \&x, double const \&y)/' libnum/include/num/num.h
+        # Renaming the operators to avoid overload resolution participation
+        sed -i 's/inline constexpr T operator+(int n, T const &x)/inline constexpr T operator_disabled_plus(int n, T const \&x)/' libnum/include/num/num.h
+        sed -i 's/inline constexpr bool operator<(T const &x, double const &y)/inline constexpr bool operator_disabled_less(T const \&x, double const \&y)/' libnum/include/num/num.h
 
         # Build and install 3rdparty libraries first
         emcmake cmake -B build-3rdparty -S 3rdparty -G Ninja -DAZUR_PLATFORM=emscripten -DCMAKE_INSTALL_PREFIX=$HOME/.prefix-emscripten

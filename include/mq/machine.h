@@ -158,8 +158,8 @@ void mq_machine_breakExecution(mqMachine *mach);
    want to interrupt the machine fetch-decode-execute loop. The current context
    is saved in an internal jmp_buf in the machine. This macro contains a
    setjmp() and returns twice. setStuck() does the longjmp() back. */
+void mq_machine_setBreakJumpBufferAux(mqMachine *mach);
 #define mq_machine_setBreakJumpBuffer(mach) ({ \
-   extern void mq_machine_setBreakJumpBufferAux(mqMachine *mach); \
    mq_machine_setBreakJumpBufferAux(mach); \
    setjmp(mach->breakJumpBuffer); \
 })

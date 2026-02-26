@@ -40,18 +40,20 @@ jobs:
         git clone --recursive https://git.planet-casio.com/Lephenixnoir/Azur.git
         cd Azur
 
-        # Patch Azur/3rdparty/CMakeLists.txt to remove glx requirement on Windows
+        # Patch Azur/3rdparty/CMakeLists.txt to use opengl32 directly on Windows
         sed -i 's/pkg_check_modules(glx REQUIRED glx IMPORTED_TARGET)/# pkg_check_modules(glx REQUIRED glx IMPORTED_TARGET)/' 3rdparty/CMakeLists.txt
-        sed -i 's/target_link_libraries(gl3w PUBLIC PkgConfig::glx PkgConfig::opengl -ldl)/target_link_libraries(gl3w PUBLIC PkgConfig::opengl)/' 3rdparty/CMakeLists.txt
+        sed -i 's/pkg_check_modules(opengl REQUIRED opengl IMPORTED_TARGET)/# pkg_check_modules(opengl REQUIRED opengl IMPORTED_TARGET)/' 3rdparty/CMakeLists.txt
+        sed -i 's/target_link_libraries(gl3w PUBLIC PkgConfig::glx PkgConfig::opengl -ldl)/target_link_libraries(gl3w PUBLIC opengl32)/' 3rdparty/CMakeLists.txt
 
         # Build and install 3rdparty libraries first
         cmake -B build-3rdparty -S 3rdparty -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local -DAZUR_PLATFORM=linux
         cmake --build build-3rdparty
         cmake --install build-3rdparty
 
-        # Patch Azur/CMakeLists.txt to remove glx requirement on Windows
+        # Patch Azur/CMakeLists.txt to use opengl32 directly on Windows
         sed -i 's/pkg_check_modules(glx REQUIRED glx IMPORTED_TARGET)/# pkg_check_modules(glx REQUIRED glx IMPORTED_TARGET)/' CMakeLists.txt
-        sed -i 's/link_libraries(PkgConfig::sdl2 PkgConfig::opengl -lm)/link_libraries(PkgConfig::sdl2 PkgConfig::opengl)/' CMakeLists.txt
+        sed -i 's/pkg_check_modules(opengl REQUIRED opengl IMPORTED_TARGET)/# pkg_check_modules(opengl REQUIRED opengl IMPORTED_TARGET)/' CMakeLists.txt
+        sed -i 's/link_libraries(PkgConfig::sdl2 PkgConfig::opengl -lm)/link_libraries(PkgConfig::sdl2 opengl32)/' CMakeLists.txt
 
         # Build and install Azur
         export AZUR_PATH_linux="$HOME/.local"
