@@ -47,6 +47,10 @@ jobs:
         sed -i 's/pkg_check_modules(opengl REQUIRED opengl IMPORTED_TARGET)/# pkg_check_modules(opengl REQUIRED opengl IMPORTED_TARGET)/' 3rdparty/CMakeLists.txt
         sed -i 's/target_link_libraries(gl3w PUBLIC PkgConfig::glx PkgConfig::opengl -ldl)/target_link_libraries(gl3w PUBLIC opengl32)/' 3rdparty/CMakeLists.txt
 
+        # Patch FindAzur3rdParty.cmake to remove glx requirement
+        sed -i 's/pkg_check_modules(glx REQUIRED glx)/# pkg_check_modules(glx REQUIRED glx)/' 3rdparty/FindAzur3rdParty.cmake
+        sed -i 's/set(Azur_glx_FOUND ${glx_FOUND})/set(Azur_glx_FOUND TRUE)/' 3rdparty/FindAzur3rdParty.cmake
+
         # Build and install 3rdparty libraries first
         cmake -B build-3rdparty -S 3rdparty -G Ninja -DCMAKE_INSTALL_PREFIX=$HOME/.local -DAZUR_PLATFORM=linux
         cmake --build build-3rdparty
