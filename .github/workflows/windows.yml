@@ -33,6 +33,7 @@ jobs:
           mingw-w64-x86_64-glew
           mingw-w64-x86_64-vulkan-loader
           mingw-w64-x86_64-ffmpeg
+          nasm
           sed
 
     - name: Build Azur

@@ -45,6 +45,11 @@ else()
   # In Release mode, optimizations are enabled and LTO is too
   set(MQ_OPT_CC -O3 -flto=auto)
   set(MQ_OPT_LD -flto=auto)
+  if(AZUR_PLATFORM STREQUAL emscripten)
+    # LTO causes issues with system libraries on Emscripten when linking
+    list(REMOVE_ITEM MQ_OPT_LD -flto=auto)
+    list(REMOVE_ITEM MQ_OPT_CC -flto=auto)
+  endif()
 endif()
 
 # Adjust options based on availability
